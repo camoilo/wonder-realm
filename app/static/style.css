@@ -383,19 +383,11 @@ html, body {
   opacity: 0.75;
 }
 
-/* 编辑区：外观沿用气泡（同宽、同底色、圆角），边框换成强调色表示正在编辑 */
-.edit-box {
-  width: min(80%, 680px);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--panel);
-  border: 1px solid var(--accent);
-  box-shadow: 0 2px 10px rgba(63, 106, 216, 0.08);
-}
-.msg.user .edit-box { background: #f7f9ff; }
+/* 编辑弹窗：固定在对话页面正中的对话框，长消息也不会把气泡或布局撑变形 */
+.edit-modal { width: 620px; }
+
+/* 输入框高度仍按内容自动撑开，但弹窗内收紧上限，免得两个框把弹窗顶出屏幕 */
+.edit-modal .edit-field textarea { max-height: 300px; }
 
 /* 编辑区两个输入框各自的标签，避免分不清哪个是情境 */
 .edit-field {
@@ -687,6 +679,10 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 .panel-body > * { flex: 0 0 auto; }
 
 .panel-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--accent-dark);
@@ -694,6 +690,31 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 6px;
+}
+
+/* 面板里"改过但没保存"的标识：只在有改动时出现，保存或改回原样即消失 */
+.dirty-flag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #8a6d1f;
+  background: var(--scenario-bg);
+  border: 1px solid var(--scenario-border);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+/* 面板收起时也要能看出有未保存的修改 */
+.dirty-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d98324;
+  margin-left: 6px;
+  vertical-align: 1px;
 }
 
 .memory-meta {

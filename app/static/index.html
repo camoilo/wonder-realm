@@ -87,8 +87,8 @@
           <option v-for="m in models" :key="m.name" :value="m.name">{{ m.name }}{{ m.thinking ? "（思考型）" : "" }}</option>
         </select>
         <button v-if="activeSession" class="ghost-btn"
-                :title="panelCollapsed ? '展开右侧面板' : '收起右侧面板'"
-                @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}</button>
+                :title="(panelCollapsed ? '展开右侧面板' : '收起右侧面板') + (anyDirty ? '（有未保存的修改）' : '')"
+                @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
       </div>
     </header>
 
@@ -108,61 +108,40 @@
             <span class="fold-toggle">{{ showArchived ? "收起" : "展开" }}</span>
           </div>
           <div v-for="m in displayMessages" :key="m.id" class="msg" :class="[m.role, {archived: m.archived}]">
-            <div v-if="editingId === m.id" class="edit-box">
-              <label v-if="editForm.hasScenario" class="edit-field">
-                <span class="edit-label">情境说明</span>
-                <textarea v-model="editForm.scenario" rows="4" @input="autoGrow"
-                          placeholder="场景、动作、氛围等（留空则不显示情境块）"></textarea>
-              </label>
-              <label class="edit-field">
-                <span class="edit-label">{{ editForm.contentLabel }}</span>
-                <textarea v-model="editForm.content" rows="4" @input="autoGrow" :placeholder="editForm.contentPlaceholder"></textarea>
-              </label>
-              <p v-if="editForm.contentHint" class="hint">{{ editForm.contentHint }}</p>
-              <div class="edit-actions">
-                <span class="hint">仅影响后续生成的上下文，不修改已沉淀的记忆</span>
-                <div class="edit-btns">
-                  <button class="ghost-btn" @click="editingId = null">取消</button>
-                  <button class="primary-btn" :disabled="!editForm.content.trim()" @click="saveEdit(m)">保存</button>
+            <div class="bubble-wrap">
+              <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
+                <div v-if="m.role === 'assistant' && activeSession.character" class="bubble-head">
+                  <span class="avatar">{{ activeSession.character.name.slice(0, 1) }}</span>
+                  <span>{{ activeSession.character.name }}</span>
                 </div>
+                <template v-if="m.scenario === 'MULTI'">
+                  <template v-for="(seg, si) in segmentsOf(m)" :key="si">
+                    <div v-if="seg.type === 'scenario'" class="scenario">
+                      <span class="scenario-label">情境</span>{{ seg.text }}
+                    </div>
+                    <div v-else class="text">{{ seg.text }}</div>
+                  </template>
+                </template>
+                <template v-else>
+                  <div v-if="m.scenario" class="scenario">
+                    <span class="scenario-label">情境</span>{{ m.scenario }}
+                  </div>
+                  <div class="text">{{ m.content }}</div>
+                </template>
+                <span v-if="m.edited" class="edited-flag">已编辑</span>
+                <span v-if="m.archived" class="archived-flag">已归档</span>
+              </div>
+              <div class="msg-actions" v-show="!streaming">
+                <button title="复制" @click="copyText(m)">复制</button>
+                <button title="编辑" @click="startEdit(m)">编辑</button>
+                <button title="删除" @click.stop="deleteMenuId = deleteMenuId === m.id ? null : m.id">删除</button>
+                <button v-if="!orphanActive" title="重新生成" @click="regenerate(m)">重新生成</button>
+              </div>
+              <div v-if="deleteMenuId === m.id" class="delete-menu" @click.stop>
+                <button @click="removeMessage(m, false)">删除这条</button>
+                <button @click="removeMessage(m, true)">删除这里之后</button>
               </div>
             </div>
-            <template v-else>
-              <div class="bubble-wrap">
-                <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
-                  <div v-if="m.role === 'assistant' && activeSession.character" class="bubble-head">
-                    <span class="avatar">{{ activeSession.character.name.slice(0, 1) }}</span>
-                    <span>{{ activeSession.character.name }}</span>
-                  </div>
-                  <template v-if="m.scenario === 'MULTI'">
-                    <template v-for="(seg, si) in segmentsOf(m)" :key="si">
-                      <div v-if="seg.type === 'scenario'" class="scenario">
-                        <span class="scenario-label">情境</span>{{ seg.text }}
-                      </div>
-                      <div v-else class="text">{{ seg.text }}</div>
-                    </template>
-                  </template>
-                  <template v-else>
-                    <div v-if="m.scenario" class="scenario">
-                      <span class="scenario-label">情境</span>{{ m.scenario }}
-                    </div>
-                    <div class="text">{{ m.content }}</div>
-                  </template>
-                  <span v-if="m.edited" class="edited-flag">已编辑</span>
-                  <span v-if="m.archived" class="archived-flag">已归档</span>
-                </div>
-                <div class="msg-actions" v-show="!streaming">
-                  <button title="复制" @click="copyText(m)">复制</button>
-                  <button title="编辑" @click="startEdit(m)">编辑</button>
-                  <button title="删除" @click="deleteMenuId = deleteMenuId === m.id ? null : m.id">删除</button>
-                  <button v-if="m.role === 'assistant' && !orphanActive" title="重新生成" @click="regenerate(m)">重新生成</button>
-                </div>
-                <div v-if="deleteMenuId === m.id" class="delete-menu">
-                  <button @click="removeMessage(m, false)">删除这条</button>
-                  <button @click="removeMessage(m, true)">删除这里之后</button>
-                </div>
-              </div>
-            </template>
           </div>
           <div v-if="streaming" class="msg assistant">
             <div class="bubble streaming-bubble">
@@ -208,7 +187,10 @@
       </div>
       <div class="panel-body">
         <template v-if="activeSession">
-          <div class="panel-section">{{ genSectionTitle }}</div>
+          <div class="panel-section">
+            <span>{{ genSectionTitle }}</span>
+            <span v-if="genDirty" class="dirty-flag">未保存</span>
+          </div>
           <div v-for="f in fieldsOf(activeSession.mode)" :key="f.key" class="field">
             <span class="field-label">{{ f.label }}</span>
             <div v-if="f.type === 'radio'" class="radio-row">
@@ -238,7 +220,10 @@
           <p class="hint">保存后立即生效，只影响后续生成</p>
         </template>
         <template v-if="activeSession && activeSession.character">
-          <div class="panel-section">角色卡</div>
+          <div class="panel-section">
+            <span>角色卡</span>
+            <span v-if="charDirty" class="dirty-flag">未保存</span>
+          </div>
           <label class="field">姓名<input v-model="charForm.name" type="text"></label>
           <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
           <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
@@ -251,7 +236,10 @@
           <p class="hint">保存后，下一次生成即按新设定回复</p>
         </template>
         <template v-if="memoryScope">
-          <div class="panel-section">{{ memoryScope.label }}</div>
+          <div class="panel-section">
+            <span>{{ memoryScope.label }}</span>
+            <span v-if="memoryDirty" class="dirty-flag">未保存</span>
+          </div>
           <p class="memory-meta">
             已归档 {{ memoryData.message_count }} 条消息<template v-if="memoryData.updated_at"> · 更新于 {{ memoryData.updated_at }}</template>
             <a class="refresh-link" @click="loadMemory">刷新</a>
@@ -303,6 +291,28 @@
       <div class="modal-actions">
         <button class="ghost-btn" @click="answerConfirm(false)">取消</button>
         <button class="danger-btn" @click="answerConfirm(true)">确认</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-mask" v-if="editingId !== null" @click.self="cancelEdit">
+    <div class="modal edit-modal">
+      <h2>编辑消息</h2>
+      <label v-if="editForm.hasScenario" class="edit-field">
+        <span class="edit-label">情境说明</span>
+        <textarea v-model="editForm.scenario" rows="4" @input="autoGrow"
+                  placeholder="场景、动作、氛围等（留空则不显示情境块）"></textarea>
+      </label>
+      <label class="edit-field">
+        <span class="edit-label">{{ editForm.contentLabel }}</span>
+        <textarea v-model="editForm.content" rows="5" @input="autoGrow" :placeholder="editForm.contentPlaceholder"></textarea>
+      </label>
+      <p v-if="editForm.contentHint" class="hint">{{ editForm.contentHint }}</p>
+      <div class="edit-actions">
+        <span class="hint">仅影响后续生成的上下文，不修改已沉淀的记忆</span>
+        <div class="edit-btns">
+          <button class="ghost-btn" @click="cancelEdit">取消</button>
+          <button class="primary-btn" :disabled="!editForm.content.trim()" @click="saveEdit">保存</button>
+        </div>
       </div>
     </div>
   </div>

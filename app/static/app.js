@@ -62,6 +62,11 @@ const app = Vue.createApp({
       genFields: [],
       genDefaults: {},
       genForm: {},
+      // 最近一次保存（或载入）后的快照，用来判断面板里是否有"未保存"的修改。
+      // 初值必须与上面各表单的初值一致，否则还没载入任何会话就会被判成"已修改"
+      genSaved: {},
+      charSaved: emptyCharForm(),
+      memorySaved: "",
       tagDraft: {},
     };
   },
@@ -104,6 +109,19 @@ const app = Vue.createApp({
     archivedCount() {
       return this.messages.filter((m) => m.archived).length;
     },
+    // 面板三块的"未保存"判定：各自与保存时的快照比对，改回原样就自动消失
+    genDirty() {
+      return !this.sameSnapshot(this.genForm, this.genSaved);
+    },
+    charDirty() {
+      return !this.sameSnapshot(this.charForm, this.charSaved);
+    },
+    memoryDirty() {
+      return this.memoryText !== this.memorySaved;
+    },
+    anyDirty() {
+      return this.genDirty || this.charDirty || this.memoryDirty;
+    },
     displayMessages() {
       return this.showArchived
         ? this.messages
@@ -130,14 +148,23 @@ const app = Vue.createApp({
       } else {
         this.charForm = emptyCharForm();
       }
+      this.charSaved = this.snapshot(this.charForm); // 重新载入即视为已保存
     },
     panelCollapsed(collapsed) {
-      // 展开面板时重新拉一次记忆，避免收起期间的数据过期
-      if (!collapsed) this.loadMemory();
+      // 展开面板时重新拉一次记忆，避免收起期间的数据过期；
+      // 但用户手上有未保存的编辑时不能覆盖掉
+      if (!collapsed && !this.memoryDirty) this.loadMemory();
     },
   },
   mounted() {
     this.init();
+    // 点空白处 / 按 Esc 关掉消息删除菜单与编辑弹窗，避免它们只能靠再次点按钮关闭
+    document.addEventListener("click", this.onDocumentClick);
+    document.addEventListener("keydown", this.onDocumentKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener("click", this.onDocumentClick);
+    document.removeEventListener("keydown", this.onDocumentKeydown);
   },
   methods: {
     // 把失败响应统一转成 Error，并带上状态码：
@@ -165,6 +192,37 @@ const app = Vue.createApp({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       };
+    },
+
+    // 键顺序无关的快照比对：重建表单后键序可能不同，直接 JSON.stringify 会误判为已修改
+    sameSnapshot(a, b) {
+      const keys = (o) =>
+        Object.keys(o || {})
+          .filter((k) => o[k] !== undefined)
+          .sort();
+      const ka = keys(a);
+      const kb = keys(b);
+      if (ka.length !== kb.length || ka.some((k, i) => k !== kb[i])) return false;
+      return ka.every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+    },
+
+    snapshot(o) {
+      return JSON.parse(JSON.stringify(o || {}));
+    },
+
+    onDocumentClick() {
+      // 删除菜单与触发它的按钮都做了 stopPropagation，能走到这里就说明点的是别处
+      this.deleteMenuId = null;
+    },
+
+    onDocumentKeydown(e) {
+      if (e.key !== "Escape") return;
+      this.deleteMenuId = null;
+      if (this.editingId !== null) this.cancelEdit();
+    },
+
+    cancelEdit() {
+      this.editingId = null;
     },
 
     ask(text) {
@@ -297,6 +355,7 @@ const app = Vue.createApp({
         }
       }
       this.genForm = merged;
+      this.genSaved = this.snapshot(merged);
     },
 
     toggleTag(key, tag) {
@@ -598,6 +657,7 @@ const app = Vue.createApp({
       try {
         this.memoryData = await this.api(`/api/memories/${type}/${id}`);
         this.memoryText = this.memoryData.content;
+        this.memorySaved = this.memoryText;
       } catch (e) {
         /* scope 不存在等场景：面板留空 */
       }
@@ -611,6 +671,7 @@ const app = Vue.createApp({
           this.jsonOpts("PUT", { content: this.memoryText })
         );
         this.memoryText = this.memoryData.content;
+        this.memorySaved = this.memoryText; // 保存成功后"未保存"标识随之消失
       } catch (e) {
         this.error = e.message;
       }
@@ -777,7 +838,7 @@ const app = Vue.createApp({
       // 打开后按内容把输入框撑到实际高度，长消息不会被塞进一个小框里
       this.$nextTick(() => {
         document
-          .querySelectorAll(".edit-box textarea")
+          .querySelectorAll(".edit-modal textarea")
           .forEach((el) => this.autoGrowEl(el));
       });
     },
@@ -792,7 +853,13 @@ const app = Vue.createApp({
       el.style.height = Math.min(el.scrollHeight + 2, 460) + "px";
     },
 
-    async saveEdit(m) {
+    async saveEdit() {
+      // 编辑弹窗在消息列表之外，靠 editingId 找回目标消息
+      const m = this.messages.find((x) => x.id === this.editingId);
+      if (!m) {
+        this.editingId = null;
+        return;
+      }
       const payload = { content: this.editForm.content.trim() };
       if (this.editForm.hasScenario) {
         payload.scenario = this.editForm.scenario.trim() || null; // 清空即不再显示情境块
@@ -805,7 +872,7 @@ const app = Vue.createApp({
           this.jsonOpts("PUT", payload)
         );
         const idx = this.messages.findIndex((x) => x.id === m.id);
-        this.messages.splice(idx, 1, updated);
+        if (idx >= 0) this.messages.splice(idx, 1, updated);
         this.editingId = null;
         await this.refreshSessions();
       } catch (e) {
@@ -838,12 +905,17 @@ const app = Vue.createApp({
         this.error = "正在生成中，请稍候";
         return;
       }
-      if (!(await this.ask("重新生成将删除该消息及其之后的所有消息，继续？"))) return;
+      // 用户消息本身是这一轮的输入，必须保留，只删它之后的；assistant 消息则连它一起替换
+      const isUser = m.role === "user";
+      const tip = isUser
+        ? "将为这条消息重新生成回复，其后的消息会被删除，继续？"
+        : "重新生成将删除该消息及其之后的所有消息，继续？";
+      if (!(await this.ask(tip))) return;
       this.deleteMenuId = null;
       this.error = "";
       this.lastFailedUser = null;
       const idx = this.messages.findIndex((x) => x.id === m.id);
-      this.messages = this.messages.slice(0, idx);
+      this.messages = this.messages.slice(0, isUser ? idx + 1 : idx);
       this.beginStream();
       this.scrollBottom();
       let failed = false;

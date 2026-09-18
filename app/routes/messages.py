@@ -53,12 +53,16 @@ async def regenerate(mid: int):
     con = connect()
     try:
         msg = _get_message(con, mid)
-        if msg["role"] != "assistant":
-            raise HTTPException(400, "只能对生成消息触发重新生成")
         sid = msg["session_id"]
         # 先校验再删：角色已删除等情况下必须原样保留已有消息，不能删完才发现不能生成
         load_generation_context(con, sid)
-        con.execute("DELETE FROM messages WHERE session_id=? AND id>=?", (sid, mid))
+        if msg["role"] == "assistant":
+            # 替换式：连这条生成一起删掉，再重新生成
+            con.execute("DELETE FROM messages WHERE session_id=? AND id>=?", (sid, mid))
+        else:
+            # 用户消息本身必须保留（它就是这轮的输入），只删它之后的内容再生成回复。
+            # 主动停止生成后可能压根没有 assistant 消息，这条路径是唯一的补救入口。
+            con.execute("DELETE FROM messages WHERE session_id=? AND id>?", (sid, mid))
         con.commit()
         msgs, model, mode = prepare_generation(con, sid)
     finally:
