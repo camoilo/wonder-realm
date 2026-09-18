@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import get_db, now
-from ..schemas import CharacterIn
+from ..schemas import BACKGROUND_MAX_COUNT, BackgroundsIn, CharacterIn
 
 router = APIRouter(prefix="/api")
 
@@ -77,8 +77,35 @@ def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
 @router.delete("/characters/{cid}")
 def delete_character(cid: int, db=Depends(get_db)):
     _get_character(db, cid)
-    # 会话由外键 ON DELETE SET NULL 保留；角色记忆删除
+    # 会话由外键 ON DELETE SET NULL 保留；角色记忆删除；背景图由外键 ON DELETE CASCADE 删除
     db.execute("DELETE FROM memories WHERE scope_type='character' AND scope_id=?", (cid,))
     db.execute("DELETE FROM characters WHERE id=?", (cid,))
     db.commit()
     return {"ok": True}
+
+
+@router.get("/characters/{cid}/backgrounds")
+def list_backgrounds(cid: int, db=Depends(get_db)):
+    """单独取背景图：不随角色列表/会话详情返回，避免每次请求都背上几 MB 图片。"""
+    _get_character(db, cid)
+    rows = db.execute(
+        "SELECT data FROM character_images WHERE character_id=? ORDER BY position, id",
+        (cid,),
+    ).fetchall()
+    return {"images": [r["data"] for r in rows], "max": BACKGROUND_MAX_COUNT}
+
+
+@router.put("/characters/{cid}/backgrounds")
+def replace_backgrounds(cid: int, body: BackgroundsIn, db=Depends(get_db)):
+    """整体替换。前端是把这一组图当一个整体编辑的（增删都发生在表单里、保存时一次提交），
+    逐张增删反而要维护更多中间状态，且新建角色时还没有 id 可挂。"""
+    _get_character(db, cid)
+    db.execute("DELETE FROM character_images WHERE character_id=?", (cid,))
+    for i, data in enumerate(body.images):
+        db.execute(
+            "INSERT INTO character_images(character_id, position, data, created_at) "
+            "VALUES(?,?,?,?)",
+            (cid, i, data, now()),
+        )
+    db.commit()
+    return {"images": body.images, "max": BACKGROUND_MAX_COUNT}

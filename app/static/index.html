@@ -95,7 +95,10 @@
       </div>
     </header>
 
-    <main class="chat" ref="chatBox">
+    <div class="chat-area">
+      <!-- 背景层放在滚动容器外面，这样滚动消息时背景是静止的 -->
+      <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
+      <main class="chat" ref="chatBox" :class="{ 'with-bg-nav': showBgNav }">
       <div class="chat-inner">
         <div v-if="!activeSession" class="empty">
           <div class="empty-icon">&#9998;</div>
@@ -167,7 +170,13 @@
           </div>
         </template>
       </div>
-    </main>
+      </main>
+      <div v-if="showBgNav" class="chat-bg-nav">
+        <button type="button" title="上一张背景" @click="prevBg">‹</button>
+        <span class="chat-bg-count">{{ bgIndex + 1 }} / {{ bgImages.length }}</span>
+        <button type="button" title="下一张背景" @click="nextBg">›</button>
+      </div>
+    </div>
 
     <footer class="inputbar" v-if="activeSession">
       <div class="input-inner">
@@ -319,6 +328,26 @@
       </div>
       <p class="hint">头像可选；选图后可拖动裁剪成正方形，最终存为 256×256（跟着数据库走，备份也包含它）</p>
       <p v-if="avatarError" class="avatar-error">{{ avatarError }}</p>
+      <div class="bg-pick">
+        <div class="bg-pick-head">
+          <span class="field-label">对话背景</span>
+          <span class="hint">{{ (charModal.form.backgrounds || []).length }} / {{ bgMax }}</span>
+        </div>
+        <div class="bg-thumbs">
+          <div v-for="(bg, i) in charModal.form.backgrounds" :key="i" class="bg-thumb">
+            <img :src="bg" alt="">
+            <button type="button" class="bg-del" title="移除这张" @click="removeBackground('modal', i)">×</button>
+          </div>
+          <label v-if="(charModal.form.backgrounds || []).length < bgMax"
+                 class="bg-add" :class="{disabled: bgBusy}">
+            {{ bgBusy ? "处理中…" : "＋" }}
+            <input type="file" accept="image/*" multiple :disabled="bgBusy"
+                   @change="addBackgrounds($event, 'modal')">
+          </label>
+        </div>
+        <p class="hint">最多 {{ bgMax }} 张；仅在角色对话 / 角色情境模式下作为对话区背景使用（整图居中，两侧或上下留白）</p>
+        <p v-if="bgError" class="avatar-error">{{ bgError }}</p>
+      </div>
       <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
       <label class="field">外观<textarea v-model="charModal.form.appearance" rows="2" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
       <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>

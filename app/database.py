@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
     memory_model TEXT NOT NULL DEFAULT '',
     updated_at   TEXT NOT NULL
 );
+
+-- 角色的对话区背景图，每个角色至多若干张（上限在 schemas.py）。
+-- 刻意不放进 characters 表：头像是单张就已经让每次角色列表都把它带上，
+-- 背景图有 5 张、单张可达数百 KB，塞进角色表会让列表接口变成每次几 MB。
+CREATE TABLE IF NOT EXISTS character_images (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    position     INTEGER NOT NULL DEFAULT 0,
+    data         TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_character_images ON character_images(character_id, position, id);
 """
 
 DB_PATH: Path | None = None

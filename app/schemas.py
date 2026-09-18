@@ -60,6 +60,31 @@ class MemoryEdit(BaseModel):
     content: str = ""
 
 
+# 对话区背景图：每角色至多这么多张
+BACKGROUND_MAX_COUNT = 5
+# 单张上限。前端已把长边压到 1920、重编码为 JPEG，实际通常远小于此
+BACKGROUND_MAX_CHARS = 1536 * 1024
+
+
+class BackgroundsIn(BaseModel):
+    images: list[str] = []
+
+    @field_validator("images")
+    @classmethod
+    def _check_images(cls, v: list[str]) -> list[str]:
+        """整体替换式的入参校验：张数、单张大小、以及必须是白名单内的位图 data URL。"""
+        items = [(x or "").strip() for x in (v or [])]
+        items = [x for x in items if x]  # 空项直接丢弃，不往库里写空串
+        if len(items) > BACKGROUND_MAX_COUNT:
+            raise ValueError(f"最多只能放 {BACKGROUND_MAX_COUNT} 张背景图")
+        for item in items:
+            if len(item) > BACKGROUND_MAX_CHARS:
+                raise ValueError(f"背景图过大（单张上限 {BACKGROUND_MAX_CHARS // 1024}KB）")
+            if not item.startswith(AVATAR_PREFIXES):
+                raise ValueError("背景图必须是 jpeg/png/webp 的 data URL")
+        return items
+
+
 class SettingsIn(BaseModel):
     model: str | None = None
     memory_model: str | None = None

@@ -34,9 +34,11 @@ def startup_backup(cfg: dict) -> Path | None:
     backup_dir = opts.get("dir")
     if not backup_dir:
         return None
-    return backup.make_backup(
-        database.db_file(cfg["data_dir"]), backup_dir, opts.get("days", 14)
-    )
+    # 本函数在 create_app()/init_db() 之前被调用，那时 DB_PATH 还是空的，所以从配置推路径。
+    # 若已经初始化过（例如测试里先建了库，或将来有别的调用点），以 DB_PATH 为准——
+    # 它才是应用真正在写的那个文件；两者若不一致，从配置推出来的可能是另一个库。
+    db_path = database.DB_PATH or database.db_file(cfg["data_dir"])
+    return backup.make_backup(db_path, backup_dir, opts.get("days", 14))
 
 
 if __name__ == "__main__":

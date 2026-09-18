@@ -23,17 +23,27 @@ const AVATAR_MIN_SIDE = 256; // 原图最短边下限：不小于输出边长，
 const AVATAR_MAX_PIXELS = 40 * 1000 * 1000; // 原图像素总量上限
 const AVATAR_QUALITY = 0.85;
 
+// 对话区背景图：不裁剪，只等比缩到长边不超过 BG_MAX_PX（不放大），重编码为 JPEG。
+const BG_MAX_COUNT = 5;
+const BG_MAX_PX = 1920;
+const BG_MIN_LONG_SIDE = 640; // 长边下限：再小铺在对话区只会糊成一片
+const BG_QUALITY = 0.85;
+const BG_MAX_UPLOAD = 10 * 1024 * 1024;
+
 // 裁剪用的解码结果放在模块级而不是 data 里：Image 对象不需要（也不该）被 Vue 代理，
 // drawImage 直接吃原始对象最稳。
 let cropImage = null;
 
 // 选文件后立刻做的校验：返回错误文案，空串表示通过
-const avatarFileError = (type, size) => {
+const fileTypeSizeError = (type, size, maxBytes) => {
   if (!type || !type.startsWith("image/")) return "请选择图片文件（jpg/png/webp 等）";
-  if (size > AVATAR_MAX_UPLOAD)
-    return `图片太大（上限 ${AVATAR_MAX_UPLOAD / 1024 / 1024}MB），请先压缩或换一张`;
+  if (size > maxBytes)
+    return `图片太大（上限 ${Math.round(maxBytes / 1024 / 1024)}MB），请先压缩或换一张`;
   return "";
 };
+
+const avatarFileError = (type, size) => fileTypeSizeError(type, size, AVATAR_MAX_UPLOAD);
+const backgroundFileError = (type, size) => fileTypeSizeError(type, size, BG_MAX_UPLOAD);
 
 // 解码出真实分辨率后再校验一次
 const avatarImageError = (w, h) => {
@@ -42,6 +52,33 @@ const avatarImageError = (w, h) => {
     return `图片太小（至少 ${AVATAR_MIN_SIDE}×${AVATAR_MIN_SIDE}），放大后会糊`;
   if (w * h > AVATAR_MAX_PIXELS) return "图片分辨率过高，请先缩小再上传";
   return "";
+};
+
+const backgroundImageError = (w, h) => {
+  if (!w || !h) return "这个文件不是能识别的图片";
+  if (Math.max(w, h) < BG_MIN_LONG_SIDE)
+    return `图片太小（长边至少 ${BG_MIN_LONG_SIDE}px），铺在对话区会糊`;
+  return "";
+};
+
+// 等比缩到长边不超过 max，且只缩不放（小图保持原尺寸）
+const fitSize = (w, h, max) => {
+  if (!w || !h) return { w: 1, h: 1 };
+  const scale = Math.min(1, max / Math.max(w, h));
+  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
+};
+
+// 整张画进画布并重编码为 JPEG 的 data URL。先铺白底：
+// 带透明通道的 PNG/WebP 直接转 JPEG，透明处会变成黑块。
+const encodeJpeg = (img, w, h, quality) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", quality);
 };
 
 // "铺满"取景框所需的基础缩放：取长短边的较大者，保证两个方向都不留空
@@ -94,6 +131,9 @@ const emptyCharForm = () => ({
   speech_style: "",
   backstory: "",
   avatar: "",
+  // 对话区背景图（data URL 数组）。放在表单里是必须的：新建角色时还没有 id、
+  // 没法立即上传，而且面板是整体提交的，漏了它就会把背景一次性清空。
+  backgrounds: [],
 });
 
 const app = Vue.createApp({
@@ -153,6 +193,12 @@ const app = Vue.createApp({
       revertArm: { gen: false, char: false, memory: false },
       // 头像校验/裁剪的就地提示（底部错误条在没打开会话时不渲染，不能承担这个角色）
       avatarError: "",
+      // 对话区背景：图片、当前第几张、上限、就地提示
+      bgImages: [],
+      bgIndex: 0,
+      bgMax: BG_MAX_COUNT,
+      bgError: "",
+      bgBusy: false,
       crop: {
         visible: false,
         target: "modal",
@@ -176,6 +222,16 @@ const app = Vue.createApp({
     // 当前会话绑定的角色（自由情境没有）。消息区的头像与名字都用它，省得模板里重复长条件
     activeChar() {
       return (this.activeSession && this.activeSession.character) || null;
+    },
+    // 对话区背景：只有角色两模式、且该角色有背景图时才有；自由情境、未选会话、
+    // 角色已删除都回落到空白背景
+    chatBgUrl() {
+      if (!this.activeChar || !this.bgImages.length) return "";
+      const i = Math.min(Math.max(this.bgIndex, 0), this.bgImages.length - 1);
+      return this.bgImages[i] || "";
+    },
+    showBgNav() {
+      return !!this.chatBgUrl && this.bgImages.length > 1;
     },
     // 裁剪弹窗里那张图的位移与缩放。transform 里 translate 在前、scale 在后，
     // 所以 (x, y) 就是"缩放后图片左上角"在取景框坐标系里的位置
@@ -281,6 +337,8 @@ const app = Vue.createApp({
           backstory: c.backstory,
           // 必须带上：面板是整体提交的，漏了它就会在保存角色卡时把头像一个不剩地清掉
           avatar: c.avatar || "",
+          // 背景图不随角色下发，由 loadBackgrounds() 填充
+          backgrounds: [],
         };
       } else {
         this.charForm = emptyCharForm();
@@ -512,6 +570,7 @@ const app = Vue.createApp({
       this.activeSession = null;
       this.messages = [];
       this.showArchived = false;
+      this.resetBackgrounds();
       this.initGenForm();
     },
 
@@ -615,6 +674,9 @@ const app = Vue.createApp({
         this.activeSessionId = id;
         this.activeByMode[session.mode] = id;
         this.messages = await this.api(`/api/sessions/${id}/messages`);
+        // 背景图单独取（只有角色两模式有）
+        if (session.character_id) await this.loadBackgrounds(session.character_id);
+        else this.resetBackgrounds();
         if (session.character_id) {
           this.expandedChars[session.character_id] = true;
         }
@@ -693,6 +755,7 @@ const app = Vue.createApp({
           this.activeSessionId = null;
           this.activeSession = null;
           this.messages = [];
+          this.resetBackgrounds();
         }
         await this.refreshSessions();
       } catch (e) {
@@ -825,8 +888,126 @@ const app = Vue.createApp({
       else this.charForm.avatar = "";
     },
 
+    // ---------- 对话区背景图 ----------
+    resetBackgrounds() {
+      this.bgImages = [];
+      this.bgIndex = 0;
+      this.bgError = "";
+    },
+
+    // 载入当前会话角色的背景图。syncForm=true 时同步写进右侧面板的 charForm——
+    // 否则在面板里一按保存就会把这组图整体提交成空。
+    async loadBackgrounds(cid, syncForm = true) {
+      try {
+        const resp = await this.api(`/api/characters/${cid}/backgrounds`);
+        this.bgImages = resp.images || [];
+        this.bgMax = resp.max || BG_MAX_COUNT;
+        if (this.bgIndex >= this.bgImages.length) this.bgIndex = 0;
+        if (syncForm && this.activeChar && this.activeChar.id === cid) {
+          this.charForm.backgrounds = [...this.bgImages];
+          // 只同步基线里的 backgrounds，不要整体重拍快照：
+          // 那会把面板里其它尚未保存的改动一并标记成"已保存"
+          if (this.charSaved) this.charSaved.backgrounds = [...this.bgImages];
+        }
+      } catch (e) {
+        this.bgImages = [];
+      }
+    },
+
+    // 角色弹窗里可能要编辑的不是当前会话的角色，所以单独取
+    async loadModalBackgrounds(cid) {
+      try {
+        const resp = await this.api(`/api/characters/${cid}/backgrounds`);
+        if (this.charModal.editingId === cid) {
+          this.charModal.form.backgrounds = resp.images || [];
+          this.bgMax = resp.max || BG_MAX_COUNT;
+        }
+      } catch (e) {
+        /* 取不到就按空处理，保存时以表单为准 */
+      }
+    },
+
+    prevBg() {
+      const n = this.bgImages.length;
+      if (n > 1) this.bgIndex = (this.bgIndex - 1 + n) % n;
+    },
+
+    nextBg() {
+      const n = this.bgImages.length;
+      if (n > 1) this.bgIndex = (this.bgIndex + 1) % n;
+    },
+
+    bgList(target) {
+      return (target === "modal" ? this.charModal.form.backgrounds : this.charForm.backgrounds) || [];
+    },
+
+    setBgList(target, list) {
+      if (target === "modal") this.charModal.form.backgrounds = list;
+      else this.charForm.backgrounds = list;
+    },
+
+    // target: "modal"（角色弹窗）或 "panel"（右侧面板角色卡）
+    async addBackgrounds(e, target) {
+      const files = Array.from(e.target.files || []);
+      e.target.value = ""; // 清掉，才能连续两次选同一个文件
+      if (!files.length) return;
+      const list = this.bgList(target);
+      const room = this.bgMax - list.length;
+      this.bgError = "";
+      if (room <= 0) {
+        this.bgError = `最多只能放 ${this.bgMax} 张背景图`;
+        return;
+      }
+      // 一次性可能选好几张大图，逐张缩放编码会占用一段时间，
+      // 期间给个"处理中"状态并把按钮禁掉，避免重复点击
+      this.bgBusy = true;
+      const added = [];
+      let problem = "";
+      try {
+        for (const file of files.slice(0, room)) {
+          const early = backgroundFileError(file.type, file.size);
+          if (early) {
+            problem = early;
+            continue;
+          }
+          let img;
+          try {
+            img = await loadImage(await readAsDataURL(file));
+          } catch (err) {
+            problem = "有文件不是能识别的图片，已跳过";
+            continue;
+          }
+          const later = backgroundImageError(img.naturalWidth, img.naturalHeight);
+          if (later) {
+            problem = later;
+            continue;
+          }
+          const { w, h } = fitSize(img.naturalWidth, img.naturalHeight, BG_MAX_PX);
+          try {
+            added.push(encodeJpeg(img, w, h, BG_QUALITY));
+          } catch (err) {
+            problem = "有图片无法处理（可能引用了外部资源），已跳过";
+          }
+          await new Promise((r) => setTimeout(r, 0)); // 让出主线程，界面不至于卡住
+        }
+      } finally {
+        this.bgBusy = false;
+      }
+      if (added.length) this.setBgList(target, [...list, ...added]);
+      if (files.length > room) problem = `最多 ${this.bgMax} 张，多选的已忽略`;
+      this.bgError = problem;
+    },
+
+    removeBackground(target, i) {
+      const list = [...this.bgList(target)];
+      list.splice(i, 1);
+      this.setBgList(target, list);
+      this.bgError = "";
+    },
+
     openCharacterModal(c = null) {
       this.avatarError = ""; // 换一个角色就清掉上一次的提示
+      this.bgError = "";
       if (c) {
         this.charModal = {
           visible: true,
@@ -838,8 +1019,10 @@ const app = Vue.createApp({
             speech_style: c.speech_style,
             backstory: c.backstory,
             avatar: c.avatar || "",
+            backgrounds: [], // 背景图不随角色列表下发，下面单独取
           },
         };
+        this.loadModalBackgrounds(c.id);
       } else {
         this.charModal = { visible: false, editingId: null, form: emptyCharForm() };
         this.charModal.visible = true;
@@ -847,17 +1030,21 @@ const app = Vue.createApp({
     },
 
     async saveCharacterModal() {
-      const f = this.charModal.form;
+      // 背景图不属于角色接口的字段，单独整体提交，所以先从角色载荷里摘出去
+      const { backgrounds, ...charPayload } = this.charModal.form;
       try {
-        if (this.charModal.editingId) {
-          await this.api(
-            `/api/characters/${this.charModal.editingId}`,
-            this.jsonOpts("PUT", f)
-          );
+        let cid = this.charModal.editingId;
+        if (cid) {
+          await this.api(`/api/characters/${cid}`, this.jsonOpts("PUT", charPayload));
         } else {
-          const c = await this.api("/api/characters", this.jsonOpts("POST", f));
+          const c = await this.api("/api/characters", this.jsonOpts("POST", charPayload));
+          cid = c.id;
           this.expandedChars[c.id] = true;
         }
+        await this.api(
+          `/api/characters/${cid}/backgrounds`,
+          this.jsonOpts("PUT", { images: backgrounds || [] })
+        );
         this.charModal.visible = false;
         await this.afterCharacterChange();
       } catch (e) {
@@ -866,10 +1053,13 @@ const app = Vue.createApp({
     },
 
     async saveCharacterDrawer() {
+      const { backgrounds, ...charPayload } = this.charForm;
       try {
+        const cid = this.activeSession.character.id;
+        await this.api(`/api/characters/${cid}`, this.jsonOpts("PUT", charPayload));
         await this.api(
-          `/api/characters/${this.activeSession.character.id}`,
-          this.jsonOpts("PUT", this.charForm)
+          `/api/characters/${cid}/backgrounds`,
+          this.jsonOpts("PUT", { images: backgrounds || [] })
         );
         await this.afterCharacterChange();
       } catch (e) {
@@ -907,6 +1097,9 @@ const app = Vue.createApp({
       if (this.activeSessionId) {
         this.activeSession = await this.api(`/api/sessions/${this.activeSessionId}`);
       }
+      // 角色可能刚被保存或删除，背景图跟着刷新（没有角色就清空）
+      if (this.activeChar) await this.loadBackgrounds(this.activeChar.id);
+      else this.resetBackgrounds();
     },
 
     startRename() {
