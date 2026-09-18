@@ -11,7 +11,10 @@ CREATE TABLE IF NOT EXISTS characters (
     speech_style TEXT NOT NULL DEFAULT '',
     backstory    TEXT NOT NULL DEFAULT '',
     created_at   TEXT NOT NULL,
-    updated_at   TEXT NOT NULL
+    updated_at   TEXT NOT NULL,
+    -- 自定义头像，存 data URL（jpg/png/webp）。放在最后：ALTER TABLE ADD COLUMN 也是追加到末尾，
+    -- 这样新库与补列后的旧库列序一致。空串表示不用自定义头像，回落到姓名首字占位。
+    avatar       TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -69,14 +72,21 @@ def now() -> str:
 
 
 def _migrate(con: sqlite3.Connection) -> None:
-    """为存量的旧库补列：CREATE TABLE IF NOT EXISTS 不会修改已存在的表。"""
-    cols = {row[1] for row in con.execute("PRAGMA table_info(sessions)")}
-    if "title_auto" not in cols:
+    """为存量的旧库补列：CREATE TABLE IF NOT EXISTS 不会修改已存在的表。
+
+    每张表都先确认存在再补列：本函数也会被只建了部分表的场景调用
+    （单测里造的最小旧库就是如此），缺表时静默跳过而不是报错。
+    """
+    sess_cols = {row[1] for row in con.execute("PRAGMA table_info(sessions)")}
+    if sess_cols and "title_auto" not in sess_cols:
         con.execute(
             "ALTER TABLE sessions ADD COLUMN title_auto INTEGER NOT NULL DEFAULT 1"
         )
         # 存量会话一律不参与自动命名，避免覆盖用户已有的标题
         con.execute("UPDATE sessions SET title_auto=0")
+    char_cols = {row[1] for row in con.execute("PRAGMA table_info(characters)")}
+    if char_cols and "avatar" not in char_cols:
+        con.execute("ALTER TABLE characters ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
 
 
 def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -> None:

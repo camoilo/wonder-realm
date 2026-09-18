@@ -25,7 +25,10 @@
           <div v-for="c in characters" :key="c.id" class="char-group">
             <div class="char-row" @click="toggleChar(c.id)">
               <span class="chevron" :class="{open: expandedChars[c.id]}">›</span>
-              <span class="avatar sm">{{ c.name.slice(0, 1) }}</span>
+              <span class="avatar sm">
+                <img v-if="c.avatar" :src="c.avatar" alt="">
+                <template v-else>{{ c.name.slice(0, 1) }}</template>
+              </span>
               <span class="char-name">{{ c.name }}</span>
               <button class="icon-btn" title="编辑角色" @click.stop="openCharacterModal(c)">✎</button>
             </div>
@@ -108,11 +111,14 @@
             <span class="fold-toggle">{{ showArchived ? "收起" : "展开" }}</span>
           </div>
           <div v-for="m in displayMessages" :key="m.id" class="msg" :class="[m.role, {archived: m.archived}]">
-            <div v-if="m.role === 'assistant' && activeSession.character" class="msg-side">
-              <span class="avatar lg">{{ activeSession.character.name.slice(0, 1) }}</span>
-              <span class="side-name" :title="activeSession.character.name">{{ activeSession.character.name }}</span>
+            <div v-if="m.role === 'assistant' && activeChar" class="msg-side">
+              <span class="avatar lg">
+                <img v-if="activeChar.avatar" :src="activeChar.avatar" :alt="activeChar.name">
+                <template v-else>{{ activeChar.name.slice(0, 1) }}</template>
+              </span>
             </div>
             <div class="bubble-wrap">
+              <div v-if="m.role === 'assistant' && activeChar" class="msg-name">{{ activeChar.name }}</div>
               <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
                 <template v-if="m.scenario === 'MULTI'">
                   <template v-for="(seg, si) in segmentsOf(m)" :key="si">
@@ -144,14 +150,19 @@
             </div>
           </div>
           <div v-if="streaming" class="msg assistant">
-            <div v-if="activeSession.character" class="msg-side">
-              <span class="avatar lg">{{ activeSession.character.name.slice(0, 1) }}</span>
-              <span class="side-name" :title="activeSession.character.name">{{ activeSession.character.name }}</span>
+            <div v-if="activeChar" class="msg-side">
+              <span class="avatar lg">
+                <img v-if="activeChar.avatar" :src="activeChar.avatar" :alt="activeChar.name">
+                <template v-else>{{ activeChar.name.slice(0, 1) }}</template>
+              </span>
             </div>
-            <div class="bubble streaming-bubble">
-              <div v-if="thinkPhase" class="phase">思考中<span class="dots"><i></i><i></i><i></i></span></div>
-              <div v-else-if="streamText" class="text">{{ streamText }}</div>
-              <div v-else class="phase">生成中<span class="dots"><i></i><i></i><i></i></span></div>
+            <div class="bubble-wrap">
+              <div v-if="activeChar" class="msg-name">{{ activeChar.name }}</div>
+              <div class="bubble streaming-bubble">
+                <div v-if="thinkPhase" class="phase">思考中<span class="dots"><i></i><i></i><i></i></span></div>
+                <div v-else-if="streamText" class="text">{{ streamText }}</div>
+                <div v-else class="phase">生成中<span class="dots"><i></i><i></i><i></i></span></div>
+              </div>
             </div>
           </div>
         </template>
@@ -244,6 +255,18 @@
                       @click="armRevert('char')">{{ revertArm.char ? "确认还原？" : "还原" }}</button>
             </span>
           </div>
+          <div class="avatar-pick">
+            <span class="avatar xl">
+              <img v-if="charForm.avatar" :src="charForm.avatar" alt="">
+              <template v-else>{{ (charForm.name || "?").slice(0, 1) }}</template>
+            </span>
+            <div class="avatar-pick-actions">
+              <label class="ghost-btn file-btn">选择图片
+                <input type="file" accept="image/*" @change="pickAvatar($event, 'panel')">
+              </label>
+              <button v-if="charForm.avatar" class="ghost-btn" @click="clearAvatar('panel')">移除头像</button>
+            </div>
+          </div>
           <label class="field">姓名<input v-model="charForm.name" type="text"></label>
           <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
           <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
@@ -281,6 +304,19 @@
   <div class="modal-mask" v-if="charModal.visible" @click.self="charModal.visible = false">
     <div class="modal">
       <h2>{{ charModal.editingId ? "编辑角色" : "新建角色" }}</h2>
+      <div class="avatar-pick">
+        <span class="avatar xl">
+          <img v-if="charModal.form.avatar" :src="charModal.form.avatar" alt="">
+          <template v-else>{{ (charModal.form.name || "?").slice(0, 1) }}</template>
+        </span>
+        <div class="avatar-pick-actions">
+          <label class="ghost-btn file-btn">选择图片
+            <input type="file" accept="image/*" @change="pickAvatar($event, 'modal')">
+          </label>
+          <button v-if="charModal.form.avatar" class="ghost-btn" @click="clearAvatar('modal')">移除头像</button>
+        </div>
+      </div>
+      <p class="hint">头像可选；图片会缩到最长边 256px 后随角色一起保存（跟着数据库走，备份也包含它）</p>
       <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
       <label class="field">外观<textarea v-model="charModal.form.appearance" rows="2" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
       <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>

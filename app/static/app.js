@@ -12,12 +12,26 @@ const revertTimers = {};
 // 自由情境"继续"按钮发出的内容：等同于用户手打一条"请继续"
 const CONTINUE_PROMPT = "请继续";
 
+// 自定义头像：在浏览器里等比缩到最长边不超过这个像素数，再重编码为 JPEG 上传。
+// 前端就把图压好，后端不必收原始文件（省掉 multipart 依赖），也保证存进库的
+// 永远是我们自己编码的位图而不是用户原始字节。
+const AVATAR_MAX_PX = 256;
+const AVATAR_QUALITY = 0.85;
+
+// 等比缩放的尺寸换算，抽成纯函数便于单测；不放大（小图保持原尺寸）。
+const fitSize = (w, h, max) => {
+  if (!w || !h) return { w: 1, h: 1 };
+  const scale = Math.min(1, max / Math.max(w, h));
+  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
+};
+
 const emptyCharForm = () => ({
   name: "",
   appearance: "",
   personality: "",
   speech_style: "",
   backstory: "",
+  avatar: "",
 });
 
 const app = Vue.createApp({
@@ -81,6 +95,10 @@ const app = Vue.createApp({
   computed: {
     isCharacterMode() {
       return MODES[this.mode].character;
+    },
+    // 当前会话绑定的角色（自由情境没有）。消息区的头像与名字都用它，省得模板里重复长条件
+    activeChar() {
+      return (this.activeSession && this.activeSession.character) || null;
     },
     isFreeScenario() {
       return !!this.activeSession && this.activeSession.mode === "free_scenario";
@@ -164,6 +182,8 @@ const app = Vue.createApp({
           personality: c.personality,
           speech_style: c.speech_style,
           backstory: c.backstory,
+          // 必须带上：面板是整体提交的，漏了它就会在保存角色卡时把头像一个不剩地清掉
+          avatar: c.avatar || "",
         };
       } else {
         this.charForm = emptyCharForm();
@@ -578,6 +598,56 @@ const app = Vue.createApp({
       }
     },
 
+    // 把用户选的图片读进 <img> → 等比缩到 AVATAR_MAX_PX → 重编码成 JPEG data URL。
+    // 直接上传原文件会带来两个问题：库被大图撑爆，以及要把任意字节当图片存下来。
+    readAvatarFile(file) {
+      return new Promise((resolve, reject) => {
+        if (!file.type || !file.type.startsWith("image/")) {
+          reject(new Error("请选择图片文件"));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("读取文件失败"));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error("这个文件不是能识别的图片"));
+          img.onload = () => {
+            const { w, h } = fitSize(img.naturalWidth, img.naturalHeight, AVATAR_MAX_PX);
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            // 先铺一层白底：带透明通道的 PNG/WebP 转 JPEG 时，透明处会变成黑块
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", AVATAR_QUALITY));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+
+    // target: "modal"（新建/编辑角色弹窗）或 "panel"（右侧面板角色卡）
+    async pickAvatar(e, target) {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = ""; // 清掉，才能连续两次选同一个文件
+      if (!file) return;
+      try {
+        const dataUrl = await this.readAvatarFile(file);
+        if (target === "modal") this.charModal.form.avatar = dataUrl;
+        else this.charForm.avatar = dataUrl;
+      } catch (err) {
+        this.error = err.message;
+      }
+    },
+
+    clearAvatar(target) {
+      if (target === "modal") this.charModal.form.avatar = "";
+      else this.charForm.avatar = "";
+    },
+
     openCharacterModal(c = null) {
       if (c) {
         this.charModal = {
@@ -589,6 +659,7 @@ const app = Vue.createApp({
             personality: c.personality,
             speech_style: c.speech_style,
             backstory: c.backstory,
+            avatar: c.avatar || "",
           },
         };
       } else {

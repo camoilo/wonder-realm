@@ -31,14 +31,15 @@ def list_characters(db=Depends(get_db)):
 @router.post("/characters")
 def create_character(body: CharacterIn, db=Depends(get_db)):
     cur = db.execute(
-        "INSERT INTO characters(name, appearance, personality, speech_style, backstory, created_at, updated_at) "
-        "VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO characters(name, appearance, personality, speech_style, backstory, avatar, created_at, updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?)",
         (
             body.name.strip(),
             body.appearance.strip(),
             body.personality.strip(),
             body.speech_style.strip(),
             body.backstory.strip(),
+            body.avatar,
             now(),
             now(),
         ),
@@ -56,7 +57,7 @@ def get_character(cid: int, db=Depends(get_db)):
 def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
     _get_character(db, cid)
     db.execute(
-        "UPDATE characters SET name=?, appearance=?, personality=?, speech_style=?, backstory=?, updated_at=? "
+        "UPDATE characters SET name=?, appearance=?, personality=?, speech_style=?, backstory=?, avatar=?, updated_at=? "
         "WHERE id=?",
         (
             body.name.strip(),
@@ -64,6 +65,7 @@ def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
             body.personality.strip(),
             body.speech_style.strip(),
             body.backstory.strip(),
+            body.avatar,
             now(),
             cid,
         ),
