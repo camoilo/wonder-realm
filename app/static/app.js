@@ -9,8 +9,8 @@ const SEGMENT_RE = /\[(SCENARIO|DIALOG)\]\s*(.*?)(?=\n?\[(?:SCENARIO|DIALOG)\]|$
 // "还原"键的解除武装计时器。放模块级而不是 data 里：定时器句柄不需要响应式
 const revertTimers = {};
 
-// 自由情境"继续"按钮发出的内容：等同于用户手打一条"请继续"
-const CONTINUE_PROMPT = "请继续";
+// 自由情境"继续"按钮发出的内容：等同于用户手打一条"继续"
+const CONTINUE_PROMPT = "继续";
 
 // 自定义头像：浏览器内先校验，再让用户拖动裁剪成正方形，最后缩到 256px 重编码为 JPEG 上传。
 // 前端就把图处理好，后端不必收原始文件（省掉 multipart 依赖），也保证存进库的
@@ -1249,7 +1249,7 @@ const app = Vue.createApp({
       await this.runSend(text);
     },
 
-    // 自由情境的"继续"：等价于自动发一条"请继续"，让模型接着上一条回复往下写。
+    // 自由情境的"继续"：等价于自动发一条"继续"，让模型接着上一条回复往下写。
     // 不动输入框——里面可能是用户正在写的草稿，不能被这个按钮吞掉。
     async continueGeneration() {
       if (!this.canContinue) return;
