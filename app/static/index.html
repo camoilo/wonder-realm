@@ -388,6 +388,9 @@
            @pointerup="cropUp" @pointercancel="cropUp">
         <img :src="crop.src" :style="cropImageStyle" alt="" draggable="false">
       </div>
+      <p v-if="cropSamplePx && cropSamplePx < 256" class="crop-warn">
+        取景范围只有 {{ cropSamplePx }}×{{ cropSamplePx }} 像素，放大到 256 后会偏糊；缩小一点缩放或换更大的图
+      </p>
       <label class="crop-zoom">
         <span>缩放</span>
         <input type="range" min="1" :max="crop.maxZoom" step="0.01" :value="crop.zoom"

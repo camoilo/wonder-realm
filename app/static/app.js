@@ -19,7 +19,7 @@ const AVATAR_OUT_PX = 256; // 输出正方形的边长
 const CROP_VIEW_PX = 280; // 裁剪取景框的显示边长（正方形）
 const CROP_MAX_ZOOM = 3;
 const AVATAR_MAX_UPLOAD = 10 * 1024 * 1024; // 单文件上限
-const AVATAR_MIN_SIDE = 64; // 原图最短边下限
+const AVATAR_MIN_SIDE = 256; // 原图最短边下限：不小于输出边长，保证永远不会被放大
 const AVATAR_MAX_PIXELS = 40 * 1000 * 1000; // 原图像素总量上限
 const AVATAR_QUALITY = 0.85;
 
@@ -188,6 +188,14 @@ const app = Vue.createApp({
         transform: `translate(${c.x}px, ${c.y}px) scale(${s})`,
         transformOrigin: "0 0",
       };
+    },
+    // 当前取景框落在原图上的实际像素边长。放大后它可能小于输出边长，
+    // 那就意味着要放大（画面变糊）——只在小于输出尺寸时提示，平时不打扰
+    cropSamplePx() {
+      const c = this.crop;
+      if (!c.natW || !c.natH) return 0;
+      const { side } = cropSourceRect(c.natW, c.natH, c.view, c.zoom, c.x, c.y);
+      return Math.round(side);
     },
     isFreeScenario() {
       return !!this.activeSession && this.activeSession.mode === "free_scenario";

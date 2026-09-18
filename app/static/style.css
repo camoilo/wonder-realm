@@ -548,13 +548,18 @@ html, body {
    与其它弹窗的"按钮靠右"不一致 */
 .crop-modal .modal-actions { align-self: stretch; }
 
-/* 取景框本身就是裁剪范围：溢出裁掉，所以框内所见即所得 */
+/* 取景框本身就是裁剪范围：溢出裁掉，所以框内所见即所得。
+   边界用 outline（蓝色）而不是 border：全局是 box-sizing: border-box，加 border 会把
+   可见区域从 280px 缩到 276px，而裁剪换算按 280px 算，框里看到的和实际裁到的就会差 4px。
+   outline 不占布局，几何与换算始终一致。白色背景的图也能看清边界。 */
 .crop-view {
   position: relative;
   flex: none;
   overflow: hidden;
   background: #eef0f4;
   border-radius: 10px;
+  outline: 2px solid var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   cursor: grab;
   touch-action: none; /* 触屏上拖动不被页面滚动手势抢走 */
   user-select: none;
@@ -582,6 +587,18 @@ html, body {
 }
 .crop-zoom input { flex: 1; }
 .crop-reset { padding: 4px 10px; font-size: 12px; }
+
+/* 只在"放大到会糊"时出现 */
+.crop-warn {
+  align-self: stretch;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--error-text);
+  background: var(--error-bg);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
 
 .scenario {
   background: var(--scenario-bg);
