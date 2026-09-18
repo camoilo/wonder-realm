@@ -193,6 +193,8 @@ const app = Vue.createApp({
       revertArm: { gen: false, char: false, memory: false },
       // 头像校验/裁剪的就地提示（底部错误条在没打开会话时不渲染，不能承担这个角色）
       avatarError: "",
+      // 右侧面板各分区的收起状态（true = 已折叠）。纯界面偏好，不持久化
+      panelFold: { gen: false, char: false, memory: false },
       // 对话区背景：图片、当前第几张、上限、就地提示
       bgImages: [],
       bgIndex: 0,
@@ -889,6 +891,10 @@ const app = Vue.createApp({
     },
 
     // ---------- 对话区背景图 ----------
+    togglePanelFold(key) {
+      this.panelFold[key] = !this.panelFold[key];
+    },
+
     resetBackgrounds() {
       this.bgImages = [];
       this.bgIndex = 0;
