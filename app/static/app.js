@@ -9,6 +9,9 @@ const SEGMENT_RE = /\[(SCENARIO|DIALOG)\]\s*(.*?)(?=\n?\[(?:SCENARIO|DIALOG)\]|$
 // "还原"键的解除武装计时器。放模块级而不是 data 里：定时器句柄不需要响应式
 const revertTimers = {};
 
+// 自由情境"继续"按钮发出的内容：等同于用户手打一条"请继续"
+const CONTINUE_PROMPT = "请继续";
+
 const emptyCharForm = () => ({
   name: "",
   appearance: "",
@@ -78,6 +81,18 @@ const app = Vue.createApp({
   computed: {
     isCharacterMode() {
       return MODES[this.mode].character;
+    },
+    isFreeScenario() {
+      return !!this.activeSession && this.activeSession.mode === "free_scenario";
+    },
+    // "继续"要有上一条回复可接才可用；生成中、角色已删时也不给用
+    canContinue() {
+      return (
+        this.isFreeScenario &&
+        !this.streaming &&
+        !this.orphanActive &&
+        this.messages.some((m) => m.role === "assistant")
+      );
     },
     genSectionTitle() {
       // 面板属于当前会话，标题按会话自身的模式取，避免切换 Tab 后标题不符
@@ -775,10 +790,26 @@ const app = Vue.createApp({
       }
     },
 
+    canSendText(text) {
+      return !!text && !this.streaming && !!this.activeSession && !this.orphanActive;
+    },
+
     async send() {
       const text = this.input.trim();
-      if (!text || this.streaming || !this.activeSession || this.orphanActive) return;
-      this.input = "";
+      if (!this.canSendText(text)) return;
+      this.input = ""; // 通过校验后才清空，发不出去时不会把草稿弄丢
+      await this.runSend(text);
+    },
+
+    // 自由情境的"继续"：等价于自动发一条"请继续"，让模型接着上一条回复往下写。
+    // 不动输入框——里面可能是用户正在写的草稿，不能被这个按钮吞掉。
+    async continueGeneration() {
+      if (!this.canContinue) return;
+      await this.runSend(CONTINUE_PROMPT);
+    },
+
+    // 发消息与"继续"共用的发送路径，避免两处各写一遍流式处理而走偏
+    async runSend(text) {
       this.error = "";
       this.lastFailedUser = null;
       this.beginStream();

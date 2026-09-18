@@ -616,6 +616,39 @@ html, body {
 textarea:focus { outline: none; border-color: var(--accent); }
 textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 
+/* 发送键那一列：自由情境下"继续"叠在发送/停止上方，两键等宽 */
+.send-col {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 自由情境的"继续"：次级按钮，不抢发送键的视觉重量 */
+.continue-btn {
+  padding: 9px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.continue-btn:hover:not(:disabled) {
+  background: #f0f2f6;
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+.continue-btn:disabled {
+  color: var(--text-soft);
+  background: #f0f1f4;
+  cursor: not-allowed;
+}
+
 .send-btn {
   padding: 11px 22px;
   border: none;
