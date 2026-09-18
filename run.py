@@ -27,18 +27,15 @@ def open_browser_later(url: str, delay: float = 1.5) -> None:
 
 
 def startup_backup(cfg: dict) -> Path | None:
-    """每天首次启动时留一份备份；开关关掉、今天已备过、库还不存在时都跳过。"""
+    """每次启动都留一份备份；开关关掉或库还不存在时跳过（一天多份是正常的）。"""
     opts = cfg.get("backup") or {}
     if not opts.get("on_startup", True):
         return None
     backup_dir = opts.get("dir")
     if not backup_dir:
         return None
-    if backup.has_backup_today(backup_dir):
-        log.info("今天已经备份过，跳过启动备份")
-        return None
     return backup.make_backup(
-        database.db_file(cfg["data_dir"]), backup_dir, opts.get("keep", 14)
+        database.db_file(cfg["data_dir"]), backup_dir, opts.get("days", 14)
     )
 
 

@@ -4,11 +4,13 @@
 `chatbot.db-wal` 里、尚未并回主文件。只拷 `.db` 会得到一个缺少近期对话的快照——平时看不出来，
 真要用它恢复时才发现丢的正是最后那段。`Connection.backup()` 通过连接读取当前已提交状态，
 WAL 里的内容一并包含，且在应用正常运行、连接打开时也能安全导出。
+
+保留策略按**天数**而不是份数：每次启动都会备一份（一天可能好几份），超出保留天数的才清理。
 """
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 log = logging.getLogger("ollama_agent")
@@ -26,10 +28,13 @@ def existing_backups(backup_dir) -> list[Path]:
     return sorted(Path(backup_dir).glob(f"{PREFIX}*{SUFFIX}"))
 
 
-def has_backup_today(backup_dir, today: str | None = None) -> bool:
-    """今天是否已经备过——用来保证"每天首次启动备一份"而不是每次重启都备。"""
-    day = today or datetime.now().strftime("%Y%m%d")
-    return any(p.name.startswith(f"{PREFIX}{day}") for p in Path(backup_dir).glob(f"{PREFIX}*{SUFFIX}"))
+def _date_of(path: Path):
+    """从文件名解析出备份日期；名字不符合约定时返回 None（这类文件不参与清理，免得误删）。"""
+    stamp = path.name[len(PREFIX): -len(SUFFIX)]
+    try:
+        return datetime.strptime(stamp[:8], "%Y%m%d").date()
+    except ValueError:
+        return None
 
 
 def _remove_file(path: Path) -> None:
@@ -41,22 +46,32 @@ def _remove_file(path: Path) -> None:
             log.warning("删除备份文件失败（%s）：%s", p.name, e)
 
 
-def _prune(backup_dir: Path, keep: int) -> int:
-    """只保留最近 keep 份，返回删掉的数量。"""
+def _prune(backup_dir: Path, days: int) -> int:
+    """删掉超过保留天数的备份，返回删掉的数量。
+
+    基准取"最新一份备份的日期"而不是系统当天。刚做完备份时两者相同，但用前者可以保证
+    任何情况下都不会把最近的历史一次清空（例如隔了很久才启动，系统当天口径会把旧备份全删光，
+    只剩刚做的这一份）。
+    """
     files = existing_backups(backup_dir)
-    if keep <= 0 or len(files) <= keep:
+    if days <= 0 or len(files) <= 1:
         return 0
+    # 取所有可解析日期里的最大者作为基准。不要图省事用 files[-1]：CJK 等字符排序在数字之后，
+    # 一个名字不合约定的文件排在末尾就会让基准解析失败，从而把整轮清理悄悄跳过。
+    known = [d for d in (_date_of(p) for p in files) if d is not None]
+    if not known:
+        return 0
+    cutoff = max(known) - timedelta(days=days - 1)  # 含最新那份当天，共 days 个自然日
     removed = 0
-    for old in files[:-keep]:
-        try:
+    for old in files:
+        day = _date_of(old)
+        if day is not None and day < cutoff:
             _remove_file(old)
             removed += 1
-        except OSError as e:  # 删不掉不该影响备份本身
-            log.warning("清理旧备份失败（%s）：%s", old.name, e)
     return removed
 
 
-def make_backup(db_path, backup_dir, keep: int = 14) -> Path | None:
+def make_backup(db_path, backup_dir, days: int = 14) -> Path | None:
     """把 db_path 备份进 backup_dir，成功返回备份路径；无需备份或失败返回 None。
 
     本函数不抛异常：备份是附加保障，失败只记日志，绝不能因此挡住应用启动。
@@ -67,12 +82,17 @@ def make_backup(db_path, backup_dir, keep: int = 14) -> Path | None:
         return None
 
     backup_dir = Path(backup_dir)
-    target = backup_dir / f"{PREFIX}{_stamp()}{SUFFIX}"
+    stamp = _stamp()
+    target = backup_dir / f"{PREFIX}{stamp}{SUFFIX}"
     tmp = target.with_name(target.name + ".tmp")
     try:
         backup_dir.mkdir(parents=True, exist_ok=True)
-        if target.exists():  # 同一秒内被调用两次：沿用已有那份，不覆盖
-            return target
+        # 同一秒内再次启动（比如连点两下启动脚本）时另存一份，而不是覆盖或静默跳过
+        seq = 1
+        while target.exists():
+            seq += 1
+            target = backup_dir / f"{PREFIX}{stamp}-{seq}{SUFFIX}"
+            tmp = target.with_name(target.name + ".tmp")
         _remove_file(tmp)
 
         # 用读写方式打开源库：允许 SQLite 自行处理 WAL 恢复，读取到的才是最新已提交状态
@@ -106,11 +126,11 @@ def make_backup(db_path, backup_dir, keep: int = 14) -> Path | None:
         log.error("备份失败：%s", e)
         return None
 
-    removed = _prune(backup_dir, keep)
+    removed = _prune(backup_dir, days)
     log.info(
         "已备份数据库到 %s（%d 字节）%s",
         target,
         target.stat().st_size,
-        f"，同时清理了 {removed} 份旧备份" if removed else "",
+        f"，同时清理了 {removed} 份超过 {days} 天的旧备份" if removed else "",
     )
     return target

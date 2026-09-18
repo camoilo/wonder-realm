@@ -25,7 +25,7 @@ server:
 
 backup:
   dir: ./backups                    # 备份目录；相对路径按项目根目录解析，可改成别的盘或网盘同步目录
-  keep: 14                          # 保留最近多少份，超出的自动删除
-  on_startup: true                  # 每天首次启动应用时自动备份一份
+  days: 14                          # 保留最近多少个自然日的备份（每次启动都备，一天可能多份）
+  on_startup: true                  # 每次启动应用时自动备份一份
 
 data_dir: ./data                  # 数据库目录，直接指定

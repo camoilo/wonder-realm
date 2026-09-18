@@ -21,7 +21,7 @@ DEFAULTS = {
     "naming": {"model": "", "max_chars": 12, "min_user_chars": 8},
     "server": {"host": "127.0.0.1", "port": 17800},
     "data_dir": str(ROOT / "data"),
-    "backup": {"dir": str(ROOT / "backups"), "keep": 14, "on_startup": True},
+    "backup": {"dir": str(ROOT / "backups"), "days": 14, "on_startup": True},
 }
 
 
