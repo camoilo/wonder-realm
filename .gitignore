@@ -1,0 +1,51 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虚拟环境（uv 按 .python-version 自动创建，不入库）
+.venv/
+venv/
+env/
+
+# 构建与缓存
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------- 运行时数据 ----------
+# SQLite 数据库：角色、会话、消息、记忆、模型选择都在这里，属于本机数据
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# ---------- 配置与密钥 ----------
+# 本地覆盖用的配置与密钥不入库；config.yaml 本身是仓库的一部分，保留
+.env
+.env.*
+*.local.yaml
+
+# ---------- 日志 ----------
+*.log
+logs/
+
+# ---------- 编辑器与操作系统 ----------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---------- 说明 ----------
+# .python-version / uv.lock / pyproject.toml / config.yaml 都应当提交：
+# 前者固定 Python 版本，uv.lock 锁定依赖版本，config.yaml 是运行配置模板。

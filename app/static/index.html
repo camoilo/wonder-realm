@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>本地对话机器人</title>
+  <link rel="stylesheet" href="style.css?v=9">
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+</head>
+<body>
+<div id="app" v-cloak>
+  <aside class="sidebar" :class="{collapsed: sideCollapsed}">
+    <div class="sidebar-inner">
+      <nav class="mode-tabs">
+        <button v-for="(m, key) in MODES" :key="key" class="mode-tab" :class="{active: mode === key}"
+                @click="switchMode(key)">{{ m.label }}</button>
+      </nav>
+
+      <div class="side-list">
+        <template v-if="isCharacterMode">
+          <div v-if="characters.length === 0" class="side-empty">
+            <p>还没有角色</p>
+            <button class="ghost-btn full" @click="openCharacterModal()">创建第一个角色</button>
+          </div>
+          <div v-for="c in characters" :key="c.id" class="char-group">
+            <div class="char-row" @click="toggleChar(c.id)">
+              <span class="chevron" :class="{open: expandedChars[c.id]}">›</span>
+              <span class="avatar sm">{{ c.name.slice(0, 1) }}</span>
+              <span class="char-name">{{ c.name }}</span>
+              <button class="icon-btn" title="编辑角色" @click.stop="openCharacterModal(c)">✎</button>
+            </div>
+            <div v-show="expandedChars[c.id]" class="char-sessions">
+              <div v-for="s in sessionsOf(c.id)" :key="s.id" class="session-row"
+                   :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
+                <span class="session-title">{{ s.title }}</span>
+                <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
+              </div>
+              <div class="session-row add" @click="createSessionForCharacter(c.id)">＋ 新会话</div>
+            </div>
+          </div>
+          <div v-if="orphanSessions.length" class="char-group">
+            <div class="char-row muted"><span class="chevron"></span>已删除角色的会话</div>
+            <div class="char-sessions">
+              <div v-for="s in orphanSessions" :key="s.id" class="session-row"
+                   :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
+                <span class="session-title">{{ s.title }}</span>
+                <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div v-if="freeSessions.length === 0" class="side-empty"><p>还没有会话</p></div>
+          <div v-for="s in freeSessions" :key="s.id" class="session-row"
+               :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
+            <span class="session-title">{{ s.title }}</span>
+            <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
+          </div>
+        </template>
+      </div>
+
+      <div class="side-footer">
+        <button v-if="isCharacterMode" class="ghost-btn full" @click="openCharacterModal()">新建角色</button>
+        <button class="primary-btn full" @click="newSession">新建会话</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="title-area">
+        <button class="icon-btn rail-toggle" :title="sideCollapsed ? '展开左侧栏' : '收起左侧栏'"
+                @click="sideCollapsed = !sideCollapsed">&#9776;</button>
+        <template v-if="activeSession">
+          <input v-if="renaming" v-model="renameText" class="title-input"
+                 @keydown.enter.prevent="saveRename" @blur="saveRename" />
+          <h1 v-else class="title" title="点击重命名" @click="startRename">{{ activeSession.title }}</h1>
+          <span class="chip">{{ MODES[activeSession.mode].label }}</span>
+          <span v-if="orphanActive" class="chip warn">角色已删除 · 仅可查看</span>
+        </template>
+        <h1 v-else class="title muted">未选择会话</h1>
+      </div>
+      <div class="toolbar">
+        <span v-if="modelWarning" class="model-warning">{{ modelWarning }}</span>
+        <select v-model="currentModel" class="model-select" :disabled="models.length === 0" @change="switchModel">
+          <option value="" disabled>选择模型</option>
+          <option v-for="m in models" :key="m.name" :value="m.name">{{ m.name }}{{ m.thinking ? "（思考型）" : "" }}</option>
+        </select>
+        <button v-if="activeSession" class="ghost-btn"
+                :title="panelCollapsed ? '展开右侧面板' : '收起右侧面板'"
+                @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}</button>
+      </div>
+    </header>
+
+    <main class="chat" ref="chatBox">
+      <div class="chat-inner">
+        <div v-if="!activeSession" class="empty">
+          <div class="empty-icon">&#9998;</div>
+          <p>从左侧选择或创建一个会话</p>
+        </div>
+        <div v-else-if="messages.length === 0 && !streaming" class="empty">
+          <div class="empty-icon">&#9998;</div>
+          <p>发送第一条消息，开始对话</p>
+        </div>
+        <template v-else>
+          <div v-if="archivedCount" class="archived-fold" @click="showArchived = !showArchived">
+            已归档 {{ archivedCount }} 条（已存入记忆）
+            <span class="fold-toggle">{{ showArchived ? "收起" : "展开" }}</span>
+          </div>
+          <div v-for="m in displayMessages" :key="m.id" class="msg" :class="[m.role, {archived: m.archived}]">
+            <div v-if="editingId === m.id" class="edit-box">
+              <label v-if="editForm.hasScenario" class="edit-field">
+                <span class="edit-label">情境说明</span>
+                <textarea v-model="editForm.scenario" rows="4" @input="autoGrow"
+                          placeholder="场景、动作、氛围等（留空则不显示情境块）"></textarea>
+              </label>
+              <label class="edit-field">
+                <span class="edit-label">{{ editForm.contentLabel }}</span>
+                <textarea v-model="editForm.content" rows="4" @input="autoGrow" :placeholder="editForm.contentPlaceholder"></textarea>
+              </label>
+              <p v-if="editForm.contentHint" class="hint">{{ editForm.contentHint }}</p>
+              <div class="edit-actions">
+                <span class="hint">仅影响后续生成的上下文，不修改已沉淀的记忆</span>
+                <div class="edit-btns">
+                  <button class="ghost-btn" @click="editingId = null">取消</button>
+                  <button class="primary-btn" :disabled="!editForm.content.trim()" @click="saveEdit(m)">保存</button>
+                </div>
+              </div>
+            </div>
+            <template v-else>
+              <div class="bubble-wrap">
+                <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
+                  <div v-if="m.role === 'assistant' && activeSession.character" class="bubble-head">
+                    <span class="avatar">{{ activeSession.character.name.slice(0, 1) }}</span>
+                    <span>{{ activeSession.character.name }}</span>
+                  </div>
+                  <template v-if="m.scenario === 'MULTI'">
+                    <template v-for="(seg, si) in segmentsOf(m)" :key="si">
+                      <div v-if="seg.type === 'scenario'" class="scenario">
+                        <span class="scenario-label">情境</span>{{ seg.text }}
+                      </div>
+                      <div v-else class="text">{{ seg.text }}</div>
+                    </template>
+                  </template>
+                  <template v-else>
+                    <div v-if="m.scenario" class="scenario">
+                      <span class="scenario-label">情境</span>{{ m.scenario }}
+                    </div>
+                    <div class="text">{{ m.content }}</div>
+                  </template>
+                  <span v-if="m.edited" class="edited-flag">已编辑</span>
+                  <span v-if="m.archived" class="archived-flag">已归档</span>
+                </div>
+                <div class="msg-actions" v-show="!streaming">
+                  <button title="复制" @click="copyText(m)">复制</button>
+                  <button title="编辑" @click="startEdit(m)">编辑</button>
+                  <button title="删除" @click="deleteMenuId = deleteMenuId === m.id ? null : m.id">删除</button>
+                  <button v-if="m.role === 'assistant'" title="重新生成" @click="regenerate(m)">重新生成</button>
+                </div>
+                <div v-if="deleteMenuId === m.id" class="delete-menu">
+                  <button @click="removeMessage(m, false)">删除这条</button>
+                  <button @click="removeMessage(m, true)">删除这里之后</button>
+                </div>
+              </div>
+            </template>
+          </div>
+          <div v-if="streaming" class="msg assistant">
+            <div class="bubble streaming-bubble">
+              <div v-if="thinkPhase" class="phase">思考中<span class="dots"><i></i><i></i><i></i></span></div>
+              <div v-else-if="streamText" class="text">{{ streamText }}</div>
+              <div v-else class="phase">生成中<span class="dots"><i></i><i></i><i></i></span></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </main>
+
+    <footer class="inputbar" v-if="activeSession">
+      <div class="input-inner">
+        <div v-if="orphanActive" class="notice">该会话绑定的角色已删除，仅可查看历史记录</div>
+        <div v-if="error" class="error">
+          <span class="error-text">{{ error }}</span>
+          <button v-if="lastFailedUser" class="retry-btn" @click="retryFailed">重试</button>
+          <button class="dismiss" @click="error = ''">&times;</button>
+        </div>
+        <div class="input-row">
+          <textarea
+            v-model="input"
+            :disabled="orphanActive"
+            rows="3"
+            placeholder="输入消息，Enter 发送（Shift+Enter 换行）"
+            @keydown.enter.exact.prevent="send"
+          ></textarea>
+          <button v-if="streaming" class="stop-btn" @click="stop">
+            <span class="stop-square"></span>停止
+          </button>
+          <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
+    <div class="panel-inner">
+      <div class="panel-head">
+        <h2>面板</h2>
+        <button class="icon-btn" title="收起面板" @click="panelCollapsed = true">✕</button>
+      </div>
+      <div class="panel-body">
+        <template v-if="activeSession">
+          <div class="panel-section">{{ genSectionTitle }}</div>
+          <div v-for="f in fieldsOf(activeSession.mode)" :key="f.key" class="field">
+            <span class="field-label">{{ f.label }}</span>
+            <div v-if="f.type === 'radio'" class="radio-row">
+              <label v-for="opt in f.options" :key="opt[0]" class="radio-item" :class="{on: genForm[f.key] === opt[0]}">
+                <input type="radio" :name="f.key" :value="opt[0]" v-model="genForm[f.key]">{{ opt[1] }}
+              </label>
+            </div>
+            <div v-else-if="f.type === 'tags'" class="tags-box">
+              <div class="tag-chips">
+                <span v-for="p in f.presets" :key="p" class="chip-btn"
+                      :class="{on: (genForm[f.key] || []).includes(p)}" @click="toggleTag(f.key, p)">{{ p }}</span>
+              </div>
+              <div class="tag-custom">
+                <span v-for="t in customTags(f)" :key="t" class="tag">{{ t }}<button class="tag-x" @click="removeTag(f.key, t)">&times;</button></span>
+                <input class="tag-input" v-model="tagDraft[f.key]" :placeholder="f.placeholder"
+                       @keydown.enter.prevent="addTag(f.key)" @blur="addTag(f.key)">
+              </div>
+            </div>
+            <div v-else class="input-wrap">
+              <textarea v-if="f.type === 'textarea'" v-model="genForm[f.key]" rows="2" :placeholder="f.placeholder"></textarea>
+              <input v-else type="text" v-model="genForm[f.key]" :placeholder="f.placeholder">
+              <button v-if="genForm[f.key]" class="clear-btn" title="清空这一栏" @click="genForm[f.key] = ''">✕</button>
+            </div>
+            <span v-if="f.hint" class="field-hint">{{ f.hint }}</span>
+          </div>
+          <button class="primary-btn full" @click="saveGenSettings">保存生成要求</button>
+          <p class="hint">保存后立即生效，只影响后续生成</p>
+        </template>
+        <template v-if="activeSession && activeSession.character">
+          <div class="panel-section">角色卡</div>
+          <label class="field">姓名<input v-model="charForm.name" type="text"></label>
+          <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
+          <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
+          <label class="field">语言风格<textarea v-model="charForm.speech_style" rows="3" placeholder="口癖、语气、用词习惯"></textarea></label>
+          <label class="field">背景故事<textarea v-model="charForm.backstory" rows="4"></textarea></label>
+          <div class="panel-actions">
+            <button class="danger-btn" @click="removeCharacter">删除角色</button>
+            <button class="primary-btn" :disabled="!charForm.name.trim()" @click="saveCharacterDrawer">保存</button>
+          </div>
+          <p class="hint">保存后，下一次生成即按新设定回复</p>
+        </template>
+        <template v-if="memoryScope">
+          <div class="panel-section">{{ memoryScope.label }}</div>
+          <p class="memory-meta">
+            已归档 {{ memoryData.message_count }} 条消息<template v-if="memoryData.updated_at"> · 更新于 {{ memoryData.updated_at }}</template>
+            <a class="refresh-link" @click="loadMemory">刷新</a>
+            <span v-if="memoryData.compress_failed" class="warn-text">上次压缩失败</span>
+          </p>
+          <textarea class="memory-text" v-model="memoryText" rows="10" placeholder="暂无记忆，随对话自动沉淀"></textarea>
+          <button class="primary-btn full" @click="saveMemory">保存记忆</button>
+          <p class="hint">手动编辑保存后，下一次生成即生效</p>
+        </template>
+      </div>
+    </div>
+  </aside>
+
+  <div class="modal-mask" v-if="charModal.visible" @click.self="charModal.visible = false">
+    <div class="modal">
+      <h2>{{ charModal.editingId ? "编辑角色" : "新建角色" }}</h2>
+      <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
+      <label class="field">外观<textarea v-model="charModal.form.appearance" rows="2" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
+      <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>
+      <label class="field">语言风格<textarea v-model="charModal.form.speech_style" rows="2" placeholder="口癖、语气、用词习惯"></textarea></label>
+      <label class="field">背景故事<textarea v-model="charModal.form.backstory" rows="3"></textarea></label>
+      <div class="modal-actions">
+        <button v-if="charModal.editingId" class="danger-btn" @click="removeCharacterFromModal">删除角色</button>
+        <span class="spacer"></span>
+        <button class="ghost-btn" @click="charModal.visible = false">取消</button>
+        <button class="primary-btn" :disabled="!charModal.form.name.trim()" @click="saveCharacterModal">保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-mask" v-if="newSessionModal.visible" @click.self="newSessionModal.visible = false">
+    <div class="modal">
+      <h2>新会话 · {{ MODES[mode].label }}</h2>
+      <label class="field">角色
+        <select v-model="newSessionModal.characterId">
+          <option v-for="c in characters" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+      </label>
+      <label class="field">标题（可选）<input v-model="newSessionModal.title" type="text" placeholder="留空则首轮对话后自动命名"></label>
+      <div class="modal-actions">
+        <button class="ghost-btn" @click="newSessionModal.visible = false">取消</button>
+        <button class="primary-btn" :disabled="!newSessionModal.characterId" @click="confirmNewSession">创建</button>
+      </div>
+      <p class="hint"><a @click="newSessionModal.visible = false; openCharacterModal()">没有角色？先创建一个</a></p>
+    </div>
+  </div>
+  <div class="modal-mask" v-if="confirmBox.visible" @click.self="answerConfirm(false)">
+    <div class="modal confirm-modal">
+      <p class="confirm-text">{{ confirmBox.text }}</p>
+      <div class="modal-actions">
+        <button class="ghost-btn" @click="answerConfirm(false)">取消</button>
+        <button class="danger-btn" @click="answerConfirm(true)">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="app.js?v=9"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+ollama:
+  base_url: http://localhost:11434
+  model: qwen2.5:3b              # 首次启动的默认模型；运行中以界面选择为准（app_settings）
+  options:
+    temperature: 0.8
+    num_ctx: 8192
+
+memory:
+  model: ""                       # 压缩用模型默认值，空 = 同对话模型；运行时可改
+  compress_threshold_chars: 6000  # 未归档上下文超过该字符数触发压缩
+  archive_batch_size: 20          # 每次归档的消息条数
+  max_memory_chars: 600           # 记忆摘要长度上限（写入提示词约束）
+
+chat:
+  history_max_messages: 60        # 注入历史的最大条数（截断最早的）
+
+naming:
+  model: ""                       # 会话自动命名用模型，空 = 同对话模型
+  max_chars: 12                   # 自动标题的字数上限
+  min_user_chars: 8               # 用户累计发言少于该字数时先不命名，等后续轮次
+
+server:
+  host: 127.0.0.1
+  port: 8000
+
+data_dir: ./data                  # 数据库目录，直接指定
