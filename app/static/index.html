@@ -108,12 +108,12 @@
             <span class="fold-toggle">{{ showArchived ? "收起" : "展开" }}</span>
           </div>
           <div v-for="m in displayMessages" :key="m.id" class="msg" :class="[m.role, {archived: m.archived}]">
+            <div v-if="m.role === 'assistant' && activeSession.character" class="msg-side">
+              <span class="avatar lg">{{ activeSession.character.name.slice(0, 1) }}</span>
+              <span class="side-name" :title="activeSession.character.name">{{ activeSession.character.name }}</span>
+            </div>
             <div class="bubble-wrap">
               <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
-                <div v-if="m.role === 'assistant' && activeSession.character" class="bubble-head">
-                  <span class="avatar">{{ activeSession.character.name.slice(0, 1) }}</span>
-                  <span>{{ activeSession.character.name }}</span>
-                </div>
                 <template v-if="m.scenario === 'MULTI'">
                   <template v-for="(seg, si) in segmentsOf(m)" :key="si">
                     <div v-if="seg.type === 'scenario'" class="scenario">
@@ -144,6 +144,10 @@
             </div>
           </div>
           <div v-if="streaming" class="msg assistant">
+            <div v-if="activeSession.character" class="msg-side">
+              <span class="avatar lg">{{ activeSession.character.name.slice(0, 1) }}</span>
+              <span class="side-name" :title="activeSession.character.name">{{ activeSession.character.name }}</span>
+            </div>
             <div class="bubble streaming-bubble">
               <div v-if="thinkPhase" class="phase">思考中<span class="dots"><i></i><i></i><i></i></span></div>
               <div v-else-if="streamText" class="text">{{ streamText }}</div>
@@ -189,7 +193,12 @@
         <template v-if="activeSession">
           <div class="panel-section">
             <span>{{ genSectionTitle }}</span>
-            <span v-if="genDirty" class="dirty-flag">未保存</span>
+            <span v-if="genDirty" class="dirty-tools">
+              <span class="dirty-flag">未保存</span>
+              <button class="revert-btn" :class="{armed: revertArm.gen}"
+                      :title="revertArm.gen ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                      @click="armRevert('gen')">{{ revertArm.gen ? "确认还原？" : "还原" }}</button>
+            </span>
           </div>
           <div v-for="f in fieldsOf(activeSession.mode)" :key="f.key" class="field">
             <span class="field-label">{{ f.label }}</span>
@@ -222,7 +231,12 @@
         <template v-if="activeSession && activeSession.character">
           <div class="panel-section">
             <span>角色卡</span>
-            <span v-if="charDirty" class="dirty-flag">未保存</span>
+            <span v-if="charDirty" class="dirty-tools">
+              <span class="dirty-flag">未保存</span>
+              <button class="revert-btn" :class="{armed: revertArm.char}"
+                      :title="revertArm.char ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                      @click="armRevert('char')">{{ revertArm.char ? "确认还原？" : "还原" }}</button>
+            </span>
           </div>
           <label class="field">姓名<input v-model="charForm.name" type="text"></label>
           <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
@@ -238,7 +252,12 @@
         <template v-if="memoryScope">
           <div class="panel-section">
             <span>{{ memoryScope.label }}</span>
-            <span v-if="memoryDirty" class="dirty-flag">未保存</span>
+            <span v-if="memoryDirty" class="dirty-tools">
+              <span class="dirty-flag">未保存</span>
+              <button class="revert-btn" :class="{armed: revertArm.memory}"
+                      :title="revertArm.memory ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                      @click="armRevert('memory')">{{ revertArm.memory ? "确认还原？" : "还原" }}</button>
+            </span>
           </div>
           <p class="memory-meta">
             已归档 {{ memoryData.message_count }} 条消息<template v-if="memoryData.updated_at"> · 更新于 {{ memoryData.updated_at }}</template>

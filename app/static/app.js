@@ -6,6 +6,9 @@ const MODES = {
 
 const SEGMENT_RE = /\[(SCENARIO|DIALOG)\]\s*(.*?)(?=\n?\[(?:SCENARIO|DIALOG)\]|$)/gs;
 
+// "还原"键的解除武装计时器。放模块级而不是 data 里：定时器句柄不需要响应式
+const revertTimers = {};
+
 const emptyCharForm = () => ({
   name: "",
   appearance: "",
@@ -67,6 +70,8 @@ const app = Vue.createApp({
       genSaved: {},
       charSaved: emptyCharForm(),
       memorySaved: "",
+      // "还原"键的两次点击状态：第一次只是武装，再点一次才真的回退
+      revertArm: { gen: false, char: false, memory: false },
       tagDraft: {},
     };
   },
@@ -155,6 +160,16 @@ const app = Vue.createApp({
       // 但用户手上有未保存的编辑时不能覆盖掉
       if (!collapsed && !this.memoryDirty) this.loadMemory();
     },
+    // 改动被撤销（标识消失）时顺手解除还原键的武装，免得下次单击就误回退
+    genDirty(v) {
+      if (!v) this.disarmRevert("gen");
+    },
+    charDirty(v) {
+      if (!v) this.disarmRevert("char");
+    },
+    memoryDirty(v) {
+      if (!v) this.disarmRevert("memory");
+    },
   },
   mounted() {
     this.init();
@@ -208,6 +223,32 @@ const app = Vue.createApp({
 
     snapshot(o) {
       return JSON.parse(JSON.stringify(o || {}));
+    },
+
+    disarmRevert(section) {
+      clearTimeout(revertTimers[section]);
+      delete revertTimers[section];
+      this.revertArm[section] = false;
+    },
+
+    // 还原键：第一次点击只"武装"（按钮变成确认字样），再点一次才真的回退，避免误触丢改动
+    armRevert(section) {
+      if (this.revertArm[section]) {
+        this.revertSection(section);
+        return;
+      }
+      this.revertArm[section] = true;
+      clearTimeout(revertTimers[section]);
+      // 几秒内没有第二次点击就自动解除，免得一直停在"待确认"状态
+      revertTimers[section] = setTimeout(() => this.disarmRevert(section), 5000);
+    },
+
+    // 回退到最近一次保存（或载入）时的快照；没保存过的会话即回到默认值
+    revertSection(section) {
+      this.disarmRevert(section);
+      if (section === "gen") this.genForm = this.snapshot(this.genSaved);
+      else if (section === "char") this.charForm = this.snapshot(this.charSaved);
+      else if (section === "memory") this.memoryText = this.memorySaved;
     },
 
     onDocumentClick() {
