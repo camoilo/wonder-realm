@@ -56,6 +56,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
 """
 
 DB_PATH: Path | None = None
+DB_FILENAME = "chatbot.db"
+
+
+def db_file(data_dir) -> Path:
+    """数据库文件路径。备份在 init_db 之前跑，那时 DB_PATH 还没设，所以需要这个入口。"""
+    return Path(data_dir) / DB_FILENAME
 
 
 def now() -> str:
@@ -77,7 +83,7 @@ def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -
     global DB_PATH
     path = Path(data_dir)
     path.mkdir(parents=True, exist_ok=True)
-    DB_PATH = path / "chatbot.db"
+    DB_PATH = path / DB_FILENAME
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)

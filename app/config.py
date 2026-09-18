@@ -21,6 +21,7 @@ DEFAULTS = {
     "naming": {"model": "", "max_chars": 12, "min_user_chars": 8},
     "server": {"host": "127.0.0.1", "port": 17800},
     "data_dir": str(ROOT / "data"),
+    "backup": {"dir": str(ROOT / "backups"), "keep": 14, "on_startup": True},
 }
 
 
@@ -34,16 +35,21 @@ def _merge(base: dict, override: dict) -> dict:
     return out
 
 
+def _resolve(path_like) -> str:
+    """相对路径一律相对项目根目录解析，这样从任何工作目录启动都落到同一处。"""
+    path = Path(path_like)
+    return str(path if path.is_absolute() else ROOT / path)
+
+
 def load_config() -> dict:
     loaded = {}
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH, encoding="utf-8") as f:
             loaded = yaml.safe_load(f) or {}
     cfg = _merge(DEFAULTS, loaded)
-    data_dir = Path(cfg["data_dir"])
-    if not data_dir.is_absolute():
-        data_dir = ROOT / data_dir
-    cfg["data_dir"] = str(data_dir)
+    cfg["data_dir"] = _resolve(cfg["data_dir"])
+    backup = cfg.setdefault("backup", {})
+    backup["dir"] = _resolve(backup.get("dir") or DEFAULTS["backup"]["dir"])
     return cfg
 
 

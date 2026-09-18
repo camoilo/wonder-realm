@@ -1,10 +1,15 @@
+import logging
 import socket
 import threading
 import webbrowser
+from pathlib import Path
 
 import uvicorn
 
+from app import backup, database
 from app.config import get_config
+
+log = logging.getLogger("ollama_agent")
 
 
 def port_in_use(host: str, port: int) -> bool:
@@ -21,13 +26,34 @@ def open_browser_later(url: str, delay: float = 1.5) -> None:
     timer.start()
 
 
+def startup_backup(cfg: dict) -> Path | None:
+    """每天首次启动时留一份备份；开关关掉、今天已备过、库还不存在时都跳过。"""
+    opts = cfg.get("backup") or {}
+    if not opts.get("on_startup", True):
+        return None
+    backup_dir = opts.get("dir")
+    if not backup_dir:
+        return None
+    if backup.has_backup_today(backup_dir):
+        log.info("今天已经备份过，跳过启动备份")
+        return None
+    return backup.make_backup(
+        database.db_file(cfg["data_dir"]), backup_dir, opts.get("keep", 14)
+    )
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = get_config()
     host = cfg["server"]["host"]
     port = cfg["server"]["port"]
     # 监听地址可能是 0.0.0.0，浏览器需要能访问的具体地址
     browser_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     url = f"http://{browser_host}:{port}"
+
+    # 无论这次是真的起服务还是"已经在跑"，都先确保今天有一份备份。
+    # 放在 uvicorn.run() 之前：留下的是上次运行结束时的库，而不是本次启动刚迁移过的。
+    startup_backup(cfg)
 
     if port_in_use(browser_host, port):
         print(f"端口 {port} 已在监听，服务应该已在运行，直接打开浏览器：{url}")
