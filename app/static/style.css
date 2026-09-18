@@ -324,7 +324,7 @@ html, body {
   align-items: center;
 }
 
-.avatar.lg { width: 38px; height: 38px; font-size: 16px; }
+/* 消息区头像的尺寸在下面的 .avatar 一节统一给出（.avatar.lg） */
 
 /* 角色名：贴在气泡正上方，与气泡左对齐 */
 .msg-name {
@@ -504,7 +504,10 @@ html, body {
   display: block;
 }
 
-.avatar.sm { width: 22px; height: 22px; font-size: 12px; }
+.avatar.sm { width: 38px; height: 38px; font-size: 16px; }
+
+/* 消息区头像与编辑处预览都是 64px：一样大就用一样的圆角与字号 */
+.avatar.lg,
 .avatar.xl { width: 64px; height: 64px; font-size: 24px; border-radius: 8px; }
 
 /* 角色编辑处的头像选择：预览 + 选择/移除 */
