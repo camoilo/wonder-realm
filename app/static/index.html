@@ -267,6 +267,7 @@
               <button v-if="charForm.avatar" class="ghost-btn" @click="clearAvatar('panel')">移除头像</button>
             </div>
           </div>
+          <p v-if="avatarError" class="avatar-error">{{ avatarError }}</p>
           <label class="field">姓名<input v-model="charForm.name" type="text"></label>
           <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
           <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
@@ -316,7 +317,8 @@
           <button v-if="charModal.form.avatar" class="ghost-btn" @click="clearAvatar('modal')">移除头像</button>
         </div>
       </div>
-      <p class="hint">头像可选；图片会缩到最长边 256px 后随角色一起保存（跟着数据库走，备份也包含它）</p>
+      <p class="hint">头像可选；选图后可拖动裁剪成正方形，最终存为 256×256（跟着数据库走，备份也包含它）</p>
+      <p v-if="avatarError" class="avatar-error">{{ avatarError }}</p>
       <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
       <label class="field">外观<textarea v-model="charModal.form.appearance" rows="2" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
       <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>
@@ -374,6 +376,27 @@
           <button class="ghost-btn" @click="cancelEdit">取消</button>
           <button class="primary-btn" :disabled="!editForm.content.trim()" @click="saveEdit">保存</button>
         </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-mask crop-mask" v-if="crop.visible" @click.self="cancelCrop">
+    <div class="modal crop-modal">
+      <h2>裁剪头像</h2>
+      <p class="hint">拖动图片调整位置，方框内的部分会成为头像</p>
+      <div class="crop-view" :style="{ width: crop.view + 'px', height: crop.view + 'px' }"
+           @pointerdown="cropDown" @pointermove="cropMove"
+           @pointerup="cropUp" @pointercancel="cropUp">
+        <img :src="crop.src" :style="cropImageStyle" alt="" draggable="false">
+      </div>
+      <label class="crop-zoom">
+        <span>缩放</span>
+        <input type="range" min="1" :max="crop.maxZoom" step="0.01" :value="crop.zoom"
+               @input="setCropZoom($event.target.value)">
+        <button class="ghost-btn crop-reset" type="button" @click="setCropZoom(1)">复位</button>
+      </label>
+      <div class="modal-actions">
+        <button class="ghost-btn" @click="cancelCrop">取消</button>
+        <button class="primary-btn" @click="confirmCrop">确定</button>
       </div>
     </div>
   </div>

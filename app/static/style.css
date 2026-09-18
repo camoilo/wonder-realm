@@ -527,6 +527,62 @@ html, body {
 .file-btn { display: inline-flex; align-items: center; cursor: pointer; }
 .file-btn input { display: none; }
 
+/* 头像校验/裁剪失败的就地提示（不用底部错误条：它只在打开会话时渲染） */
+.avatar-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--error-text);
+  background: var(--error-bg);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* ---------- 头像裁剪 ---------- */
+/* 叠在角色弹窗之上（角色弹窗是 z-index 1000） */
+.crop-mask { z-index: 1200; }
+.crop-modal { width: 380px; align-items: center; }
+.crop-modal h2 { align-self: flex-start; }
+.crop-modal .hint { align-self: flex-start; }
+/* 本弹窗用了 align-items:center，操作行要显式撑满，否则会缩成内容宽并被居中，
+   与其它弹窗的"按钮靠右"不一致 */
+.crop-modal .modal-actions { align-self: stretch; }
+
+/* 取景框本身就是裁剪范围：溢出裁掉，所以框内所见即所得 */
+.crop-view {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  background: #eef0f4;
+  border-radius: 10px;
+  cursor: grab;
+  touch-action: none; /* 触屏上拖动不被页面滚动手势抢走 */
+  user-select: none;
+}
+.crop-view:active { cursor: grabbing; }
+
+.crop-view img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* 必须显式关掉最大宽度：否则会被压回容器宽度，裁剪换算全错 */
+  max-width: none;
+  max-height: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+.crop-zoom input { flex: 1; }
+.crop-reset { padding: 4px 10px; font-size: 12px; }
+
 .scenario {
   background: var(--scenario-bg);
   border: 1px solid var(--scenario-border);

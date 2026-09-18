@@ -12,18 +12,80 @@ const revertTimers = {};
 // 自由情境"继续"按钮发出的内容：等同于用户手打一条"请继续"
 const CONTINUE_PROMPT = "请继续";
 
-// 自定义头像：在浏览器里等比缩到最长边不超过这个像素数，再重编码为 JPEG 上传。
-// 前端就把图压好，后端不必收原始文件（省掉 multipart 依赖），也保证存进库的
+// 自定义头像：浏览器内先校验，再让用户拖动裁剪成正方形，最后缩到 256px 重编码为 JPEG 上传。
+// 前端就把图处理好，后端不必收原始文件（省掉 multipart 依赖），也保证存进库的
 // 永远是我们自己编码的位图而不是用户原始字节。
-const AVATAR_MAX_PX = 256;
+const AVATAR_OUT_PX = 256; // 输出正方形的边长
+const CROP_VIEW_PX = 280; // 裁剪取景框的显示边长（正方形）
+const CROP_MAX_ZOOM = 3;
+const AVATAR_MAX_UPLOAD = 10 * 1024 * 1024; // 单文件上限
+const AVATAR_MIN_SIDE = 64; // 原图最短边下限
+const AVATAR_MAX_PIXELS = 40 * 1000 * 1000; // 原图像素总量上限
 const AVATAR_QUALITY = 0.85;
 
-// 等比缩放的尺寸换算，抽成纯函数便于单测；不放大（小图保持原尺寸）。
-const fitSize = (w, h, max) => {
-  if (!w || !h) return { w: 1, h: 1 };
-  const scale = Math.min(1, max / Math.max(w, h));
-  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
+// 裁剪用的解码结果放在模块级而不是 data 里：Image 对象不需要（也不该）被 Vue 代理，
+// drawImage 直接吃原始对象最稳。
+let cropImage = null;
+
+// 选文件后立刻做的校验：返回错误文案，空串表示通过
+const avatarFileError = (type, size) => {
+  if (!type || !type.startsWith("image/")) return "请选择图片文件（jpg/png/webp 等）";
+  if (size > AVATAR_MAX_UPLOAD)
+    return `图片太大（上限 ${AVATAR_MAX_UPLOAD / 1024 / 1024}MB），请先压缩或换一张`;
+  return "";
 };
+
+// 解码出真实分辨率后再校验一次
+const avatarImageError = (w, h) => {
+  if (!w || !h) return "这个文件不是能识别的图片";
+  if (Math.min(w, h) < AVATAR_MIN_SIDE)
+    return `图片太小（至少 ${AVATAR_MIN_SIDE}×${AVATAR_MIN_SIDE}），放大后会糊`;
+  if (w * h > AVATAR_MAX_PIXELS) return "图片分辨率过高，请先缩小再上传";
+  return "";
+};
+
+// "铺满"取景框所需的基础缩放：取长短边的较大者，保证两个方向都不留空
+const coverScale = (w, h, view) => Math.max(view / w, view / h);
+
+// 把偏移限制在"图片始终盖满取景框"的范围内。这一步是正确性的关键：
+// 一旦图片边缘跑进取景框内，裁出来就会带空白边。
+const clampOffset = (v, drawn, view) => Math.min(0, Math.max(view - drawn, v));
+
+// 取景框状态 → 原图上的取样矩形（纯函数，便于单测）
+const cropSourceRect = (natW, natH, view, zoom, x, y) => {
+  const s = coverScale(natW, natH, view) * zoom;
+  return { sx: -x / s, sy: -y / s, side: view / s };
+};
+
+// 以取景框中心为锚点缩放，返回夹好边界的新偏移（纯函数，便于单测）。
+// 不锚定的话放大时图片会往左上跑，观感很跳。
+const zoomAroundCenter = (natW, natH, view, fromZoom, toZoom, x, y) => {
+  const unit = coverScale(natW, natH, view);
+  const prev = unit * fromZoom;
+  const next = unit * toZoom;
+  const cx = (view / 2 - x) / prev; // 取景框中心对应的原图坐标
+  const cy = (view / 2 - y) / prev;
+  return {
+    x: clampOffset(view / 2 - cx * next, natW * next, view),
+    y: clampOffset(view / 2 - cy * next, natH * next, view),
+  };
+};
+
+const readAsDataURL = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read-failed"));
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("decode-failed"));
+    img.src = src;
+  });
 
 const emptyCharForm = () => ({
   name: "",
@@ -89,6 +151,21 @@ const app = Vue.createApp({
       memorySaved: "",
       // "还原"键的两次点击状态：第一次只是武装，再点一次才真的回退
       revertArm: { gen: false, char: false, memory: false },
+      // 头像校验/裁剪的就地提示（底部错误条在没打开会话时不渲染，不能承担这个角色）
+      avatarError: "",
+      crop: {
+        visible: false,
+        target: "modal",
+        src: "",
+        view: CROP_VIEW_PX,
+        natW: 0,
+        natH: 0,
+        zoom: 1,
+        maxZoom: CROP_MAX_ZOOM,
+        x: 0,
+        y: 0,
+        dragging: false,
+      },
       tagDraft: {},
     };
   },
@@ -99,6 +176,18 @@ const app = Vue.createApp({
     // 当前会话绑定的角色（自由情境没有）。消息区的头像与名字都用它，省得模板里重复长条件
     activeChar() {
       return (this.activeSession && this.activeSession.character) || null;
+    },
+    // 裁剪弹窗里那张图的位移与缩放。transform 里 translate 在前、scale 在后，
+    // 所以 (x, y) 就是"缩放后图片左上角"在取景框坐标系里的位置
+    cropImageStyle() {
+      const c = this.crop;
+      const s = c.natW && c.natH ? coverScale(c.natW, c.natH, c.view) * c.zoom : 1;
+      return {
+        width: c.natW + "px",
+        height: c.natH + "px",
+        transform: `translate(${c.x}px, ${c.y}px) scale(${s})`,
+        transformOrigin: "0 0",
+      };
     },
     isFreeScenario() {
       return !!this.activeSession && this.activeSession.mode === "free_scenario";
@@ -293,6 +382,11 @@ const app = Vue.createApp({
 
     onDocumentKeydown(e) {
       if (e.key !== "Escape") return;
+      // 裁剪弹窗叠在最上层，Esc 先关它
+      if (this.crop.visible) {
+        this.cancelCrop();
+        return;
+      }
       this.deleteMenuId = null;
       if (this.editingId !== null) this.cancelEdit();
     },
@@ -598,57 +692,133 @@ const app = Vue.createApp({
       }
     },
 
-    // 把用户选的图片读进 <img> → 等比缩到 AVATAR_MAX_PX → 重编码成 JPEG data URL。
-    // 直接上传原文件会带来两个问题：库被大图撑爆，以及要把任意字节当图片存下来。
-    readAvatarFile(file) {
-      return new Promise((resolve, reject) => {
-        if (!file.type || !file.type.startsWith("image/")) {
-          reject(new Error("请选择图片文件"));
-          return;
-        }
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error("读取文件失败"));
-        reader.onload = () => {
-          const img = new Image();
-          img.onerror = () => reject(new Error("这个文件不是能识别的图片"));
-          img.onload = () => {
-            const { w, h } = fitSize(img.naturalWidth, img.naturalHeight, AVATAR_MAX_PX);
-            const canvas = document.createElement("canvas");
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext("2d");
-            // 先铺一层白底：带透明通道的 PNG/WebP 转 JPEG 时，透明处会变成黑块
-            ctx.fillStyle = "#fff";
-            ctx.fillRect(0, 0, w, h);
-            ctx.drawImage(img, 0, 0, w, h);
-            resolve(canvas.toDataURL("image/jpeg", AVATAR_QUALITY));
-          };
-          img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    },
-
+    // 选文件后先校验，通过就进裁剪；任何一步不过都在头像处就地提示
+    // （不用底部错误条：它在没打开会话时不渲染，用户会看不到原因）
     // target: "modal"（新建/编辑角色弹窗）或 "panel"（右侧面板角色卡）
     async pickAvatar(e, target) {
       const file = e.target.files && e.target.files[0];
       e.target.value = ""; // 清掉，才能连续两次选同一个文件
       if (!file) return;
+      this.avatarError = "";
+      const early = avatarFileError(file.type, file.size);
+      if (early) {
+        this.avatarError = early;
+        return;
+      }
+      let src;
       try {
-        const dataUrl = await this.readAvatarFile(file);
-        if (target === "modal") this.charModal.form.avatar = dataUrl;
-        else this.charForm.avatar = dataUrl;
+        src = await readAsDataURL(file);
       } catch (err) {
-        this.error = err.message;
+        this.avatarError = "读取文件失败，请重试";
+        return;
+      }
+      let img;
+      try {
+        img = await loadImage(src);
+      } catch (err) {
+        this.avatarError = "这个文件不是能识别的图片";
+        return;
+      }
+      const later = avatarImageError(img.naturalWidth, img.naturalHeight);
+      if (later) {
+        this.avatarError = later;
+        return;
+      }
+      cropImage = img;
+      const natW = img.naturalWidth;
+      const natH = img.naturalHeight;
+      const s = coverScale(natW, natH, CROP_VIEW_PX);
+      this.crop = {
+        visible: true,
+        target,
+        src,
+        view: CROP_VIEW_PX,
+        natW,
+        natH,
+        zoom: 1,
+        maxZoom: CROP_MAX_ZOOM,
+        // 初始居中
+        x: (CROP_VIEW_PX - natW * s) / 2,
+        y: (CROP_VIEW_PX - natH * s) / 2,
+        dragging: false,
+      };
+    },
+
+    // 拖动：记录按下时的指针位置与图片偏移，移动时按位移换算新偏移并夹住边界
+    cropDown(e) {
+      const c = this.crop;
+      if (!c.visible) return;
+      c.dragging = true;
+      this._drag = { px: e.clientX, py: e.clientY, x0: c.x, y0: c.y };
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    },
+
+    cropMove(e) {
+      const c = this.crop;
+      if (!c.dragging || !this._drag) return;
+      const d = this._drag;
+      const s = coverScale(c.natW, c.natH, c.view) * c.zoom;
+      c.x = clampOffset(d.x0 + (e.clientX - d.px), c.natW * s, c.view);
+      c.y = clampOffset(d.y0 + (e.clientY - d.py), c.natH * s, c.view);
+    },
+
+    cropUp(e) {
+      this.crop.dragging = false;
+      this._drag = null;
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+    },
+
+    // 缩放时以取景框中心为锚点，图片不会突然跳走
+    setCropZoom(z) {
+      const c = this.crop;
+      if (!c.visible) return;
+      const to = Math.min(c.maxZoom, Math.max(1, Number(z) || 1));
+      const next = zoomAroundCenter(c.natW, c.natH, c.view, c.zoom, to, c.x, c.y);
+      c.zoom = to;
+      c.x = next.x;
+      c.y = next.y;
+    },
+
+    cancelCrop() {
+      this.crop.visible = false;
+      cropImage = null;
+    },
+
+    confirmCrop() {
+      const c = this.crop;
+      if (!cropImage) {
+        this.cancelCrop();
+        return;
+      }
+      const { sx, sy, side } = cropSourceRect(c.natW, c.natH, c.view, c.zoom, c.x, c.y);
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_OUT_PX;
+      canvas.height = AVATAR_OUT_PX;
+      const ctx = canvas.getContext("2d");
+      // 先铺白底：带透明通道的 PNG/WebP 转 JPEG 时，透明处会变黑块
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, AVATAR_OUT_PX, AVATAR_OUT_PX);
+      try {
+        ctx.drawImage(cropImage, sx, sy, side, side, 0, 0, AVATAR_OUT_PX, AVATAR_OUT_PX);
+        const dataUrl = canvas.toDataURL("image/jpeg", AVATAR_QUALITY);
+        if (c.target === "modal") this.charModal.form.avatar = dataUrl;
+        else this.charForm.avatar = dataUrl;
+        this.avatarError = "";
+        this.cancelCrop();
+      } catch (err) {
+        // 引用了外部资源（或跨域）的图片会污染画布，toDataURL 会抛 SecurityError
+        this.avatarError = "这张图片无法处理（可能引用了外部资源），请换一张";
       }
     },
 
     clearAvatar(target) {
+      this.avatarError = "";
       if (target === "modal") this.charModal.form.avatar = "";
       else this.charForm.avatar = "";
     },
 
     openCharacterModal(c = null) {
+      this.avatarError = ""; // 换一个角色就清掉上一次的提示
       if (c) {
         this.charModal = {
           visible: true,
