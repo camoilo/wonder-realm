@@ -27,6 +27,7 @@ const app = Vue.createApp({
       expandedChars: {},
       activeSessionId: null,
       activeSession: null,
+      activeByMode: {}, // 各模式各自打开的会话 id，切换模式 Tab 时用来恢复
       messages: [],
       input: "",
       streaming: false,
@@ -139,16 +140,22 @@ const app = Vue.createApp({
     this.init();
   },
   methods: {
+    // 把失败响应统一转成 Error，并带上状态码：
+    // 调用方据此区分“服务端明确拒绝（如角色已删除）”与“连接中断”，提示才不会误导
+    async httpError(resp) {
+      let msg = `请求失败（${resp.status}）`;
+      try {
+        const j = await resp.json();
+        if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+      } catch (e) {}
+      const err = new Error(msg);
+      err.httpStatus = resp.status;
+      return err;
+    },
+
     async api(path, opts = {}) {
       const resp = await fetch(path, opts);
-      if (!resp.ok) {
-        let msg = `请求失败（${resp.status}）`;
-        try {
-          const j = await resp.json();
-          if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
-        } catch (e) {}
-        throw new Error(msg);
-      }
+      if (!resp.ok) throw await this.httpError(resp);
       return resp.json();
     },
 
@@ -176,14 +183,7 @@ const app = Vue.createApp({
       const opts = this.jsonOpts("POST", body);
       if (signal) opts.signal = signal;
       const resp = await fetch(url, opts);
-      if (!resp.ok) {
-        let msg = `请求失败（${resp.status}）`;
-        try {
-          const j = await resp.json();
-          if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
-        } catch (e) {}
-        throw new Error(msg);
-      }
+      if (!resp.ok) throw await this.httpError(resp);
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
@@ -247,11 +247,36 @@ const app = Vue.createApp({
     },
 
     async refreshSessions() {
-      this.sessions = await this.api("/api/sessions");
+      // 只拉当前模式的会话：角色对话与角色情境的会话列表相互隔离，互不可见
+      this.sessions = await this.api(`/api/sessions?mode=${this.mode}`);
     },
 
-    switchMode(key) {
+    async switchMode(key) {
+      if (key === this.mode) return;
+      if (this.streaming) {
+        this.error = "正在生成中，请等待完成后再切换模式";
+        return;
+      }
+      this.activeByMode[this.mode] = this.activeSessionId; // 记住本模式正看哪条
       this.mode = key;
+      this.error = "";
+      try {
+        await this.refreshSessions();
+      } catch (e) {
+        this.error = e.message;
+        return;
+      }
+      const remembered = this.activeByMode[key];
+      if (remembered && this.sessions.some((s) => s.id === remembered)) {
+        await this.openSession(remembered); // 切回来仍停在原来那条会话
+        return;
+      }
+      // 该模式没有可恢复的会话：清空对话区，另一模式的会话不残留
+      this.activeSessionId = null;
+      this.activeSession = null;
+      this.messages = [];
+      this.showArchived = false;
+      this.initGenForm();
     },
 
     fieldsOf(mode) {
@@ -343,11 +368,18 @@ const app = Vue.createApp({
         return;
       }
       try {
-        this.activeSession = await this.api(`/api/sessions/${id}`);
+        const session = await this.api(`/api/sessions/${id}`);
+        if (session.mode !== this.mode) {
+          // 列表已按模式过滤，正常点不到这里；防御性拦截，避免跨模式查看
+          this.error = `该会话属于「${MODES[session.mode].label}」模式，请切换模式后再打开`;
+          return;
+        }
+        this.activeSession = session;
         this.activeSessionId = id;
+        this.activeByMode[session.mode] = id;
         this.messages = await this.api(`/api/sessions/${id}/messages`);
-        if (this.activeSession.character_id) {
-          this.expandedChars[this.activeSession.character_id] = true;
+        if (session.character_id) {
+          this.expandedChars[session.character_id] = true;
         }
         this.error = "";
         this.scrollBottom();
@@ -651,6 +683,7 @@ const app = Vue.createApp({
       this.messages.push({ id: "tmp-user", role: "user", content: text });
       this.scrollBottom();
       let userId = null;
+      let failed = false;
       try {
         await this.ssePost(
           `/api/sessions/${this.activeSessionId}/chat`,
@@ -687,11 +720,15 @@ const app = Vue.createApp({
       } catch (e) {
         // 用户点「停止」导致的中断不算错误：部分内容已由服务端落库
         if (!this.stopped) {
-          this.error = `连接中断：${e.message}`;
+          this.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
           if (userId) this.lastFailedUser = { id: userId, text };
+          // user 消息压根没落库（如角色已删除被拒），界面上那条是乐观渲染的，需要撤掉
+          else failed = true;
         }
       }
-      if (this.endStream()) await this.syncAfterStop();
+      const stopped = this.endStream();
+      if (stopped) await this.syncAfterStop();
+      else if (failed) await this.refreshMessages();
       await this.refreshSessions();
       this.scrollBottom();
     },
@@ -809,6 +846,7 @@ const app = Vue.createApp({
       this.messages = this.messages.slice(0, idx);
       this.beginStream();
       this.scrollBottom();
+      let failed = false;
       try {
         await this.ssePost(`/api/messages/${m.id}/regenerate`, {}, {
           status: (d) => {
@@ -832,9 +870,15 @@ const app = Vue.createApp({
           },
         }, this.abortCtrl.signal);
       } catch (e) {
-        if (!this.stopped) this.error = `连接中断：${e.message}`;
+        if (!this.stopped) {
+          failed = true;
+          this.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
+        }
       }
-      if (this.endStream()) await this.syncAfterStop();
+      const stopped = this.endStream();
+      if (stopped) await this.syncAfterStop();
+      // 服务端校验不过时不会删消息，这里拉一次把上面乐观截断的界面还原回来
+      else if (failed) await this.refreshMessages();
       await this.refreshSessions();
       this.scrollBottom();
     },

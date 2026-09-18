@@ -32,6 +32,13 @@ FREE_LENGTH_DESC = {
     "long": "单次生成篇幅较长，可以充分展开",
 }
 
+COMPOSITION_DESC = {
+    "scenario_only": "只写情境，不要输出任何 [DIALOG] 台词",
+    "scenario_heavy": "以情境为主，情境可以铺陈多段，台词只作少量点缀",
+    "balanced": "情境与台词大致均衡，按剧情需要自然安排",
+    "dialog_heavy": "以台词为主，情境只作简短交代",
+}
+
 DEFAULT_SETTINGS = {
     "character_chat": {
         "reply_length": "medium",
@@ -49,6 +56,7 @@ DEFAULT_SETTINGS = {
         "genre": "",
         "style": "",
         "length": "medium",
+        "composition": "balanced",
         "director_notes": "",
         "extra": "",
     },
@@ -80,6 +88,10 @@ FIELDS = {
         {"key": "style", "label": "文风", "type": "text", "placeholder": "如：细腻文学风、轻喜剧"},
         {"key": "length", "label": "单次篇幅", "type": "radio",
          "options": [("short", "短"), ("medium", "中"), ("long", "长")]},
+        {"key": "composition", "label": "情境/台词配比", "type": "radio",
+         "hint": "决定情境与台词各占多少，可只写情境",
+         "options": [("scenario_only", "只有情境"), ("scenario_heavy", "情境为主"),
+                     ("balanced", "均衡"), ("dialog_heavy", "台词为主")]},
         {"key": "director_notes", "label": "导演指令", "type": "textarea",
          "hint": "只影响剧情走向，不进入生成结果", "placeholder": "如：下一幕转入雨夜"},
         {"key": "extra", "label": "附加要求", "type": "textarea"},
@@ -130,6 +142,10 @@ def render_free_scenario_settings(s: dict) -> str:
     if s.get("style"):
         parts.append(f"文风：{s['style']}")
     parts.append(f"篇幅：{FREE_LENGTH_DESC.get(s.get('length'), FREE_LENGTH_DESC['medium'])}")
+    parts.append(
+        "情境与台词的配比："
+        f"{COMPOSITION_DESC.get(s.get('composition'), COMPOSITION_DESC['balanced'])}"
+    )
     if s.get("extra"):
         parts.append(f"附加要求：{s['extra']}")
     return _join(parts)
@@ -206,10 +222,12 @@ def build_free_scenario_system(memory_content: str, settings: dict) -> str:
         f"{settings.get('director_notes') or '（无）'}\n"
         "导演指令只决定剧情走向，不作为对话内容出现在生成结果里。\n\n"
         "# 输出规则\n"
-        "每次生成按以下格式输出，段落数量不限：\n"
+        "每次生成都用下面的标记分段输出，每个段落以标记开头，段落数量与先后顺序不限：\n"
         "[SCENARIO]场景、氛围、事件等情境说明\n"
         "[DIALOG]角色名：该角色说出的话\n"
-        "[DIALOG]角色名：另一位角色说出的话"
+        "[SCENARIO] 与 [DIALOG] 都可以只出现其中一种，也可以各自出现多次。\n"
+        "[DIALOG] 是可选的：只写情境时就不要输出任何 [DIALOG]。\n"
+        "情境与台词的比例由「情境与台词的配比」要求决定，不要默认让两者等量或交替出现。"
     )
 
 

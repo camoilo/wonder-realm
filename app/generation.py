@@ -26,13 +26,16 @@ def spawn(coro) -> None:
     task.add_done_callback(_bg_tasks.discard)
 
 
-def prepare_generation(con, sid: int):
-    """读取会话/角色/记忆/未归档历史，组装模型输入。调用方负责连接生命周期。"""
+def load_generation_context(con, sid: int):
+    """读取会话并校验可生成性：会话存在，角色模式的绑定角色仍在。
+
+    单独抽出来是为了让调用方能在**改动数据之前**先校验——例如重新生成要先删消息，
+    若把校验留在删之后，角色已删除时就会白删一截历史。
+    """
     session = con.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
     if not session:
         raise HTTPException(404, "会话不存在")
     character = None
-    memory_content = ""
     if session["mode"] in ("character_chat", "character_scenario"):
         cid = session["character_id"]
         if cid is not None:
@@ -41,6 +44,13 @@ def prepare_generation(con, sid: int):
             ).fetchone()
         if cid is None or character is None:
             raise HTTPException(400, "该会话绑定的角色已删除，无法继续生成")
+    return session, character
+
+
+def prepare_generation(con, sid: int):
+    """读取会话/角色/记忆/未归档历史，组装模型输入。调用方负责连接生命周期。"""
+    session, character = load_generation_context(con, sid)
+    memory_content = ""
     scope = memory.scope_for_session(session)
     if scope:
         row = memory.read_memory(con, scope)

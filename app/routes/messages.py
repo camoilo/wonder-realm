@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import connect, get_db, now
-from ..generation import generation_response, prepare_generation
+from ..generation import generation_response, load_generation_context, prepare_generation
 from ..schemas import MessageEdit
 
 router = APIRouter(prefix="/api")
@@ -56,6 +56,8 @@ async def regenerate(mid: int):
         if msg["role"] != "assistant":
             raise HTTPException(400, "只能对生成消息触发重新生成")
         sid = msg["session_id"]
+        # 先校验再删：角色已删除等情况下必须原样保留已有消息，不能删完才发现不能生成
+        load_generation_context(con, sid)
         con.execute("DELETE FROM messages WHERE session_id=? AND id>=?", (sid, mid))
         con.commit()
         msgs, model, mode = prepare_generation(con, sid)

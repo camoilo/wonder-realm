@@ -155,7 +155,7 @@
                   <button title="复制" @click="copyText(m)">复制</button>
                   <button title="编辑" @click="startEdit(m)">编辑</button>
                   <button title="删除" @click="deleteMenuId = deleteMenuId === m.id ? null : m.id">删除</button>
-                  <button v-if="m.role === 'assistant'" title="重新生成" @click="regenerate(m)">重新生成</button>
+                  <button v-if="m.role === 'assistant' && !orphanActive" title="重新生成" @click="regenerate(m)">重新生成</button>
                 </div>
                 <div v-if="deleteMenuId === m.id" class="delete-menu">
                   <button @click="removeMessage(m, false)">删除这条</button>
