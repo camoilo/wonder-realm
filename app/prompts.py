@@ -227,7 +227,7 @@ def build_free_scenario_system(memory_content: str, settings: dict) -> str:
         "[DIALOG]角色名：该角色说出的话\n"
         "[SCENARIO] 与 [DIALOG] 都可以只出现其中一种，也可以各自出现多次。\n"
         "[DIALOG] 是可选的：只写情境时就不要输出任何 [DIALOG]。\n"
-        "情境与台词的比例由「情境与台词的配比」要求决定，不要默认让两者等量或交替出现。"
+        "情境与台词的比例由「情境与台词的配比」要求决定。"
     )
 
 
