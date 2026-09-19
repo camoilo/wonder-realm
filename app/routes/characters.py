@@ -3,6 +3,7 @@ import httpx
 
 from .. import character_gen
 from ..character_gen import HIDDEN_FIELDS, public_character
+from ..config import get_config
 from ..database import get_db, now
 from ..schemas import BACKGROUND_MAX_COUNT, BackgroundsIn, CharacterCreateIn, CharacterIn, GenerateIn
 
@@ -42,10 +43,18 @@ async def generate_character(body: GenerateIn):
     except ValueError as e:
         # 我们自己的校验：没选模型、模型没给出姓名
         raise HTTPException(502, f"生成失败：{e}")
+    except httpx.TimeoutException:
+        # ReadTimeout 的 str() 是空的，直接拼进消息就成了"生成失败："——必须自己写清楚
+        limit = get_config().get("character_gen", {}).get("timeout", 600)
+        raise HTTPException(
+            502,
+            f"生成超时：等待超过 {int(limit)} 秒。思考型模型开着思考会明显更慢，"
+            "可以先在顶栏把思考模式关掉再生成",
+        )
     except httpx.HTTPError as e:
-        # 连不上 Ollama、超时、响应异常。刻意不catch宽泛的 Exception：
+        # 连不上 Ollama、响应异常。刻意不catch宽泛的 Exception：
         # 真出了编程错误就该是 500，而不是伪装成"生成失败"
-        raise HTTPException(502, f"生成失败：{e}")
+        raise HTTPException(502, f"生成失败：{e or type(e).__name__}")
     draft_id = character_gen.new_draft(fields, body.mode)
     visible = dict(fields) if body.mode == "open" else {
         k: v for k, v in fields.items() if k not in HIDDEN_FIELDS

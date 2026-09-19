@@ -19,6 +19,9 @@ DEFAULTS = {
         "archive_batch_size": 20,
         "max_memory_chars": 600,
     },
+    # 让模型生成角色设定的等待上限（秒）。给得宽是因为思考型模型开着思考时可能很久：
+    # 实测同一提示词 60 秒是常态，偶发一次超过 300 秒
+    "character_gen": {"timeout": 600},
     "chat": {"history_max_messages": 60},
     "naming": {"model": "", "max_chars": 12, "min_user_chars": 8},
     "server": {"host": "127.0.0.1", "port": 17800},

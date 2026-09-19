@@ -93,7 +93,20 @@ check("有 jumpToBottom 方法", "jumpToBottom" in methods, True)
 # 弹窗变体宽度必须压得住基础 .modal（10.28 的坑）
 check("编辑弹窗宽度用复合选择器", ".modal.edit-modal { width: 780px; }" in css, True)
 check("裁剪弹窗宽度用复合选择器", ".modal.crop-modal { width: 380px;" in css, True)
+check("角色弹窗宽度用复合选择器并与编辑弹窗同宽",
+      ".modal.char-modal { width: 780px; }" in css, True)
 check("操作行按键不被压缩", ".edit-btns { display: flex; flex: none; gap: 8px; }" in css, True)
+
+# 角色弹窗里的填写框默认高度（不能只靠 rows，样式里也要有下限）
+check("角色弹窗文本框有最小高度", "min-height: 104px;" in css, True)
+check("背景故事框更高", ".modal.char-modal .field textarea.grow-lg" in css, True)
+check("背景故事框用了 grow-lg 类", 'class="grow-lg"' in html, True)
+check("宽度规则不作用于右侧面板",
+      ".modal.char-modal .field textarea {" in css and css.count(".modal.char-modal .field") >= 2, True)
+
+# 生成区说明里要交代模型与思考开关（用户问过生成是否跟随它们）
+check("生成区说明提到当前模型", "用当前选中的模型" in html, True)
+check("生成区说明提到思考开关", "跟着顶栏的思考开关走" in html, True)
 
 print()
 if FAILED:

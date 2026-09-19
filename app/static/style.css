@@ -1483,8 +1483,22 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 }
 .modal::-webkit-scrollbar-thumb:hover { background: #aab0bb; background-clip: content-box; }
 
-/* 角色编辑弹窗内容最多（头像 + 5 张背景 + 5 个字段），给它更宽的版面 */
-.char-modal { width: 560px; }
+/* 角色编辑/新建弹窗：内容最多（生成区 + 头像 + 背景 + 5 个字段），与消息编辑弹窗同宽。
+   选择器加 `.modal` 前缀的理由同 `.modal.edit-modal`（见 10.28）：单写 `.char-modal`
+   会被文件后部的基础 `.modal` 按出现顺序压掉 */
+.modal.char-modal { width: 780px; }
+
+/* 弹窗里的填写框都给足默认高度：这些是角色设定，一两个字的短框改起来要来回滚。
+   面板里同样的 `.field` 不跟着变——那里是 330px 的窄栏，框太高反而看不到全貌 */
+.modal.char-modal .field input[type="text"] { padding: 10px 12px; font-size: 14px; }
+.modal.char-modal .field textarea {
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  min-height: 104px;
+}
+/* 背景故事通常最长，再多给两行 */
+.modal.char-modal .field textarea.grow-lg { min-height: 148px; }
 
 .modal-actions {
   display: flex;

@@ -115,12 +115,17 @@ async def chat_stream(messages: list[dict], model: str, options: dict | None = N
 
 
 async def chat_once(
-    messages: list[dict], model: str, options: dict | None = None, fmt: str | None = None
+    messages: list[dict], model: str, options: dict | None = None, fmt: str | None = None,
+    timeout: float = 300,
 ) -> str:
-    """非流式调用（记忆压缩、会话命名、角色生成用），返回剥离思考段后的正文。"""
+    """非流式调用（记忆压缩、会话命名、角色生成用），返回剥离思考段后的正文。
+
+    timeout 是读超时（秒）。记忆压缩与会话命名输出短，300 秒足够；角色生成要写五项设定，
+    思考型模型开着思考时实测能从 60 秒涨到七分钟以上，所以由调用方传入更宽的上限。
+    """
     cfg = get_config()["ollama"]
     payload = _payload(model, messages, False, options, fmt)
-    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=10)) as client:
         resp = await client.post(f"{cfg['base_url']}/api/chat", json=payload)
         resp.raise_for_status()
         content = (resp.json().get("message") or {}).get("content", "")

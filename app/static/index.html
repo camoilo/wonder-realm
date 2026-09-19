@@ -373,7 +373,7 @@
       <div v-if="!charModal.editingId" class="gen-box">
         <div class="gen-head">
           <span class="field-label">让模型生成角色</span>
-          <span class="hint">只生成文字设定，不含头像与背景</span>
+          <span class="hint">用当前选中的模型，只出文字设定（不含头像与背景）</span>
         </div>
         <input v-model="charModal.gen.hint" type="text" maxlength="200"
                placeholder="想要的设定，可留空让模型自由发挥（如：古风江湖的女剑客）">
@@ -388,6 +388,7 @@
         <p class="hint">{{ charModal.gen.mode === "open"
           ? "开放模式：生成的设定全部直接展示，可以随意修改。"
           : "探索模式：只公开姓名与外观，性格 / 语言风格 / 背景故事会上锁——它们照常参与生成，但不会显示，可以在对话里慢慢了解。" }}</p>
+        <p class="hint">跟着顶栏的思考开关走：开着思考会明显更慢（常见一分钟以上），嫌久可以先关掉再生成。</p>
         <button class="ghost-btn" :disabled="charModal.gen.busy" @click="generateCharacter">
           {{ charModal.gen.busy ? "生成中…" : (charModal.gen.draftId ? "换一个" : "生成角色") }}
         </button>
@@ -439,11 +440,11 @@
         <p v-if="bgError" class="avatar-error">{{ bgError }}</p>
       </div>
       <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
-      <label class="field">外观<textarea v-model="charModal.form.appearance" rows="2" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
+      <label class="field">外观<textarea v-model="charModal.form.appearance" rows="4" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
       <template v-if="!charModal.locked">
-        <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>
-        <label class="field">语言风格<textarea v-model="charModal.form.speech_style" rows="2" placeholder="口癖、语气、用词习惯"></textarea></label>
-        <label class="field">背景故事<textarea v-model="charModal.form.backstory" rows="3"></textarea></label>
+        <label class="field">性格<textarea v-model="charModal.form.personality" rows="4"></textarea></label>
+        <label class="field">语言风格<textarea v-model="charModal.form.speech_style" rows="4" placeholder="口癖、语气、用词习惯"></textarea></label>
+        <label class="field">背景故事<textarea class="grow-lg" v-model="charModal.form.backstory" rows="6"></textarea></label>
       </template>
       <div v-else class="locked-box">
         <div class="locked-title">🔒 性格 / 语言风格 / 背景故事 已锁定</div>

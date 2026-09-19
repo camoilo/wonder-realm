@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app import character_gen, database, prompts
+from app.prompts import TEMPERATURE_LEVELS
 from app.routes import characters as char_routes
 from app.routes import sessions as sess_routes
 
@@ -56,6 +57,7 @@ async def fake_generate(hint=""):
     return dict(FIELDS)
 
 
+real_generate = character_gen.generate_character  # 后面测"是否跟随当前模型"时要用真的
 character_gen.generate_character = fake_generate
 
 # ---- 表结构 ----
@@ -217,6 +219,72 @@ from app.ollama_client import _payload  # noqa: E402
 
 check("JSON 模式载荷", _payload("m", [], False, None, "json")["format"], "json")
 check("普通对话不带 format", "format" in _payload("m", [], True, None), False)
+
+# ---- 生成跟随"当前选中的模型"与顶栏的思考开关（用户问过这点，钉住它） ----
+captured = {}
+
+
+async def spy_chat_once(messages, model, options=None, fmt=None, timeout=300):
+    captured.update(model=model, options=options, fmt=fmt, timeout=timeout)
+    return json.dumps(FIELDS, ensure_ascii=False)
+
+
+real_chat_once = character_gen.ollama_client.chat_once
+character_gen.ollama_client.chat_once = spy_chat_once
+try:
+    con = database.connect()
+    for name in ("模型甲", "模型乙"):
+        con.execute("UPDATE app_settings SET model=? WHERE id=1", (name,))
+        con.commit()
+        con.close()
+        asyncio.run(real_generate("测试"))
+        check(f"生成用的是当前模型 {name}", captured["model"], name)
+        con = database.connect()
+    con.close()
+    check("生成请求带 JSON 模式", captured["fmt"], "json")
+    check("生成温度取标准档",
+          captured["options"]["temperature"], TEMPERATURE_LEVELS["standard"])
+    check("生成超时来自 config",
+          captured["timeout"], character_gen.get_config()["character_gen"]["timeout"])
+
+    # 思考开关：关掉时带 think=False，开着时不带这个字段（永远不发 think=True）
+    con = database.connect()
+    con.execute("UPDATE app_settings SET model='fake-model' WHERE id=1")
+    con.commit()
+    con.close()
+    database.write_pref(database.PREF_DISABLE_THINKING, "1")
+    disabled = _payload(captured["model"], [], False, captured["options"], "json")
+    check("关掉思考时生成带 think=False", disabled.get("think"), False)
+    database.write_pref(database.PREF_DISABLE_THINKING, "0")
+    enabled = _payload(captured["model"], [], False, captured["options"], "json")
+    check("开着思考时生成不带 think 字段", "think" in enabled, False)
+finally:
+    character_gen.ollama_client.chat_once = real_chat_once
+
+# ---- 超时要有能看懂的话（httpx.ReadTimeout 的 str() 是空的） ----
+import httpx  # noqa: E402
+
+
+async def timeout_generate(hint=""):
+    raise httpx.ReadTimeout("")
+
+
+character_gen.generate_character = timeout_generate
+r = client.post("/api/characters/generate", json={"hint": "随便", "mode": "open"})
+check("超时返回 502", r.status_code, 502)
+detail = r.json()["detail"]
+check("超时提示不空且写明超时", ("超时" in detail) and len(detail) > 12, True)
+check("超时提示给出办法", "思考" in detail, True)
+
+
+async def no_model_generate(hint=""):
+    raise ValueError("还没有选择模型，无法生成角色")
+
+
+character_gen.generate_character = no_model_generate
+r = client.post("/api/characters/generate", json={"hint": "随便", "mode": "open"})
+check("没模型时 502 且说明原因", (r.status_code, "模型" in r.json()["detail"]), (502, True))
+character_gen.generate_character = fake_generate
 
 shutil.rmtree(tmp, ignore_errors=True)
 print()
