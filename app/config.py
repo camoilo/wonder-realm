@@ -9,7 +9,9 @@ DEFAULTS = {
     "ollama": {
         "base_url": "http://localhost:11434",
         "model": "qwen2.5:3b",
-        "options": {"temperature": 0.8, "num_ctx": 8192},
+        # temperature 只是兜底：对话生成的实际取值来自会话的「发散程度」档位
+        # （见 prompts.chat_options），记忆压缩与会话命名自己压到 0.3
+        "options": {"temperature": 0.9, "num_ctx": 8192},
     },
     "memory": {
         "model": "",

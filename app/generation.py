@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from . import memory, naming, ollama_client
 from .database import connect, now
 from .parser import parse_output
-from .prompts import build_messages
+from .prompts import build_messages, chat_options
 
 log = logging.getLogger("ollama_agent")
 
@@ -48,7 +48,10 @@ def load_generation_context(con, sid: int):
 
 
 def prepare_generation(con, sid: int):
-    """读取会话/角色/记忆/未归档历史，组装模型输入。调用方负责连接生命周期。"""
+    """读取会话/角色/记忆/未归档历史，组装模型输入。调用方负责连接生命周期。
+
+    返回值带上 options（含本会话的发散程度），调用方原样交给 generation_response。
+    """
     session, character = load_generation_context(con, sid)
     memory_content = ""
     scope = memory.scope_for_session(session)
@@ -62,7 +65,7 @@ def prepare_generation(con, sid: int):
     ).fetchall()
     model = con.execute("SELECT model FROM app_settings WHERE id=1").fetchone()["model"]
     msgs = build_messages(session, character, memory_content, rows)
-    return msgs, model, session["mode"]
+    return msgs, model, session["mode"], chat_options(session)
 
 
 def persist_message(sid: int, mode: str, raw: str) -> tuple[int | None, str, str | None]:
@@ -92,16 +95,20 @@ def persist_message(sid: int, mode: str, raw: str) -> tuple[int | None, str, str
 
 
 def generation_response(
-    sid: int, msgs: list, model: str, mode: str, meta: dict | None = None
+    sid: int, msgs: list, model: str, mode: str, options: dict | None = None,
+    meta: dict | None = None,
 ):
-    """SSE 流：生成 → 解析 → 落库 → done。chat 传 meta（user 消息 id），regenerate 不传。"""
+    """SSE 流：生成 → 解析 → 落库 → done。chat 传 meta（user 消息 id），regenerate 不传。
+
+    options 来自 prepare_generation()，带着本会话的发散程度；不传则用 config 的默认值。
+    """
 
     async def gen():
         parts = []
         if meta is not None:
             yield sse("meta", meta)
         try:
-            async for kind, value in ollama_client.chat_stream(msgs, model):
+            async for kind, value in ollama_client.chat_stream(msgs, model, options):
                 if kind == "delta":
                     parts.append(value)
                     yield sse("delta", {"text": value})

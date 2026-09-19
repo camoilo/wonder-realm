@@ -72,7 +72,7 @@ async def regenerate(mid: int):
             # 主动停止生成后可能压根没有 assistant 消息，这条路径是唯一的补救入口。
             con.execute("DELETE FROM messages WHERE session_id=? AND id>?", (sid, mid))
         con.commit()
-        msgs, model, mode = prepare_generation(con, sid)
+        msgs, model, mode, options = prepare_generation(con, sid)
     finally:
         con.close()
-    return generation_response(sid, msgs, model, mode)
+    return generation_response(sid, msgs, model, mode, options)

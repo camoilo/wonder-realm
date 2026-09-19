@@ -2,7 +2,8 @@ ollama:
   base_url: http://localhost:11434
   model: qwen2.5:3b              # 首次启动的默认模型；运行中以界面选择为准（app_settings）
   options:
-    temperature: 0.8
+    temperature: 0.9               # 兜底值：对话实际用会话的“发散程度”档位（标准档 = 0.9），
+                                   # 记忆压缩与自动命名各自压到 0.3；这里改小也不影响它们
     num_ctx: 8192
 
 memory:

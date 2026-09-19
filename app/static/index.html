@@ -262,7 +262,7 @@
         <template v-if="activeSession && activeSession.character">
           <div class="panel-section foldable" @click="togglePanelFold('char')">
             <span class="chevron" :class="{open: !panelFold.char}">›</span>
-            <span class="panel-title">角色卡</span>
+            <span class="panel-title">角色设定</span>
             <span v-if="charDirty" class="dirty-tools" @click.stop>
               <span class="dirty-flag">未保存</span>
               <button class="revert-btn" :class="{armed: revertArm.char}"

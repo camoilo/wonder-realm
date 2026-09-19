@@ -368,7 +368,7 @@ const app = Vue.createApp({
           personality: c.personality,
           speech_style: c.speech_style,
           backstory: c.backstory,
-          // 必须带上：面板是整体提交的，漏了它就会在保存角色卡时把头像一个不剩地清掉
+          // 必须带上：面板是整体提交的，漏了它就会在保存角色设定时把头像一个不剩地清掉
           avatar: c.avatar || "",
           // 背景图不随角色下发，由 loadBackgrounds() 填充
           backgrounds: [],
@@ -812,7 +812,7 @@ const app = Vue.createApp({
 
     // 选文件后先校验，通过就进裁剪；任何一步不过都在头像处就地提示
     // （不用底部错误条：它在没打开会话时不渲染，用户会看不到原因）
-    // target: "modal"（新建/编辑角色弹窗）或 "panel"（右侧面板角色卡）
+    // target: "modal"（新建/编辑角色弹窗）或 "panel"（右侧面板角色设定）
     async pickAvatar(e, target) {
       const file = e.target.files && e.target.files[0];
       e.target.value = ""; // 清掉，才能连续两次选同一个文件
@@ -997,7 +997,7 @@ const app = Vue.createApp({
       else this.charForm.backgrounds = list;
     },
 
-    // target: "modal"（角色弹窗）或 "panel"（右侧面板角色卡）
+    // target: "modal"（角色弹窗）或 "panel"（右侧面板角色设定）
     async addBackgrounds(e, target) {
       const files = Array.from(e.target.files || []);
       e.target.value = ""; // 清掉，才能连续两次选同一个文件

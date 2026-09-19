@@ -39,15 +39,33 @@ COMPOSITION_DESC = {
     "dialog_heavy": "以台词为主，情境只作简短交代",
 }
 
+# 「发散程度」档位：界面上只显示四个标签，数值不出现在界面上。它不是提示词内容，
+# 而是覆盖请求里的 options.temperature（见 2.3、chat_options()）。
+TEMPERATURE_LEVELS = {
+    "strict": 0.2,
+    "steady": 0.6,
+    "standard": 0.9,
+    "wild": 1.3,
+}
+
+TEMPERATURE_OPTIONS = [
+    ("strict", "严谨"),
+    ("steady", "稳定"),
+    ("standard", "标准"),
+    ("wild", "放飞"),
+]
+
 DEFAULT_SETTINGS = {
     "character_chat": {
         "reply_length": "medium",
         "proactive": "medium",
+        "temperature": "standard",
         "extra": "",
     },
     "character_scenario": {
         "scenario_length": "medium",
         "pace": "medium",
+        "temperature": "standard",
         "director_notes": "",
         "extra": "",
     },
@@ -56,17 +74,26 @@ DEFAULT_SETTINGS = {
         "style": "",
         "length": "medium",
         "composition": "balanced",
+        "temperature": "standard",
         "extra": "",
     },
 }
 
-# 生成要求表单字段定义，供前端渲染（GET /api/gen-settings/{mode} 或随会话返回）
+# 三种模式共用的「发散程度」字段定义
+TEMPERATURE_FIELD = {
+    "key": "temperature", "label": "发散程度", "type": "radio",
+    "hint": "只影响生成的随机程度，不写进提示词",
+    "options": TEMPERATURE_OPTIONS,
+}
+
+# 生成要求表单字段定义，供前端渲染（GET /api/gen-settings）
 FIELDS = {
     "character_chat": [
         {"key": "reply_length", "label": "回复长度", "type": "radio",
          "options": [("short", "简短"), ("medium", "适中"), ("long", "详细")]},
         {"key": "proactive", "label": "主动性", "type": "radio",
          "options": [("low", "低"), ("medium", "中"), ("high", "高")]},
+        TEMPERATURE_FIELD,
         {"key": "extra", "label": "附加要求", "type": "textarea",
          "placeholder": "任意补充要求，原样注入提示词"},
     ],
@@ -75,6 +102,7 @@ FIELDS = {
          "options": [("short", "简短"), ("medium", "适中"), ("long", "详细")]},
         {"key": "pace", "label": "推进速度", "type": "radio",
          "options": [("slow", "平缓"), ("medium", "适中"), ("fast", "快速")]},
+        TEMPERATURE_FIELD,
         {"key": "director_notes", "label": "导演指令", "type": "textarea",
          "hint": "只影响情境走向，不进入对话", "placeholder": "如：让两人的关系逐渐缓和"},
         {"key": "extra", "label": "附加要求", "type": "textarea"},
@@ -88,6 +116,7 @@ FIELDS = {
          "hint": "决定情境与台词各占多少，可只写情境",
          "options": [("scenario_only", "只有情境"), ("scenario_heavy", "情境为主"),
                      ("balanced", "均衡"), ("dialog_heavy", "台词为主")]},
+        TEMPERATURE_FIELD,
         {"key": "extra", "label": "附加要求", "type": "textarea"},
     ],
 }
@@ -105,6 +134,19 @@ def get_gen_settings(session) -> dict:
 
 def _join(parts: list[str]) -> str:
     return "；".join(p for p in parts if p) + "。"
+
+
+def chat_options(session) -> dict:
+    """生成用的 Ollama options：config 的 options 打底，按会话的「发散程度」覆盖 temperature。
+
+    档位缺失或不是已知档位时保持 config 的值（旧会话、或有人直接往 gen_settings 里塞了怪值）。
+    记忆压缩与会话命名不走这里——它们自己把 temperature 压到 0.3（见 memory.py、naming.py）。
+    """
+    opts = dict(get_config()["ollama"]["options"])
+    value = TEMPERATURE_LEVELS.get(get_gen_settings(session).get("temperature"))
+    if value is not None:
+        opts["temperature"] = value
+    return opts
 
 
 def render_character_chat_settings(s: dict) -> str:
