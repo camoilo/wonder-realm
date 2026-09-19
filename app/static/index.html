@@ -322,9 +322,16 @@
             </div>
             <label class="field">姓名<input v-model="charForm.name" type="text"></label>
             <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
-            <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
-            <label class="field">语言风格<textarea v-model="charForm.speech_style" rows="3" placeholder="口癖、语气、用词习惯"></textarea></label>
-            <label class="field">背景故事<textarea v-model="charForm.backstory" rows="4"></textarea></label>
+            <template v-if="!charLocked">
+              <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
+              <label class="field">语言风格<textarea v-model="charForm.speech_style" rows="3" placeholder="口癖、语气、用词习惯"></textarea></label>
+              <label class="field">背景故事<textarea v-model="charForm.backstory" rows="4"></textarea></label>
+            </template>
+            <div v-else class="locked-box">
+              <div class="locked-title">🔒 性格 / 语言风格 / 背景故事 已锁定</div>
+              <p class="hint">这三项照常参与生成，但不会显示，可以在对话中慢慢了解。</p>
+              <button class="ghost-btn" @click="unlockCharacter('panel')">公开角色设定</button>
+            </div>
             <div class="panel-actions">
               <button class="danger-btn" @click="removeCharacter">删除角色</button>
               <button class="primary-btn" :disabled="!charForm.name.trim()" @click="saveCharacterDrawer">保存</button>
@@ -361,6 +368,31 @@
   <div class="modal-mask" v-if="charModal.visible" @click.self="charModal.visible = false">
     <div class="modal char-modal">
       <h2>{{ charModal.editingId ? "编辑角色" : "新建角色" }}</h2>
+      <!-- 让模型生成：只在新建时提供。编辑已有角色时，设定已经定了，再生成一次
+           等于把角色换掉，不是"编辑"该做的事 -->
+      <div v-if="!charModal.editingId" class="gen-box">
+        <div class="gen-head">
+          <span class="field-label">让模型生成角色</span>
+          <span class="hint">只生成文字设定，不含头像与背景</span>
+        </div>
+        <input v-model="charModal.gen.hint" type="text" maxlength="200"
+               placeholder="想要的设定，可留空让模型自由发挥（如：古风江湖的女剑客）">
+        <div class="radio-row">
+          <label class="radio-item" :class="{on: charModal.gen.mode === 'open'}">
+            <input type="radio" value="open" v-model="charModal.gen.mode">开放模式
+          </label>
+          <label class="radio-item" :class="{on: charModal.gen.mode === 'explore'}">
+            <input type="radio" value="explore" v-model="charModal.gen.mode">探索模式
+          </label>
+        </div>
+        <p class="hint">{{ charModal.gen.mode === "open"
+          ? "开放模式：生成的设定全部直接展示，可以随意修改。"
+          : "探索模式：只公开姓名与外观，性格 / 语言风格 / 背景故事会上锁——它们照常参与生成，但不会显示，可以在对话里慢慢了解。" }}</p>
+        <button class="ghost-btn" :disabled="charModal.gen.busy" @click="generateCharacter">
+          {{ charModal.gen.busy ? "生成中…" : (charModal.gen.draftId ? "换一个" : "生成角色") }}
+        </button>
+        <p v-if="charModal.gen.error" class="avatar-error">{{ charModal.gen.error }}</p>
+      </div>
       <div class="avatar-pick">
         <span class="avatar xl">
           <img v-if="charModal.form.avatar" :src="charModal.form.avatar" alt="">
@@ -408,15 +440,25 @@
       </div>
       <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
       <label class="field">外观<textarea v-model="charModal.form.appearance" rows="2" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
-      <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>
-      <label class="field">语言风格<textarea v-model="charModal.form.speech_style" rows="2" placeholder="口癖、语气、用词习惯"></textarea></label>
-      <label class="field">背景故事<textarea v-model="charModal.form.backstory" rows="3"></textarea></label>
+      <template v-if="!charModal.locked">
+        <label class="field">性格<textarea v-model="charModal.form.personality" rows="2"></textarea></label>
+        <label class="field">语言风格<textarea v-model="charModal.form.speech_style" rows="2" placeholder="口癖、语气、用词习惯"></textarea></label>
+        <label class="field">背景故事<textarea v-model="charModal.form.backstory" rows="3"></textarea></label>
+      </template>
+      <div v-else class="locked-box">
+        <div class="locked-title">🔒 性格 / 语言风格 / 背景故事 已锁定</div>
+        <p class="hint">这三项照常参与生成，但不会显示，可以在对话中慢慢了解。</p>
+        <button v-if="charModal.editingId" class="ghost-btn"
+                @click="unlockCharacter('modal')">公开角色设定</button>
+        <p v-else class="hint">保存后可在右侧面板或这里点「公开角色设定」永久解锁。</p>
+      </div>
       <div class="modal-actions">
         <button v-if="charModal.editingId" class="danger-btn" @click="removeCharacterFromModal">删除角色</button>
         <span class="spacer"></span>
         <button class="ghost-btn" @click="charModal.visible = false">取消</button>
         <button class="primary-btn" :disabled="!charModal.form.name.trim()" @click="saveCharacterModal">保存</button>
       </div>
+      <p v-if="charModal.saveError" class="avatar-error">{{ charModal.saveError }}</p>
     </div>
   </div>
   <div class="modal-mask" v-if="newSessionModal.visible" @click.self="newSessionModal.visible = false">

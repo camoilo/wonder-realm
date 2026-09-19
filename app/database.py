@@ -13,7 +13,10 @@ CREATE TABLE IF NOT EXISTS characters (
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
     -- 自定义头像，存 data URL（jpg/png/webp）。空串表示不用自定义头像，回落到姓名首字占位
-    avatar       TEXT NOT NULL DEFAULT ''
+    avatar       TEXT NOT NULL DEFAULT '',
+    -- 探索模式：1 = 性格/语言风格/背景故事对用户隐藏且不可改（接口也不下发），
+    -- 点击「公开角色设定」后永久置 0。见 character_gen.py 与 10.29
+    locked       INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

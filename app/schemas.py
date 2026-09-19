@@ -39,6 +39,30 @@ class CharacterIn(BaseModel):
         return v
 
 
+class CharacterCreateIn(CharacterIn):
+    """新建角色。带 draft_id 时说明这一份来自模型生成的草稿。
+
+    锁不锁定由**草稿**决定，不从这里传：否则调用方可以在生成后自称"开放模式"，
+    把本该隐藏的字段要回去，锁定就形同虚设。
+    """
+
+    draft_id: str | None = None
+
+
+class GenerateIn(BaseModel):
+    """让模型生成角色的入参。"""
+
+    hint: str = ""
+    mode: str = "open"  # open = 全部直接展示；explore = 只公开姓名与外观
+
+    @field_validator("mode")
+    @classmethod
+    def _check_mode(cls, v: str) -> str:
+        if v not in ("open", "explore"):
+            raise ValueError("mode 只能是 open 或 explore")
+        return v
+
+
 class SessionIn(BaseModel):
     mode: str = "free_scenario"
     character_id: int | None = None

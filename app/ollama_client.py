@@ -44,12 +44,18 @@ class ThinkFilter:
         return out
 
 
-def _payload(model: str, messages: list[dict], stream: bool, options: dict | None) -> dict:
+def _payload(
+    model: str, messages: list[dict], stream: bool, options: dict | None,
+    fmt: str | None = None,
+) -> dict:
     """组装请求体，并在用户关掉思考模式时带上 think=False。
 
     只可能发 False，永远不会发 True：实测非思考型模型收到 think=True 会直接 400
     （"does not support thinking"），而 think=False 它们照收不误。所以"关"是安全的方向，
     "开"不是——要开就别传这个参数，让模型自己决定。
+
+    fmt="json" 会启用 Ollama 的 JSON 模式（约束输出为合法 JSON），用于角色生成；
+    普通对话不传这个字段。
     """
     cfg = get_config()["ollama"]
     payload = {
@@ -58,6 +64,8 @@ def _payload(model: str, messages: list[dict], stream: bool, options: dict | Non
         "stream": stream,
         "options": options or cfg["options"],
     }
+    if fmt:
+        payload["format"] = fmt
     if thinking_disabled():
         payload["think"] = False
     return payload
@@ -106,10 +114,12 @@ async def chat_stream(messages: list[dict], model: str, options: dict | None = N
         yield ("delta", tail)
 
 
-async def chat_once(messages: list[dict], model: str, options: dict | None = None) -> str:
-    """非流式调用（记忆压缩、会话命名用），返回剥离思考段后的正文。"""
+async def chat_once(
+    messages: list[dict], model: str, options: dict | None = None, fmt: str | None = None
+) -> str:
+    """非流式调用（记忆压缩、会话命名、角色生成用），返回剥离思考段后的正文。"""
     cfg = get_config()["ollama"]
-    payload = _payload(model, messages, False, options)
+    payload = _payload(model, messages, False, options, fmt)
     async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as client:
         resp = await client.post(f"{cfg['base_url']}/api/chat", json=payload)
         resp.raise_for_status()

@@ -1,6 +1,6 @@
+import shutil
 import sqlite3
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -32,8 +32,14 @@ run_case("keep-inner-punct", _clean("雨夜,书店", 12), "雨夜,书店")
 # 不做旧库补列（开发阶段直接删库重建），这里只确认 SCHEMA 能在空库上直接建起来
 from app.database import SCHEMA  # noqa: E402
 
-with tempfile.TemporaryDirectory() as tmp:
-    con = sqlite3.connect(Path(tmp) / "fresh.db")
+# 用工作区里的临时目录而不是 tempfile.TemporaryDirectory()：系统临时目录在受限沙箱下
+# 连清理都会 PermissionError，测试会以一个与断言无关的错误失败（新版 Python 的
+# TemporaryDirectory 在删除时还要 chmod，同样被拒）
+tmp = Path(__file__).resolve().parent.parent / ".test_naming_tmp"
+shutil.rmtree(tmp, ignore_errors=True)
+tmp.mkdir()
+try:
+    con = sqlite3.connect(tmp / "fresh.db")
     con.executescript(SCHEMA)
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for expected in ("characters", "sessions", "messages", "memories", "app_settings",
@@ -41,7 +47,10 @@ with tempfile.TemporaryDirectory() as tmp:
         assert expected in tables, f"建表缺少 {expected}：{sorted(tables)}"
     # 新库的 sessions / characters 应当自带全部字段
     assert "title_auto" in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
-    assert "avatar" in {r[1] for r in con.execute("PRAGMA table_info(characters)")}
+    columns = {r[1] for r in con.execute("PRAGMA table_info(characters)")}
+    assert {"avatar", "locked"} <= columns, f"characters 缺字段：{sorted(columns)}"
     con.close()
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
 
 print("naming._clean 与建表用例全部通过")

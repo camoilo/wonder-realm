@@ -564,6 +564,48 @@ html, body {
 .file-btn { display: inline-flex; align-items: center; cursor: pointer; }
 .file-btn input { display: none; }
 
+/* ---------- 让模型生成角色（新建角色弹窗顶部） ---------- */
+.gen-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: #fafbfd;
+}
+.gen-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gen-box input[type="text"] {
+  font-family: inherit;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #fff;
+}
+.gen-box .ghost-btn { align-self: flex-start; }
+
+/* ---------- 探索模式的锁定占位 ---------- */
+/* 锁定的三个字段在界面上完全不渲染，只留这一块说明 + 解锁入口。
+   接口在锁定时也不下发这三个字段，所以这里并没有"藏起来的值"可看 */
+.locked-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #f6f7fa;
+}
+.locked-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.locked-box .ghost-btn { align-self: flex-start; }
+
 /* ---------- 对话背景图管理 ---------- */
 .bg-pick {
   display: flex;

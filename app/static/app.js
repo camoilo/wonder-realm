@@ -146,6 +146,29 @@ const emptyCharForm = () => ({
   backgrounds: [],
 });
 
+// 探索模式下对用户隐藏、也不允许改写的三个字段（与后端 character_gen.HIDDEN_FIELDS 一致）
+const LOCKED_FIELDS = ["personality", "speech_style", "backstory"];
+
+const emptyGenerator = () => ({
+  hint: "",
+  mode: "open", // open = 全部直接展示；explore = 只公开姓名与外观
+  busy: false,
+  error: "",
+  draftId: null, // 服务端草稿 id：探索模式下隐藏的字段只存在服务端
+});
+
+// 用工厂函数而不是到处写字面量：漏一个键就会出现"某状态下少个字段"的怪问题
+// （之前 charSaved 初始化没和表单默认值对齐，面板一打开就显示"未保存"）
+const emptyCharModal = () => ({
+  visible: false,
+  editingId: null,
+  form: emptyCharForm(),
+  gen: emptyGenerator(),
+  locked: false,
+  // 保存失败要在弹窗里说：底部错误条只在会话打开时渲染，新建角色时它根本不在
+  saveError: "",
+});
+
 const app = Vue.createApp({
   data() {
     return {
@@ -173,7 +196,9 @@ const app = Vue.createApp({
       sideCollapsed: false,
       panelCollapsed: false,
       charForm: emptyCharForm(),
-      charModal: { visible: false, editingId: null, form: emptyCharForm() },
+      // 当前会话角色的三个隐藏字段是否锁定（决定面板显示字段还是锁定占位块）
+      charLocked: false,
+      charModal: emptyCharModal(),
       newSessionModal: { visible: false, characterId: null, title: "" },
       renaming: false,
       renameText: "",
@@ -365,21 +390,28 @@ const app = Vue.createApp({
         this.charForm = {
           name: c.name,
           appearance: c.appearance,
-          personality: c.personality,
-          speech_style: c.speech_style,
-          backstory: c.backstory,
+          // 锁定的角色拿不到这三项（接口就不下发），留空即可：保存时后端也会忽略它们
+          personality: c.personality || "",
+          speech_style: c.speech_style || "",
+          backstory: c.backstory || "",
           // 必须带上：面板是整体提交的，漏了它就会在保存角色设定时把头像一个不剩地清掉
           avatar: c.avatar || "",
           // 背景图不随角色下发，由 loadBackgrounds() 填充
           backgrounds: [],
         };
+        this.charLocked = !!c.locked;
       } else {
         this.charForm = emptyCharForm();
+        this.charLocked = false;
       }
       this.charSaved = this.snapshot(this.charForm); // 重新载入即视为已保存
     },
-    panelCollapsed(collapsed) {
-      // 展开面板时重新拉一次记忆，避免收起期间的数据过期；
+    // 生成前换了模式，之前那份结果就不适用了：探索模式的结果前端压根没拿到隐藏字段，
+    // 开放模式的结果也不该直接变成"锁定"。清掉草稿，请用户重新生成
+    "charModal.gen.mode"() {
+      if (this.charModal.gen.draftId) this.resetGeneratedDraft();
+    },
+    panelCollapsed(collapsed) {      // 展开面板时重新拉一次记忆，避免收起期间的数据过期；
       // 但用户手上有未保存的编辑时不能覆盖掉
       if (!collapsed && !this.memoryDirty) this.loadMemory();
     },
@@ -1112,31 +1144,104 @@ const app = Vue.createApp({
       this.bgError = "";
       if (c) {
         this.charModal = {
+          ...emptyCharModal(),
           visible: true,
           editingId: c.id,
           form: {
             name: c.name,
             appearance: c.appearance,
-            personality: c.personality,
-            speech_style: c.speech_style,
-            backstory: c.backstory,
+            personality: c.personality || "",
+            speech_style: c.speech_style || "",
+            backstory: c.backstory || "",
             avatar: c.avatar || "",
             backgrounds: [], // 背景图不随角色列表下发，下面单独取
           },
+          locked: !!c.locked,
         };
         this.loadModalBackgrounds(c.id);
       } else {
-        this.charModal = { visible: false, editingId: null, form: emptyCharForm() };
-        this.charModal.visible = true;
+        this.charModal = { ...emptyCharModal(), visible: true };
+      }
+    },
+
+    // 让模型生成一份角色设定。开放模式把结果填进表单；探索模式只有姓名与外观，
+    // 另外三项留在服务端草稿里（前端拿不到），保存时以草稿为准
+    async generateCharacter() {
+      const gen = this.charModal.gen;
+      if (gen.busy) return;
+      gen.busy = true;
+      gen.error = "";
+      try {
+        const r = await this.api(
+          "/api/characters/generate",
+          this.jsonOpts("POST", { hint: gen.hint, mode: gen.mode })
+        );
+        this.avatarError = "";
+        this.charModal.form.name = r.name || "";
+        this.charModal.form.appearance = r.appearance || "";
+        for (const k of LOCKED_FIELDS) {
+          this.charModal.form[k] = r[k] || "";
+        }
+        this.charModal.locked = !!r.locked;
+        gen.draftId = r.draft_id;
+      } catch (e) {
+        gen.error = e.message;
+      } finally {
+        gen.busy = false;
+      }
+    },
+
+    // 换一个 / 换模式：清掉草稿与那三个字段，回到"重新生成"的状态
+    resetGeneratedDraft() {
+      const gen = this.charModal.gen;
+      gen.draftId = null;
+      gen.error = "";
+      this.charModal.locked = false;
+      for (const k of LOCKED_FIELDS) this.charModal.form[k] = "";
+    },
+
+    // 公开角色设定：单向、永久。确认后本地同步这三个字段，避免出现假的"未保存"
+    async unlockCharacter(target) {
+      const cid = target === "panel"
+        ? (this.activeChar && this.activeChar.id)
+        : this.charModal.editingId;
+      if (!cid) return;
+      const ok = await this.ask(
+        "公开后将永久取消锁定，性格 / 语言风格 / 背景故事会显示出来并可以修改，且无法再锁回去。确定要公开吗？"
+      );
+      if (!ok) return;
+      try {
+        const c = await this.api(`/api/characters/${cid}/unlock`, { method: "POST" });
+        const i = this.characters.findIndex((x) => x.id === cid);
+        if (i >= 0) this.characters[i] = { ...this.characters[i], ...c };
+        if (target === "panel") {
+          for (const k of LOCKED_FIELDS) {
+            this.charForm[k] = c[k] || "";
+            // 快照一起写：这两处都是刚拿到的原值，不该被判成"未保存"
+            this.charSaved[k] = c[k] || "";
+          }
+          this.charLocked = false;
+          if (this.activeSession && this.activeSession.character) {
+            Object.assign(this.activeSession.character, c);
+          }
+        } else {
+          for (const k of LOCKED_FIELDS) this.charModal.form[k] = c[k] || "";
+          this.charModal.locked = false;
+        }
+      } catch (e) {
+        this.error = e.message;
       }
     },
 
     async saveCharacterModal() {
       // 背景图不属于角色接口的字段，单独整体提交，所以先从角色载荷里摘出去
       const { backgrounds, ...charPayload } = this.charModal.form;
+      this.charModal.saveError = "";
+      if (this.charModal.gen.draftId) charPayload.draft_id = this.charModal.gen.draftId;
       try {
         let cid = this.charModal.editingId;
         if (cid) {
+          delete charPayload.draft_id; // 编辑已有角色时不该带草稿
           await this.api(`/api/characters/${cid}`, this.jsonOpts("PUT", charPayload));
         } else {
           const c = await this.api("/api/characters", this.jsonOpts("POST", charPayload));
@@ -1150,6 +1255,8 @@ const app = Vue.createApp({
         this.charModal.visible = false;
         await this.afterCharacterChange();
       } catch (e) {
+        // 弹窗里就地提示：例如应用重启导致探索模式的草稿失效，用户需要知道要重新生成
+        this.charModal.saveError = e.message;
         this.error = e.message;
       }
     },

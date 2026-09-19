@@ -2,6 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..character_gen import public_character
 from ..database import get_db, now
 from ..schemas import SessionIn, SessionPatch
 
@@ -30,7 +31,8 @@ def _session_detail(db, sid: int) -> dict:
             "SELECT * FROM characters WHERE id=?", (session["character_id"],)
         ).fetchone()
         if row:
-            character = dict(row)
+            # 必须走同一个裁剪：会话详情里也内嵌角色，漏了它就能从这里读到锁定的设定
+            character = public_character(row)
     session["character"] = character
     try:
         session["gen_settings"] = json.loads(session["gen_settings"] or "{}")
