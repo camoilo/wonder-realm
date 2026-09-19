@@ -383,9 +383,11 @@ CREATE INDEX idx_character_images ON character_images(character_id, position, id
 导演指令只决定情境与剧情的走向，不属于对话内容，角色不得提及或回应"收到指令"。
 
 # 输出规则
-每次回复严格按以下两段格式输出，两段都不可省略：
+严格按下面两段的顺序输出，段首必须原样使用这两个英文标记：
 [SCENARIO]场景、动作、氛围等情境说明
 [DIALOG]你扮演的角色说出的话
+标记只能用 [SCENARIO] 与 [DIALOG] 这两个词，不要写成 [SCENERY]、[SCENE] 或中文标记。
+两段都必须有内容：不要输出空标记，也不要在标记之外写任何文字。
 ```
 
 **情境生成模式：**
@@ -487,31 +489,45 @@ class ThinkFilter:
 
 用标记 `[SCENARIO]` / `[DIALOG]` 而非中文标签：英文标记在中英混合输出里的歧义最小，且避免全角方括号问题。前端渲染时再显示为中文"情境"标签。
 
+**识别刻意宽容**（`app/parser.py`）。提示词里严格要求的仍是 `[SCENARIO]`/`[DIALOG]`，但解析时接受这些变体，因为它们都实际出现过：
+
+- 同义/近似词：情境侧 `SCENERY`、`SCENE`、`NARRATION`、`SETTING`、`CONTEXT`；话语侧 `DIALOGUE`、`SPEECH`、`TALK`
+- 大小写任意、全角括号 `【SCENARIO】` 也认
+- **标记之外的裸文本按话语算**：模型常把台词写在第一个标记之前（顺序颠倒），丢掉它就等于把角色说的话吞了
+- 多个情境段合并（只取第一段会静默丢内容）
+- 内容为空的标记直接跳过，不产生空段落；全是空标记时视为"没有内容"，**绝不把裸标记当正文显示给用户**
+
+宽容只影响"能不能认出标记"，不影响"要求模型输出什么"——不宽容的代价实测过：模型把 `[SCENARIO]` 写成 `[SCENERY]`、台词写在标记前、末尾多个空 `[DIALOG]`，旧实现只匹配到那个空标记，于是情境为空、整段被打成纯文本，用户看到的是带裸标记的消息。
+
 ```python
 import re
 
-SEGMENT = re.compile(r"\[(SCENARIO|DIALOG)\]\s*(.*?)(?=\n?\[(?:SCENARIO|DIALOG)\]|$)", re.S)
+SCENARIO_TAGS = ("SCENARIO", "SCENERY", "SCENE", "NARRATION", "SETTING", "CONTEXT")
+DIALOG_TAGS = ("DIALOG", "DIALOGUE", "SPEECH", "TALK")
+_TAG = r"[\[【]\s*(?:" + "|".join(SCENARIO_TAGS + DIALOG_TAGS) + r")\s*[\]】]"
+SEGMENT = re.compile(
+    r"[\[【]\s*(" + "|".join(SCENARIO_TAGS + DIALOG_TAGS) + r")\s*[\]】]\s*(.*?)(?=\n?" + _TAG + r"|$)",
+    re.S | re.I,
+)
 
-def parse_output(mode: str, raw: str):
-    """返回 (scenario, content)。角色对话模式原样返回。"""
-    if mode == 'character_chat':
-        return None, raw.strip()
-
-    segs = SEGMENT.findall(raw)
-    if not segs:                       # 容错：模型没按格式输出
-        return None, raw.strip()
-
-    if mode == 'character_scenario':
-        # 一条情境 + 一段话语
-        scenario = next((t for tag, t in segs if tag == 'SCENARIO'), None)
-        dialog = "\n".join(t for tag, t in segs if tag == 'DIALOG')
-        return (scenario or None), dialog or raw.strip()
-
-    # free_scenario：多段，content 存全文（含标记），前端分段渲染
-    return 'MULTI', raw.strip()
+def parse_output(mode: str, raw: str) -> tuple[str | None, str]:
+    text = (raw or "").strip()
+    if mode == "character_chat":
+        return None, text
+    found = SEGMENT.search(text)      # 有没有标记，与"切出了什么段落"是两件事
+    pieces = _pieces(text)            # 标记之外的裸文本也会作为话语出现在这里
+    if not pieces:
+        return (None, "") if found else (None, text)   # 全是空标记 → 没内容
+    if mode == "character_scenario":
+        scenario = "\n".join(t for kind, t in pieces if kind == "scenario").strip()
+        dialog = "\n".join(t for kind, t in pieces if kind == "dialog").strip()
+        return (scenario or None), dialog              # 允许"只有情境、没有台词"
+    return (MULTI if found else None), text
 ```
 
-容错原则：解析不出标记时不丢弃内容，整体降级为话语文本；解析成功后落库的 `content`/`scenario` 是干净文本，`free_scenario` 例外（存原始全文，渲染时再分段）。
+这里有个容易写错的地方：判断"是否降级"必须看**有没有出现标记**，而不是看切出来的段落是否为空——`_pieces()` 在完全无标记时也会把整段当成话语返回，用它判断会把纯文本误标成 `MULTI`（`free_scenario` 的降级路径就靠这个区分）。
+
+容错原则：认不出标记时不丢弃内容，整体降级为话语文本；解析成功后落库的 `content`/`scenario` 是干净文本，`free_scenario` 例外（存原始全文，渲染时再分段）。**角色情境允许"只有情境、没有台词"**（`content` 为空串、`scenario` 有值）：那正是模型输出的内容，不该丢；`persist_message` 因此把"有情境"也算作有效内容。相应地，编辑这类消息时正文可以留空（见 5.5）。
 
 分段渲染发生在前端：`free_scenario` 的 `content` 是带标记全文，`app.js` 用同一个正则（`SEGMENT_RE`，带 `g` 标志）在 `segmentsOf()` 里按原文顺序切成情境段与话语段渲染——段落数量与顺序完全由模型输出决定，前端不假设两者交替出现，只有 `[SCENARIO]` 时就是一个情境块。后端不在 SSE 响应里附带分段结果——同一份数据只在一处解析，避免两个来源不一致。`parser.py` 里另有一个等价实现 `split_segments()`，目前只被单测引用，作为这条正则的参考实现与回归用例。
 
@@ -553,6 +569,8 @@ def parse_output(mode: str, raw: str):
 ### 5.5 消息编辑、删除与重新生成
 
 **编辑**（`PUT /api/messages/{id}`）：更新 `content` / `scenario`，置 `edited=1`。`scenario` 采用"显式传入才更新"的语义——不传则保持原值，显式传 `null` 表示清空情境。后端用 Pydantic 的 `model_fields_set` 区分这两种情况，而不是 `COALESCE(?, scenario)`：后者会让情境一旦写入就再也删不掉。前端编辑过的消息显示"已编辑"标记。归档消息同样可编辑（只改展示原文，不影响已生成的记忆）。
+
+正文允许为空——"只有情境、没有台词"的消息就是这种形态（见 5.2），用户只改情境时不该被迫补一句台词。真正的约束在路由里：**正文与情境不能同时为空**，否则 400。
 
 **删除**（`DELETE /api/messages/{id}?cascade=`）：
 - `cascade=false`（默认）：只删这一条
@@ -1065,6 +1083,26 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 **情境生成模式去掉 `director_notes`（导演指令）**：这个模式下用户发的每条消息本身就是"下一步写什么"的指令，再单设一个字段属于重复，还会把"当前指令"分散在两处——一处是随时能改的表单，一处是对话流里的消息，模型该以谁为准、用户该改哪里都变得含糊。角色情境模式保留该字段：那个模式里用户说的是"角色对话"，剧情走向确实需要一个不进入对话的独立通道。
 
 两处移除都只动 `FIELDS` / `DEFAULT_SETTINGS` 与对应的提示词片段，不动数据库：旧会话 `gen_settings` 里遗留的键既不渲染也不提交（`initGenForm()` 会丢掉不在字段定义里的键），会在下一次保存时自然消失，无需迁移。
+
+### 10.25 标记识别要宽容，判定降级要看"有没有标记"
+
+实际遇到的一条输出（角色情境模式，用户只说"你好"）：
+
+```text
+你好啊，最近过得怎么样？[SCENERY]庆明坐在教室的最后一排，窗外阳光透过树叶洒下斑驳的光影。[DIALOG]
+```
+
+三个偏差叠在一起：标记写成了 `[SCENERY]`、台词写在第一个标记**之前**、末尾还多一个**空的** `[DIALOG]`。旧实现只认 `[SCENARIO]`/`[DIALOG]`，于是只匹配到末尾那个空标记：情境取不到（空）、话语也是空，触发"整体降级"，把带标记的原文当正文落库——用户看到的就是一条含裸标记、情境为空的消息。
+
+修法分两层：
+
+**提示词收紧**（让偏差更少发生）：明确写出"只用 `[SCENARIO]` 与 `[DIALOG]`，不要写成 `[SCENERY]`/`[SCENE]` 或中文标记""情境在前、话语在后""两段都必须有内容，不要输出空标记，也不要在标记之外写文字"。
+
+**解析宽容**（让残余偏差不致命）：接受同义近似词、大小写、全角括号；**标记之外的裸文本按话语算**（模型顺序颠倒时台词就在标记之前，丢掉它等于把角色说的话吞了）；多段情境合并；空标记跳过；全是空标记时视为没有内容，绝不把裸标记当正文显示。
+
+一个容易写错的地方：判断"是否降级"要看**有没有出现标记**，而不是看切出来的段落是否为空。因为标记之外的裸文本也会被切成一段话语，用后者判断会把纯文本误标成 `MULTI`（`free_scenario` 的降级路径正是靠这个区分）——这个错我在改的时候真犯了，被既有的 `free-fallback` 用例拦下来。
+
+顺带把"只有情境、没有台词"变成合法形态：那正是模型输出的内容，`persist_message` 把"有情境"也算作有效内容，编辑时正文允许留空（正文与情境不能同时为空）。
 
 ## 11. 开放问题
 

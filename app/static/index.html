@@ -427,7 +427,9 @@
         <span class="hint">仅影响后续生成的上下文，不修改已沉淀的记忆</span>
         <div class="edit-btns">
           <button class="ghost-btn" @click="cancelEdit">取消</button>
-          <button class="primary-btn" :disabled="!editForm.content.trim()" @click="saveEdit">保存</button>
+          <button class="primary-btn"
+                  :disabled="!editForm.content.trim() && !(editForm.hasScenario && editForm.scenario.trim())"
+                  @click="saveEdit">保存</button>
         </div>
       </div>
     </div>

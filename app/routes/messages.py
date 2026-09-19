@@ -21,6 +21,14 @@ def _touch_session(con, sid: int):
 @router.put("/messages/{mid}")
 def edit_message(mid: int, body: MessageEdit, db=Depends(get_db)):
     msg = _get_message(db, mid)
+    # 允许"只有情境、没有台词"（模型可能只写了场景），但两者都空就不是一条消息了
+    keeps_scenario = (
+        body.scenario
+        if "scenario" in body.model_fields_set
+        else (msg["scenario"] if msg["scenario"] != "MULTI" else None)
+    )
+    if not body.content.strip() and not (keeps_scenario or "").strip():
+        raise HTTPException(400, "消息内容不能为空")
     sets, vals = ["content=?", "edited=1"], [body.content]
     # scenario 仅在显式传入时更新（显式传 null 表示清空情境）；未传则保持原值
     if "scenario" in body.model_fields_set:

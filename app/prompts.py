@@ -197,9 +197,11 @@ def build_character_scenario_system(character, memory_content: str, settings: di
         f"{settings.get('director_notes') or '（无）'}\n"
         "导演指令只决定情境与剧情的走向，不属于对话内容，角色不得提及或回应“收到指令”。\n\n"
         "# 输出规则\n"
-        "每次回复严格按以下两段格式输出，两段都不可省略：\n"
+        "严格按下面两段的顺序输出，段首必须原样使用这两个英文标记：\n"
         "[SCENARIO]场景、动作、氛围等情境说明\n"
-        "[DIALOG]你扮演的角色说出的话"
+        "[DIALOG]你扮演的角色说出的话\n"
+        "标记只能用 [SCENARIO] 与 [DIALOG] 这两个词，不要写成 [SCENERY]、[SCENE] 或中文标记。\n"
+        "两段都必须有内容：不要输出空标记，也不要在标记之外写任何文字。"
     )
 
 
@@ -240,7 +242,10 @@ def _restore_history(mode: str, row) -> str:
     if mode == "character_scenario":
         scenario = row["scenario"] if "scenario" in row.keys() else None
         if scenario:
-            return f"[SCENARIO]{scenario}\n[DIALOG]{content}"
+            # 只有情境、没有台词时不要再补一个空的 [DIALOG]，那会教模型输出空标记
+            if content.strip():
+                return f"[SCENARIO]{scenario}\n[DIALOG]{content}"
+            return f"[SCENARIO]{scenario}"
     return content
 
 

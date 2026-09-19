@@ -811,7 +811,8 @@ html, body {
 textarea:focus { outline: none; border-color: var(--accent); }
 textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 
-/* 发送键那一列：自由情境下"继续"叠在发送/停止上方，两键等宽 */
+/* 发送键那一列：背景切换 / "继续" 叠在发送（或停止）上方。
+   四个键统一高度与字号，宽度由列内 stretch 对齐，避免同一列里高低不齐 */
 .send-col {
   flex: none;
   display: flex;
@@ -819,14 +820,24 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   gap: 8px;
 }
 
+.send-btn,
+.stop-btn,
+.continue-btn,
+.bg-switch {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14.5px;
+  border-radius: var(--radius);
+}
+
 /* 自由情境的"继续"：次级按钮，不抢发送键的视觉重量 */
 .continue-btn {
-  padding: 9px 20px;
+  padding: 0 20px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
   background: var(--panel);
   color: var(--text);
-  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
@@ -847,22 +858,18 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 /* 对话背景的上一张/下一张：与"继续"同为次级按钮、同在发送键上方
    （两者互斥：背景切换只在角色两模式出现，"继续"只在自由情境出现） */
 .bg-switch {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 2px;
-  min-height: 38px;
   padding: 0 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
   background: var(--panel);
   transition: border-color 0.15s;
 }
 .bg-switch:hover { border-color: var(--accent); }
 
 .bg-switch button {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -870,7 +877,7 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   border-radius: 7px;
   background: none;
   color: var(--text);
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
@@ -879,18 +886,16 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 .bg-switch button:hover { background: #eceef2; color: var(--accent-dark); }
 
 .bg-switch-count {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-soft);
   white-space: nowrap;
 }
 
 .send-btn {
-  padding: 11px 22px;
+  padding: 0 22px;
   border: none;
-  border-radius: var(--radius);
   background: var(--accent);
   color: #fff;
-  font-size: 14.5px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
@@ -901,15 +906,11 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 
 /* 流式生成中：发送变为停止 */
 .stop-btn {
-  display: inline-flex;
-  align-items: center;
   gap: 7px;
-  padding: 11px 20px;
+  padding: 0 20px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
   background: var(--panel);
   color: var(--text);
-  font-size: 14.5px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;

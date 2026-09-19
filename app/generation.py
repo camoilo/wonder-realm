@@ -68,13 +68,14 @@ def prepare_generation(con, sid: int):
 def persist_message(sid: int, mode: str, raw: str) -> tuple[int | None, str, str | None]:
     """解析并落库一条生成消息，返回 (message_id, content, scenario)。
 
-    raw 为空或解析后无正文时不落库，返回 (None, "", None)，由调用方决定如何提示。
+    raw 为空、解析后既无正文也无情境时不落库，返回 (None, "", None)，由调用方决定如何提示。
+    "只有情境、没有台词"也算有效内容——那正是模型输出的东西，不该丢。
     """
     raw = (raw or "").strip()
     if not raw:
         return None, "", None
     scenario, content = parse_output(mode, raw)
-    if not content.strip():
+    if not content.strip() and not (scenario and scenario != "MULTI"):
         return None, "", None
     con = connect()
     try:

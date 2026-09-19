@@ -4,7 +4,17 @@ const MODES = {
   free_scenario: { label: "自由情境", character: false },
 };
 
-const SEGMENT_RE = /\[(SCENARIO|DIALOG)\]\s*(.*?)(?=\n?\[(?:SCENARIO|DIALOG)\]|$)/gs;
+// 与后端 parser.py 保持同一套标记识别（理由见那里的注释）：宽容认标记，
+// 但只认这几种词，大小写与全角括号都接受
+const SCENARIO_TAGS = ["SCENARIO", "SCENERY", "SCENE", "NARRATION", "SETTING", "CONTEXT"];
+const DIALOG_TAGS = ["DIALOG", "DIALOGUE", "SPEECH", "TALK"];
+const ALL_TAG_SRC = SCENARIO_TAGS.concat(DIALOG_TAGS).join("|");
+const TAG_SRC = "[\\[【]\\s*(?:" + ALL_TAG_SRC + ")\\s*[\\]】]";
+const SEGMENT_RE = new RegExp(
+  "[\\[【]\\s*(" + ALL_TAG_SRC + ")\\s*[\\]】]\\s*(.*?)(?=\\n?" + TAG_SRC + "|$)",
+  "gis"
+);
+const isScenarioTag = (tag) => SCENARIO_TAGS.includes(String(tag).toUpperCase());
 
 // "还原"键的解除武装计时器。放模块级而不是 data 里：定时器句柄不需要响应式
 const revertTimers = {};
@@ -645,17 +655,30 @@ const app = Vue.createApp({
       }
     },
 
+    // 把带标记的全文切成 [{type, text}]。标记之外的裸文本按话语算——模型常把台词
+    // 写在第一个标记之前，丢掉它就等于把角色说的话吞了（与 parser.py 的容错一致）
     segmentsOf(m) {
+      const text = m.content || "";
       const segs = [];
       SEGMENT_RE.lastIndex = 0;
+      let last = 0;
       let match;
-      while ((match = SEGMENT_RE.exec(m.content)) !== null) {
-        segs.push({
-          type: match[1] === "SCENARIO" ? "scenario" : "dialog",
-          text: match[2].trim(),
-        });
+      let sawTag = false;
+      while ((match = SEGMENT_RE.exec(text)) !== null) {
+        sawTag = true;
+        const head = text.slice(last, match.index).trim();
+        if (head) segs.push({ type: "dialog", text: head });
+        const body = match[2].trim();
+        if (body) {
+          segs.push({ type: isScenarioTag(match[1]) ? "scenario" : "dialog", text: body });
+        }
+        last = SEGMENT_RE.lastIndex;
       }
-      return segs.length ? segs : [{ type: "dialog", text: m.content }];
+      const tail = text.slice(last).trim();
+      if (tail) segs.push({ type: "dialog", text: tail });
+      if (segs.length) return segs;
+      // 只有空标记：没有可渲染的内容，别把裸标记当正文显示
+      return sawTag ? [] : [{ type: "dialog", text }];
     },
 
     toggleChar(id) {
