@@ -42,7 +42,6 @@ COMPOSITION_DESC = {
 DEFAULT_SETTINGS = {
     "character_chat": {
         "reply_length": "medium",
-        "tone_hint": "",
         "proactive": "medium",
         "extra": "",
     },
@@ -57,7 +56,6 @@ DEFAULT_SETTINGS = {
         "style": "",
         "length": "medium",
         "composition": "balanced",
-        "director_notes": "",
         "extra": "",
     },
 }
@@ -67,8 +65,6 @@ FIELDS = {
     "character_chat": [
         {"key": "reply_length", "label": "回复长度", "type": "radio",
          "options": [("short", "简短"), ("medium", "适中"), ("long", "详细")]},
-        {"key": "tone_hint", "label": "语气基调", "type": "text",
-         "placeholder": "如：轻松幽默、慵懒"},
         {"key": "proactive", "label": "主动性", "type": "radio",
          "options": [("low", "低"), ("medium", "中"), ("high", "高")]},
         {"key": "extra", "label": "附加要求", "type": "textarea",
@@ -92,8 +88,6 @@ FIELDS = {
          "hint": "决定情境与台词各占多少，可只写情境",
          "options": [("scenario_only", "只有情境"), ("scenario_heavy", "情境为主"),
                      ("balanced", "均衡"), ("dialog_heavy", "台词为主")]},
-        {"key": "director_notes", "label": "导演指令", "type": "textarea",
-         "hint": "只影响剧情走向，不进入生成结果", "placeholder": "如：下一幕转入雨夜"},
         {"key": "extra", "label": "附加要求", "type": "textarea"},
     ],
 }
@@ -117,8 +111,6 @@ def render_character_chat_settings(s: dict) -> str:
     parts = [
         f"回复长度：{REPLY_LENGTH_DESC.get(s.get('reply_length'), REPLY_LENGTH_DESC['medium'])}",
     ]
-    if s.get("tone_hint"):
-        parts.append(f"语气基调：{s['tone_hint']}")
     parts.append(f"主动性：{PROACTIVE_DESC.get(s.get('proactive'), PROACTIVE_DESC['medium'])}")
     if s.get("extra"):
         parts.append(f"附加要求：{s['extra']}")
@@ -212,15 +204,14 @@ def build_character_scenario_system(character, memory_content: str, settings: di
 
 
 def build_free_scenario_system(memory_content: str, settings: dict) -> str:
+    # 这个模式没有独立的"导演指令"字段：用户在对话里发的内容本身就是对下一步的指令，
+    # 再单设一个字段属于重复，且会让"当前指令"分散在两处。
     return (
         "你是创意写作引擎，根据用户的引导生成故事情境与角色对话。\n\n"
         "# 本会话此前的剧情\n"
         f"{memory_content.strip() or '（暂无，这是新的故事）'}\n\n"
         "# 生成要求\n"
         f"{render_free_scenario_settings(settings)}\n\n"
-        "# 导演指令\n"
-        f"{settings.get('director_notes') or '（无）'}\n"
-        "导演指令只决定剧情走向，不作为对话内容出现在生成结果里。\n\n"
         "# 输出规则\n"
         "每次生成都用下面的标记分段输出，每个段落以标记开头，段落数量与先后顺序不限：\n"
         "[SCENARIO]场景、氛围、事件等情境说明\n"

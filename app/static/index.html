@@ -98,15 +98,11 @@
     <div class="chat-area">
       <!-- 背景层放在滚动容器外面，这样滚动消息时背景是静止的 -->
       <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
-      <main class="chat" ref="chatBox" :class="{ 'with-bg-nav': showBgNav }">
+      <main class="chat" ref="chatBox">
       <div class="chat-inner">
         <div v-if="!activeSession" class="empty">
           <div class="empty-icon">&#9998;</div>
           <p>从左侧选择或创建一个会话</p>
-        </div>
-        <div v-else-if="messages.length === 0 && !streaming" class="empty">
-          <div class="empty-icon">&#9998;</div>
-          <p>发送第一条消息，开始对话</p>
         </div>
         <template v-else>
           <div v-if="archivedCount" class="archived-fold" @click="showArchived = !showArchived">
@@ -171,11 +167,6 @@
         </template>
       </div>
       </main>
-      <div v-if="showBgNav" class="chat-bg-nav">
-        <button type="button" title="上一张背景" @click="prevBg">‹</button>
-        <span class="chat-bg-count">{{ bgIndex + 1 }} / {{ bgImages.length }}</span>
-        <button type="button" title="下一张背景" @click="nextBg">›</button>
-      </div>
     </div>
 
     <footer class="inputbar" v-if="activeSession">
@@ -195,8 +186,15 @@
             @keydown.enter.exact.prevent="send"
           ></textarea>
           <div class="send-col">
+            <!-- 背景切换与"继续"互斥：前者只在角色两模式出现，后者只在自由情境出现，
+                 所以它们共用发送键上方这个位置，样式也用同一套（次级按钮） -->
+            <div v-if="showBgNav" class="bg-switch">
+              <button type="button" title="上一张背景" @click="prevBg">‹</button>
+              <span class="bg-switch-count">{{ bgIndex + 1 }}/{{ bgImages.length }}</span>
+              <button type="button" title="下一张背景" @click="nextBg">›</button>
+            </div>
             <button v-if="isFreeScenario" class="continue-btn" :disabled="!canContinue"
-                    title="基于上一条回复继续生成（相当于发送“继续”）"
+                    title="基于上一条回复继续生成（相当于发送“请继续”）"
                     @click="continueGeneration">继续</button>
             <button v-if="streaming" class="stop-btn" @click="stop">
               <span class="stop-square"></span>停止

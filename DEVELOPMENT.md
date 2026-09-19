@@ -82,9 +82,10 @@
 | 字段 | 类型 | 取值 |
 |---|---|---|
 | `reply_length` | 单选 | 简短 / 适中 / 详细 |
-| `tone_hint` | 自由文本 | 如"轻松幽默"、"慵懒" |
 | `proactive` | 单选 | 低 / 中 / 高（主动推进话题的程度） |
 | `extra` | 自由文本 | 任意补充要求，原样注入 |
+
+> 曾有 `tone_hint`（语气基调，自由文本），已移除：一个角色用什么语气说话，本来就是这个角色（角色卡里的"语言风格"）加上模型自己判断的结果，再让用户在会话里指定一遍既重复又容易和角色卡打架（见 10.24）。
 
 **角色情境模式（生成要求）：**
 
@@ -105,12 +106,13 @@
 | `style` | 自由文本 | 文风，如"细腻文学风"、"轻喜剧" |
 | `length` | 单选 | 短 / 中 / 长（单次生成篇幅） |
 | `composition` | 单选 | 只有情境 / 情境为主 / 均衡 / 台词为主（情境与台词的配比，默认均衡） |
-| `director_notes` | 自由文本 | 导演指令：影响剧情走向，不进入对话 |
 | `extra` | 自由文本 | 任意补充要求 |
+
+> 这个模式曾有 `director_notes`，已移除：用户在这个模式下发的每条消息本身就是对下一步的指令，再单设一个字段属于重复，还会让"当前指令"分散在两处（见 10.24）。
 
 `composition` 决定情境与台词各占多少：`scenario_only` 明确要求不输出任何 `[DIALOG]`，`scenario_heavy` 允许情境铺陈多段、台词只作点缀。旧会话的 `gen_settings` 里没有这个键时由 `DEFAULT_SETTINGS` 兜底为 `balanced`，因此不需要数据迁移（见 5.1）。
 
-`director_notes`（导演指令）与输出风格类字段不同：它保存对情境/剧情走向的持续性要求（如"让两人的关系逐渐缓和""下一幕转入雨夜"），不作为消息进入对话历史，只注入 system prompt 指导生成，角色不会"说出"收到了指令。它与生成要求的其他字段一样挂在会话上、随时可改、只影响后续生成。角色对话模式不设此字段——该模式无情境，同类需求由 `extra` 承担。
+`director_notes`（导演指令）与输出风格类字段不同：它保存对情境/剧情走向的持续性要求（如"让两人的关系逐渐缓和"），不作为消息进入对话历史，只注入 system prompt 指导生成，角色不会"说出"收到了指令。它与生成要求的其他字段一样挂在会话上、随时可改、只影响后续生成。**目前只有角色情境模式保留此字段**——角色对话模式无情境，同类需求由 `extra` 承担；情境生成模式的用户消息本身就是指令，故不设（见 10.24）。
 
 ### 2.4 共通能力
 
@@ -397,10 +399,6 @@ CREATE INDEX idx_character_images ON character_images(character_id, position, id
 # 生成要求
 {gen_settings_text}
 
-# 导演指令
-{director_notes 或 "（无）"}
-导演指令只决定剧情走向，不作为对话内容出现在生成结果里。
-
 # 输出规则
 每次生成都用下面的标记分段输出，每个段落以标记开头，段落数量与先后顺序不限：
 [SCENARIO]场景、氛围、事件等情境说明
@@ -427,8 +425,6 @@ def render_character_chat_settings(s: dict) -> str:
     parts = [
         f"回复长度：{REPLY_LENGTH_DESC.get(s.get('reply_length'), REPLY_LENGTH_DESC['medium'])}",
     ]
-    if s.get("tone_hint"):
-        parts.append(f"语气基调：{s['tone_hint']}")
     parts.append(f"主动性：{PROACTIVE_DESC.get(s.get('proactive'), PROACTIVE_DESC['medium'])}")
     if s.get("extra"):
         parts.append(f"附加要求：{s['extra']}")
@@ -437,7 +433,9 @@ def render_character_chat_settings(s: dict) -> str:
 
 取值一律用 `.get(..., 默认)` 兜底：会话里存的可能是旧版本留下的枚举值，直接下标取值会在升级后 KeyError。字段定义与默认值集中在 `prompts.py` 的 `FIELDS` / `DEFAULT_SETTINGS`，通过 `GET /api/gen-settings` 下发给前端渲染，前端不含任何硬编码字段。
 
-`director_notes` 不并入 `gen_settings_text`，而是渲染为提示词中独立的"导演指令"段：它是剧情走向的持续要求，不是输出风格，独立成段让模型不会混淆两者，用户在面板里也能直观理解字段含义。
+`director_notes` 不并入 `gen_settings_text`，而是渲染为提示词中独立的"导演指令"段：它是剧情走向的持续要求，不是输出风格，独立成段让模型不会混淆两者，用户在面板里也能直观理解字段含义（目前仅角色情境模式有该字段，见 10.24）。
+
+字段被移除后，旧会话 `gen_settings` 里遗留的同名键**既不渲染也不提交**：`initGenForm()` 会把不在当前字段定义里的键丢掉，`saveGenSettings()` 也只按字段定义组装载荷，所以旧值会在下一次保存时被自然清掉。
 
 历史消息注入时的格式还原：assistant 历史按原始标记格式回填（`[SCENARIO]xxx\n[DIALOG]yyy`），让模型持续看到自己此前的输出结构，格式遵循率更高。user 消息注入 `content`。
 
@@ -1059,6 +1057,14 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 修法是把滚动条做成本身不破坏圆角的样子：轨道透明、滑块内缩并带圆角（`::-webkit-scrollbar-track: transparent`，`thumb` 用 `border-radius` + `background-clip: content-box`），Firefox 侧用 `scrollbar-color: #c6cad2 transparent`；再加 `scrollbar-gutter: stable`，让内容变长时布局不跳。同时显式 `overflow-x: hidden`——只要有一轴不是 `visible`，另一轴的 `visible` 就会计算成 `auto`，横向一旦溢出同样会出现滚动条并盖掉下方圆角。
 
 顺带把角色弹窗单独放宽（`.char-modal` 560px）并删掉两段上传说明文字：这个弹窗要放头像、5 张背景缩略图和 5 个字段，430px 下换行太多、纵向也更容易溢出。
+
+### 10.24 移除两个重复的生成要求字段
+
+**角色对话模式去掉 `tone_hint`（语气基调）**：一个角色用什么语气说话，本该由角色卡里的"语言风格"加上模型对当前语境的判断决定。再让用户在会话里手填一遍，既与角色卡重复，又会在两者不一致时互相打架（角色卡写"冷淡简短"，会话里写"轻松幽默"，模型只能猜听谁的）。要固定语气就写进角色卡，那才是角色的固有属性。
+
+**情境生成模式去掉 `director_notes`（导演指令）**：这个模式下用户发的每条消息本身就是"下一步写什么"的指令，再单设一个字段属于重复，还会把"当前指令"分散在两处——一处是随时能改的表单，一处是对话流里的消息，模型该以谁为准、用户该改哪里都变得含糊。角色情境模式保留该字段：那个模式里用户说的是"角色对话"，剧情走向确实需要一个不进入对话的独立通道。
+
+两处移除都只动 `FIELDS` / `DEFAULT_SETTINGS` 与对应的提示词片段，不动数据库：旧会话 `gen_settings` 里遗留的键既不渲染也不提交（`initGenForm()` 会丢掉不在字段定义里的键），会在下一次保存时自然消失，无需迁移。
 
 ## 11. 开放问题
 

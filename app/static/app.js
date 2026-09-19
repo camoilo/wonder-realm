@@ -593,6 +593,12 @@ const app = Vue.createApp({
           merged[f.key] = (f.options && f.options[0] && f.options[0][0]) || "";
         }
       }
+      // 丢掉已不在字段定义里的旧键（例如后来移除的"语气基调""导演指令"）：
+      // 它们既不渲染、保存时也不提交，留着只会让快照比对和排查变得含混
+      const allowed = new Set(this.fieldsOf(mode).map((f) => f.key));
+      for (const k of Object.keys(merged)) {
+        if (!allowed.has(k)) delete merged[k];
+      }
       this.genForm = merged;
       this.genSaved = this.snapshot(merged);
     },
