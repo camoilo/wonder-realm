@@ -267,6 +267,11 @@ html, body {
 .model-select:focus { outline: 2px solid rgba(63, 106, 216, 0.25); }
 .model-select:disabled { background: #f0f1f4; color: var(--text-soft); cursor: not-allowed; }
 
+/* 思考模式开关：关掉时用灰底表示"已关闭"，模型不支持时置灰不可点 */
+.think-btn { white-space: nowrap; padding: 6px 10px; font-size: 13px; }
+.think-btn.off { background: #f0f1f4; color: var(--text-soft); border-color: var(--border); }
+.think-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* 侧栏收起/展开按钮：常显 */
 .rail-toggle {
   opacity: 1;

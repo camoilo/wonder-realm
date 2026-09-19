@@ -154,6 +154,8 @@ const app = Vue.createApp({
       models: [],
       currentModel: "",
       modelWarning: "",
+      // 是否禁用思考模式（全局偏好，存库；模型不支持思考时这个开关不起作用）
+      disableThinking: false,
       characters: [],
       sessions: [],
       expandedChars: {},
@@ -239,6 +241,20 @@ const app = Vue.createApp({
     // 当前会话绑定的角色（自由情境没有）。消息区的头像与名字都用它，省得模板里重复长条件
     activeChar() {
       return (this.activeSession && this.activeSession.character) || null;
+    },
+    // 顶栏"思考模式"开关：只有思考型模型才让它可点
+    currentModelInfo() {
+      return this.models.find((m) => m.name === this.currentModel) || null;
+    },
+    currentModelSupportsThinking() {
+      const info = this.currentModelInfo;
+      return info ? !!info.thinking : true; // 模型列表还没到手时不置灰，免得闪一下
+    },
+    thinkToggleTitle() {
+      if (!this.currentModelSupportsThinking) return "当前模型不支持思考模式，这个开关对它没有作用";
+      return this.disableThinking
+        ? "思考模式已关闭，点击开启"
+        : "思考模式已开启，点击关闭（能明显加快回复）";
     },
     // 对话区背景：只有角色两模式、且该角色有背景图时才有；自由情境、未选会话、
     // 角色已删除都回落到空白背景
@@ -528,6 +544,7 @@ const app = Vue.createApp({
       try {
         const s = await this.api("/api/settings");
         this.currentModel = s.model;
+        this.disableThinking = !!s.disable_thinking;
       } catch (e) {
         this.error = e.message;
         return;
@@ -1230,6 +1247,26 @@ const app = Vue.createApp({
           this.currentModel = s.model;
         } catch (_) {
           /* 读取失败就保持原选择 */
+        }
+      }
+    },
+
+    // 顶栏的思考模式开关。失败时同样在顶栏提示并回退，理由同 switchModel
+    async toggleThinking() {
+      try {
+        const s = await this.api(
+          "/api/settings",
+          this.jsonOpts("PUT", { disable_thinking: !this.disableThinking })
+        );
+        this.disableThinking = !!s.disable_thinking;
+        this.modelWarning = "";
+      } catch (e) {
+        this.modelWarning = e.message;
+        try {
+          const s = await this.api("/api/settings");
+          this.disableThinking = !!s.disable_thinking;
+        } catch (_) {
+          /* 保持原状态 */
         }
       }
     },

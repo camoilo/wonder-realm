@@ -89,6 +89,10 @@
           <option value="" disabled>选择模型</option>
           <option v-for="m in models" :key="m.name" :value="m.name">{{ m.name }}{{ m.thinking ? "（思考型）" : "" }}</option>
         </select>
+        <button class="ghost-btn think-btn" :class="{off: disableThinking}"
+                :disabled="!currentModelSupportsThinking"
+                :title="thinkToggleTitle"
+                @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
         <button v-if="activeSession" class="ghost-btn"
                 :title="(panelCollapsed ? '展开右侧面板' : '收起右侧面板') + (anyDirty ? '（有未保存的修改）' : '')"
                 @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}<span v-if="anyDirty" class="dirty-dot"></span></button>

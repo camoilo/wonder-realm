@@ -36,7 +36,8 @@ with tempfile.TemporaryDirectory() as tmp:
     con = sqlite3.connect(Path(tmp) / "fresh.db")
     con.executescript(SCHEMA)
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    for expected in ("characters", "sessions", "messages", "memories", "app_settings", "character_images"):
+    for expected in ("characters", "sessions", "messages", "memories", "app_settings",
+                     "character_images", "app_prefs"):
         assert expected in tables, f"建表缺少 {expected}：{sorted(tables)}"
     # 新库的 sessions / characters 应当自带全部字段
     assert "title_auto" in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}

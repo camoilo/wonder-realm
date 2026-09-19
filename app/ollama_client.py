@@ -1,9 +1,11 @@
+import asyncio
 import json
 import re
 
 import httpx
 
 from .config import get_config
+from .database import thinking_disabled
 
 
 class ThinkFilter:
@@ -42,18 +44,32 @@ class ThinkFilter:
         return out
 
 
+def _payload(model: str, messages: list[dict], stream: bool, options: dict | None) -> dict:
+    """组装请求体，并在用户关掉思考模式时带上 think=False。
+
+    只可能发 False，永远不会发 True：实测非思考型模型收到 think=True 会直接 400
+    （"does not support thinking"），而 think=False 它们照收不误。所以"关"是安全的方向，
+    "开"不是——要开就别传这个参数，让模型自己决定。
+    """
+    cfg = get_config()["ollama"]
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": stream,
+        "options": options or cfg["options"],
+    }
+    if thinking_disabled():
+        payload["think"] = False
+    return payload
+
+
 async def chat_stream(messages: list[dict], model: str, options: dict | None = None):
     """流式调用 Ollama /api/chat，兼容有无思考模式的模型。
 
     yield (kind, value)：("status", "thinking"/"generating") 或 ("delta", 正文增量)。
     """
     cfg = get_config()["ollama"]
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": True,
-        "options": options or cfg["options"],
-    }
+    payload = _payload(model, messages, True, options)
     tf = ThinkFilter()
     saw_thinking = False
     saw_content = False
@@ -91,14 +107,9 @@ async def chat_stream(messages: list[dict], model: str, options: dict | None = N
 
 
 async def chat_once(messages: list[dict], model: str, options: dict | None = None) -> str:
-    """非流式调用（记忆压缩用），返回剥离思考段后的正文。"""
+    """非流式调用（记忆压缩、会话命名用），返回剥离思考段后的正文。"""
     cfg = get_config()["ollama"]
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-        "options": options or cfg["options"],
-    }
+    payload = _payload(model, messages, False, options)
     async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10)) as client:
         resp = await client.post(f"{cfg['base_url']}/api/chat", json=payload)
         resp.raise_for_status()
@@ -107,22 +118,30 @@ async def chat_once(messages: list[dict], model: str, options: dict | None = Non
 
 
 async def list_models() -> list[dict]:
-    """已安装模型列表，thinking 标记是否为思考型模型。"""
+    """已安装模型列表，thinking 标记是否为思考型模型。
+
+    取 /api/tags 与 /api/show 两处 capabilities 的**并集**：实测两者会对同一模型给出不同
+    结果（sorc/qwen3.5-instruct-uncensored:4b 在 tags 里缺 thinking、show 里有），只信
+    tags 会漏标。show 是按模型逐个查，所以并发发出去；查不到就退化成只用 tags 的结果。
+    """
     cfg = get_config()["ollama"]
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.get(f"{cfg['base_url']}/api/tags")
         resp.raise_for_status()
-        return [
-            {
-                "name": m["name"],
-                "thinking": "thinking" in (m.get("capabilities") or []),
-            }
-            for m in resp.json().get("models", [])
-        ]
+        models = resp.json().get("models", [])
 
+        async def caps(name: str, from_tags) -> set:
+            try:
+                r = await client.post(f"{cfg['base_url']}/api/show", json={"model": name})
+                r.raise_for_status()
+                from_show = r.json().get("capabilities") or []
+            except (httpx.HTTPError, ValueError):
+                from_show = []
+            return set(from_tags or []) | set(from_show)
 
-async def check_model(name: str) -> bool:
-    try:
-        return any(m["name"] == name for m in await list_models())
-    except httpx.HTTPError:
-        return False
+        merged = await asyncio.gather(*(caps(m["name"], m.get("capabilities")) for m in models))
+
+    return [
+        {"name": m["name"], "thinking": "thinking" in c}
+        for m, c in zip(models, merged)
+    ]

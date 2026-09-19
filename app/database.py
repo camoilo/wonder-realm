@@ -67,6 +67,14 @@ CREATE TABLE IF NOT EXISTS character_images (
     created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_character_images ON character_images(character_id, position, id);
+
+-- 零散的界面偏好，键值对存放。用独立的新表而不是给 app_settings 加列：
+-- CREATE TABLE IF NOT EXISTS 对**已有库**也会把新表建出来，而加列不会（我们不做补列，
+-- 见 4.2）——所以新表不需要用户删库重建，新列需要。
+CREATE TABLE IF NOT EXISTS app_prefs (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
 """
 
 DB_PATH: Path | None = None
@@ -115,12 +123,45 @@ def get_db():
         con.close()
 
 
+# 界面偏好：是否禁用思考模式（存 "1"/"0"）
+PREF_DISABLE_THINKING = "disable_thinking"
+
+
+def read_pref(key: str, default: str = "") -> str:
+    con = connect()
+    try:
+        row = con.execute("SELECT value FROM app_prefs WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else default
+    finally:
+        con.close()
+
+
+def write_pref(key: str, value: str) -> None:
+    con = connect()
+    try:
+        con.execute(
+            "INSERT INTO app_prefs(key, value) VALUES(?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def thinking_disabled() -> bool:
+    """生成时是否禁用思考模式。集中在这里读，聊天/重新生成/记忆压缩/自动命名就都会遵守。"""
+    return read_pref(PREF_DISABLE_THINKING, "0") == "1"
+
+
 def read_settings() -> dict:
     con = connect()
     try:
         row = con.execute(
             "SELECT model, memory_model FROM app_settings WHERE id=1"
         ).fetchone()
-        return dict(row)
+        out = dict(row)
     finally:
         con.close()
+    out["disable_thinking"] = thinking_disabled()
+    return out

@@ -90,3 +90,5 @@ class BackgroundsIn(BaseModel):
 class SettingsIn(BaseModel):
     model: str | None = None
     memory_model: str | None = None
+    # 界面上的"思考模式"开关；None 表示这次不改它
+    disable_thinking: bool | None = None
