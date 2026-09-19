@@ -28,32 +28,19 @@ run_case("punct-only", _clean("。。。", 12), "")
 run_case("keep-inner-punct", _clean("雨夜,书店", 12), "雨夜,书店")
 
 
-# ---- 旧库补列迁移 ----
-from app.database import SCHEMA, _migrate  # noqa: E402
+# ---- 建表 ----
+# 不做旧库补列（开发阶段直接删库重建），这里只确认 SCHEMA 能在空库上直接建起来
+from app.database import SCHEMA  # noqa: E402
 
 with tempfile.TemporaryDirectory() as tmp:
-    db = Path(tmp) / "old.db"
-    con = sqlite3.connect(db)
-    # 造一个没有 title_auto 的旧库
-    con.execute(
-        "CREATE TABLE sessions ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL, character_id INTEGER,"
-        "title TEXT NOT NULL DEFAULT '新会话', gen_settings TEXT NOT NULL DEFAULT '{}',"
-        "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
-    )
-    con.execute(
-        "INSERT INTO sessions(mode, title, created_at, updated_at) "
-        "VALUES('free_scenario','旧会话','2026-01-01T00:00:00','2026-01-01T00:00:00')"
-    )
-    con.commit()
-    _migrate(con)
-    _migrate(con)  # 重复执行应当幂等
-    cols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
-    assert "title_auto" in cols, f"迁移后缺少 title_auto：{cols}"
-    row = con.execute("SELECT title, title_auto FROM sessions").fetchone()
-    assert row == ("旧会话", 0), f"存量会话不应被自动改名，实际 {row!r}"
-    # 全量 schema 也应能直接建在新库上
+    con = sqlite3.connect(Path(tmp) / "fresh.db")
     con.executescript(SCHEMA)
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for expected in ("characters", "sessions", "messages", "memories", "app_settings", "character_images"):
+        assert expected in tables, f"建表缺少 {expected}：{sorted(tables)}"
+    # 新库的 sessions / characters 应当自带全部字段
+    assert "title_auto" in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
+    assert "avatar" in {r[1] for r in con.execute("PRAGMA table_info(characters)")}
     con.close()
 
-print("naming._clean 与数据库迁移用例全部通过")
+print("naming._clean 与建表用例全部通过")

@@ -50,8 +50,8 @@ if __name__ == "__main__":
     browser_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     url = f"http://{browser_host}:{port}"
 
-    # 无论这次是真的起服务还是"已经在跑"，都先确保今天有一份备份。
-    # 放在 uvicorn.run() 之前：留下的是上次运行结束时的库，而不是本次启动刚迁移过的。
+    # 无论这次是真的起服务还是"已经在跑"，都先留一份备份。
+    # 放在 uvicorn.run() 之前：留下的是上次运行结束时的库，而不是本次启动刚建过表的。
     startup_backup(cfg)
 
     if port_in_use(browser_host, port):

@@ -569,16 +569,44 @@ html, body {
   gap: 8px;
 }
 
+/* 缩略图：可拖动排序，四角叠了序号、删除、前移/后移 */
 .bg-thumb {
   position: relative;
-  width: 72px;
-  height: 48px;
+  width: 92px;
+  height: 62px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--border);
   background: #eef0f4;
+  cursor: grab;
 }
-.bg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bg-thumb:active { cursor: grabbing; }
+.bg-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  -webkit-user-drag: none;
+}
+.bg-thumb.dragging { opacity: 0.45; }
+/* 拖到哪一张上就把哪一张标出来，落点才看得出来 */
+.bg-thumb.over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(63, 106, 216, 0.35); }
+
+.bg-num {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: rgba(20, 22, 28, 0.62);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 1;
+}
 
 .bg-del {
   position: absolute;
@@ -601,9 +629,40 @@ html, body {
 }
 .bg-del:hover { background: var(--error-text); }
 
+/* 前移/后移：贴在缩略图底部，半透明底保证任何图上都看得清 */
+.bg-move {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 1px 0;
+  background: rgba(20, 22, 28, 0.5);
+}
+.bg-move button {
+  width: 22px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+}
+.bg-move button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.25); }
+.bg-move button:disabled { color: rgba(255, 255, 255, 0.35); cursor: not-allowed; }
+
 .bg-add {
-  width: 72px;
-  height: 48px;
+  width: 92px;
+  height: 62px;
   display: flex;
   align-items: center;
   justify-content: center;

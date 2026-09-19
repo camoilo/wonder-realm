@@ -211,6 +211,11 @@ const app = Vue.createApp({
       bgMax: BG_MAX_COUNT,
       bgError: "",
       bgBusy: false,
+      // 拖动排序时的状态：正在拖的是哪一处列表的第几张、当前悬停在哪一张上。
+      // 注意别把字段名取成与方法同名（如 bgDragOver）——data 与方法共用一个命名空间，
+      // 字段会盖住方法，模板里的事件处理器就会变成"调用一个对象"。
+      bgDrag: { target: null, index: null },
+      bgHover: { target: null, index: null },
       crop: {
         visible: false,
         target: "modal",
@@ -602,12 +607,6 @@ const app = Vue.createApp({
         if (f.type === "radio" && !merged[f.key]) {
           merged[f.key] = (f.options && f.options[0] && f.options[0][0]) || "";
         }
-      }
-      // 丢掉已不在字段定义里的旧键（例如后来移除的"语气基调""导演指令"）：
-      // 它们既不渲染、保存时也不提交，留着只会让快照比对和排查变得含混
-      const allowed = new Set(this.fieldsOf(mode).map((f) => f.key));
-      for (const k of Object.keys(merged)) {
-        if (!allowed.has(k)) delete merged[k];
       }
       this.genForm = merged;
       this.genSaved = this.snapshot(merged);
@@ -1038,6 +1037,57 @@ const app = Vue.createApp({
       list.splice(i, 1);
       this.setBgList(target, list);
       this.bgError = "";
+    },
+
+    // 背景排序：把第 from 张移到第 to 张的位置。顺序就是对话里上一张/下一张的顺序，
+    // 第一张是打开会话时默认显示的那张
+    moveBackground(target, from, to) {
+      const list = [...this.bgList(target)];
+      if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return;
+      const [item] = list.splice(from, 1);
+      list.splice(to, 0, item);
+      this.setBgList(target, list);
+      this.bgError = "";
+    },
+
+    bgDragStart(e, target, i) {
+      this.bgDrag = { target, index: i };
+      this.bgHover = { target: null, index: null };
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        // Firefox 不设数据就不启动拖拽
+        try {
+          e.dataTransfer.setData("text/plain", String(i));
+        } catch (err) {
+          /* 忽略：设不上也不影响其它浏览器 */
+        }
+      }
+    },
+
+    bgDragOver(e, target, i) {
+      if (this.bgDrag.index === null || this.bgDrag.target !== target) return;
+      this.bgHover = { target, index: i };
+    },
+
+    bgDrop(e, target, i) {
+      // 先把状态取出来再清空：moveBackground 里要用
+      const drag = this.bgDrag;
+      this.bgDragEnd();
+      if (!drag.target || drag.target !== target || drag.index === null) return;
+      this.moveBackground(target, drag.index, i);
+    },
+
+    bgDragEnd() {
+      this.bgDrag = { target: null, index: null };
+      this.bgHover = { target: null, index: null };
+    },
+
+    bgDragging(target, i) {
+      return this.bgDrag.target === target && this.bgDrag.index === i;
+    },
+
+    bgDropTarget(target, i) {
+      return this.bgHover.target === target && this.bgHover.index === i;
     },
 
     openCharacterModal(c = null) {
