@@ -108,6 +108,14 @@ check("宽度规则不作用于右侧面板",
 check("生成区说明提到当前模型", "用当前选中的模型" in html, True)
 check("生成区说明提到思考开关", "跟着顶栏的思考开关走" in html, True)
 
+# 头像入口：面板与弹窗的按钮文案必须一致（曾经一个写"选择图片"、一个写"选择头像"）
+picker = re.findall(r'class="ghost-btn file-btn">\{\{([^}]*)\}\}', html)
+normalized = sorted(re.sub(r"char(?:Modal\.form|Form)\.avatar", "AV", p).strip() for p in picker)
+check("两处头像按钮都在", len(picker), 2)
+check("两处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
+      normalized, ['AV ? "更换头像" : "上传头像"'] * 2)
+check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
+
 print()
 if FAILED:
     print(f"失败 {len(FAILED)} 项：{FAILED}")

@@ -281,7 +281,7 @@
                 <template v-else>{{ (charForm.name || "?").slice(0, 1) }}</template>
               </span>
               <div class="avatar-pick-actions">
-                <label class="ghost-btn file-btn">选择图片
+                <label class="ghost-btn file-btn">{{ charForm.avatar ? "更换头像" : "上传头像" }}
                   <input type="file" accept="image/*" @change="pickAvatar($event, 'panel')">
                 </label>
                 <button v-if="charForm.avatar" class="ghost-btn" @click="clearAvatar('panel')">移除头像</button>
@@ -400,7 +400,7 @@
           <template v-else>{{ (charModal.form.name || "?").slice(0, 1) }}</template>
         </span>
         <div class="avatar-pick-actions">
-          <label class="ghost-btn file-btn">选择头像
+          <label class="ghost-btn file-btn">{{ charModal.form.avatar ? "更换头像" : "上传头像" }}
             <input type="file" accept="image/*" @change="pickAvatar($event, 'modal')">
           </label>
           <button v-if="charModal.form.avatar" class="ghost-btn" @click="clearAvatar('modal')">移除头像</button>
