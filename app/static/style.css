@@ -435,8 +435,13 @@ html, body {
 }
 
 /* 编辑弹窗：固定在对话页面正中的对话框，长消息也不会把气泡或布局撑变形。
-   消息可能很长，所以给足宽度与高度，避免在窄框里反复滚动。 */
-.edit-modal { width: 780px; }
+   消息可能很长，所以给足宽度与高度，避免在窄框里反复滚动。
+
+   选择器必须写成 `.modal.edit-modal`：基础 `.modal`（430px）在文件后部，两者优先级相同
+   时**按出现顺序决胜**，只写 `.edit-modal` 会被它覆盖回 430px——之前"加宽没生效、
+   底部两个按键被挤成竖排"就是这个原因。加一个类前缀把优先级提到基类之上，就不再依赖
+   两条规则的先后位置。下面的 `.modal.crop-modal` 同理。 */
+.modal.edit-modal { width: 780px; }
 
 /* 输入框高度仍按内容自动撑开，但弹窗内收紧上限，免得两个框把弹窗顶出屏幕 */
 .edit-modal .edit-field textarea { min-height: 140px; max-height: 420px; }
@@ -480,7 +485,12 @@ html, body {
   gap: 10px;
 }
 
-.edit-btns { display: flex; gap: 8px; }
+/* 提示文字让位、按键一步不让：默认 flex 收缩是按基准宽度等比例缩的，窗口窄或弹窗宽度
+   不够时按键会先被压到只剩一个字的宽度，中文就一个字一行排成竖版。给按键 flex: none
+   并把提示设为可收缩（min-width: 0 才允许缩到内容宽以下、由它先换行）。 */
+.edit-actions .hint { flex: 1 1 auto; min-width: 0; }
+.edit-btns { display: flex; flex: none; gap: 8px; }
+.edit-btns button { white-space: nowrap; }
 
 .bubble {
   position: relative;
@@ -696,7 +706,9 @@ html, body {
 /* ---------- 头像裁剪 ---------- */
 /* 叠在角色弹窗之上（角色弹窗是 z-index 1000） */
 .crop-mask { z-index: 1200; }
-.crop-modal { width: 380px; align-items: center; }
+/* 同 `.modal.edit-modal`：基础 `.modal` 在文件后部、优先级相同，必须加类前缀才压得住
+   （这里实际被覆盖成了 430px，只是差得不明显） */
+.modal.crop-modal { width: 380px; align-items: center; }
 .crop-modal h2 { align-self: flex-start; }
 .crop-modal .hint { align-self: flex-start; }
 /* 本弹窗用了 align-items:center，操作行要显式撑满，否则会缩成内容宽并被居中，
@@ -887,6 +899,7 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 .send-btn,
 .stop-btn,
 .continue-btn,
+.jump-btn,
 .bg-switch {
   height: 42px;
   display: flex;
@@ -895,6 +908,15 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   font-size: 14.5px;
   border-radius: var(--radius);
 }
+
+/* 发送/停止键与它右侧的"↓"并排：发送键吃掉剩余宽度，↓ 固定成方形，
+   这样它不会随发送键的文字长短而变宽窄 */
+.send-row {
+  display: flex;
+  gap: 8px;
+}
+.send-row .send-btn,
+.send-row .stop-btn { flex: 1; }
 
 /* 自由情境的"继续"：次级按钮，不抢发送键的视觉重量 */
 .continue-btn {
@@ -987,6 +1009,22 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   border-radius: 2px;
   background: currentColor;
 }
+
+/* 发送键右侧的"回到最新"：同样式但与发送键区分，避免和主操作抢注意力 */
+.jump-btn {
+  flex: none;
+  width: 42px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.jump-btn:hover { background: #f0f2f6; border-color: var(--accent); color: var(--accent-dark); }
 
 /* ---------- 右侧面板（第三栏，与对话区并排而非覆盖） ---------- */
 .panel {

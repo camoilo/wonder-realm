@@ -200,10 +200,14 @@
             <button v-if="isFreeScenario" class="continue-btn" :disabled="!canContinue"
                     title="基于上一条回复继续生成（相当于发送“继续”）"
                     @click="continueGeneration">继续</button>
-            <button v-if="streaming" class="stop-btn" @click="stop">
-              <span class="stop-square"></span>停止
-            </button>
-            <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
+            <div class="send-row">
+              <button v-if="streaming" class="stop-btn" @click="stop">
+                <span class="stop-square"></span>停止
+              </button>
+              <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
+              <!-- 消息很长、往上翻过之后，一键回到最新：不用一路拖滚动条 -->
+              <button class="jump-btn" title="回到页面底部（最新消息）" @click="jumpToBottom">↓</button>
+            </div>
           </div>
         </div>
       </div>

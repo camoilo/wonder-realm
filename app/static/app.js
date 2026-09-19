@@ -1597,6 +1597,19 @@ const app = Vue.createApp({
         if (el) el.scrollTop = el.scrollHeight;
       });
     },
+
+    // 发送键右侧的"↓"键：平滑滚到最新消息。与 scrollBottom() 分开是有意的——
+    // 那个是流式输出时"跟着新内容即时贴底"，每来一小段就调用一次，必须瞬时、
+    // 不能有动画，否则会一直追着一段没走完的平滑滚动跑。
+    jumpToBottom() {
+      const el = this.$refs.chatBox;
+      if (!el) return;
+      if (typeof el.scrollTo === "function") {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      } else {
+        el.scrollTop = el.scrollHeight; // 兜底：极老的浏览器不支持带 options 的 scrollTo
+      }
+    },
   },
 });
 app.mount("#app");
