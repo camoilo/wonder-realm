@@ -167,7 +167,8 @@ check("时间在气泡之前（上方那一行）",
 check("时间在 msg-head 行里", html.index('class="msg-head"') < html.index('class="msg-time"'), True)
 check("名字与时间同一行", 'class="msg-head"' in html and 'class="msg-name"' in html, True)
 check("时间样式在", ".msg-time {" in css, True)
-check("user 侧那一行靠右", ".msg.user .msg-head { justify-content: flex-end; }" in css, True)
+check("user 侧那一行仍靠右（由 bubble-wrap 的 align-items 决定）",
+      ".msg.user .bubble-wrap { align-items: flex-end; }" in css, True)
 check("有时间格式化方法", "timeOf(m)" in js and "fullTimeOf(m)" in js, True)
 check("时间取 created_at 的时分秒", 's.slice(11, 19)' in js, True)
 
@@ -188,6 +189,25 @@ check("用户头像列排在气泡之后（渲染到右侧）",
       html.rindex('class="msg-side"') > html.index('class="bubble-wrap"'), True)
 check("那一行排在气泡之前（显示在上方）",
       html.index('class="msg-head"') < html.index('title="双击可编辑这条消息"'), True)
+# 两侧气泡到头像的间距要一致（user 那侧的头像是后加的，漏了 gap 就会紧贴）
+check("两侧消息用同一份间距",
+      ".msg.user,\n.msg.assistant { align-items: flex-start; gap: 12px; }" in css, True)
+# user 侧与模型侧镜像：时间在名字左边
+check("user 侧时间换到名字左边", ".msg.user .msg-head { flex-direction: row-reverse; }" in css, True)
+# "已编辑"标记已移除（数据字段仍在，只是不再显示）
+check("页面里没有「已编辑」标记", ("已编辑" in html) or ("edited-flag" in css), False)
+
+# ---- 弹窗底部的操作行钉底 ----
+check("两个弹窗各有字段滚动区", html.count('class="modal-body"'), 2)
+check("弹窗外层保留滚动兜底", ".modal {" in css and "overflow-y: auto;" in css, True)
+check("字段区是弹窗里唯一滚动区",
+      ".modal-body {" in css and "flex: 1 1 auto;" in css and "min-height: 0;" in css, True)
+check("角色弹窗的操作行在字段区之外",
+      html.rindex('class="modal-actions"') > html.rindex('class="modal-body"'), True)
+check("编辑弹窗的操作行在字段区之外",
+      html.rindex('class="edit-actions"') > html.index('class="modal-body"'), True)
+check("保存失败提示也在字段区之外（与按钮一起常驻）",
+      html.index('charModal.saveError') > html.index('class="modal-body"'), True)
 
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)

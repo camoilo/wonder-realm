@@ -337,12 +337,13 @@ html, body {
   display: flex;
   margin-bottom: 14px;
 }
+/* 两侧都用同一份间距：user 那侧的头像是后加的，漏了 gap 就会紧贴气泡 */
+.msg.user,
+.msg.assistant { align-items: flex-start; gap: 12px; }
 .msg.user { justify-content: flex-end; }
 
-/* 角色两模式：头像单独占消息左侧一列，名字放在气泡上方（微信式）。
+/* 头像单独占消息一侧的一列（assistant 在左、user 在右），名字放在气泡上方（微信式）。
    列宽固定，换自定义头像时气泡位置不受影响 */
-.msg.assistant { align-items: flex-start; gap: 10px; }
-
 .msg-side {
   flex: none;
   display: flex;
@@ -373,8 +374,9 @@ html, body {
   max-width: 100%;
   margin-bottom: 4px;
 }
-/* 用户消息：名字与时间靠右（头像在气泡右侧，微信式） */
-.msg.user .msg-head { justify-content: flex-end; }
+/* 用户消息：名字与时间靠右，并与模型那一侧镜像——所以顺序反过来（时间在名字左边，
+   名字贴着气泡右端）。DOM 顺序两边一致，只在 CSS 里换向 */
+.msg.user .msg-head { flex-direction: row-reverse; }
 
 /* 角色名：与气泡左对齐 */
 .msg-name {
@@ -458,15 +460,6 @@ html, body {
   font-family: inherit;
 }
 .delete-menu button:hover { background: var(--error-bg); }
-
-.edited-flag {
-  position: absolute;
-  right: 10px;
-  bottom: 4px;
-  font-size: 10.5px;
-  color: var(--text-soft);
-  opacity: 0.75;
-}
 
 /* 编辑弹窗：固定在对话页面正中的对话框，长消息也不会把气泡或布局撑变形。
    消息可能很长，所以给足宽度与高度，避免在窄框里反复滚动。
@@ -1524,8 +1517,9 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   width: 430px;
   max-width: calc(100vw - 40px);
   max-height: 88vh;
-  /* 横向也是 auto（只要有一轴非 visible，另一轴的 visible 就会计算成 auto），
-     显式关掉以免出现横向滚动条把下方圆角盖掉 */
+  /* 外层仍保留 auto 作为兜底：没有 .modal-body 的弹窗（裁剪头像、新会话）只有这一层；
+     有 .modal-body 的弹窗里，正文会先把溢出吃掉（flex + min-height:0），外层不会滚，
+     于是操作行被钉在底部（见 10.36）。横向一律 hidden，免得出现横向滚动条盖住圆角 */
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--panel);
@@ -1538,22 +1532,38 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 }
 .modal h2 { font-size: 16px; margin: 0 0 2px; }
 
-/* 内容超长时会出现滚动条，而原生滚动条的矩形轨道会盖住右上/右下圆角，
-   看上去就是"右侧没有圆角、左右不对称"。把轨道做成透明、滑块内缩即可保住圆角。 */
-.modal {
+/* 弹窗里唯一可滚动的部分：字段区。操作行与错误提示放在它外面，始终可见 */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 内容超长时会出现滚动条，而原生滚动条的矩形轨道会盖住圆角，看上去"右侧没有圆角"。
+   把轨道做成透明、滑块内缩即可保住圆角。有 .modal-body 的弹窗滚的是它，没有的滚外层 */
+.modal,
+.modal-body {
   scrollbar-width: thin;
   scrollbar-color: #c6cad2 transparent;
   scrollbar-gutter: stable; /* 预留槽位，内容变长时布局不跳 */
 }
-.modal::-webkit-scrollbar { width: 10px; height: 10px; }
-.modal::-webkit-scrollbar-track { background: transparent; }
-.modal::-webkit-scrollbar-thumb {
+.modal::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar { width: 10px; height: 10px; }
+.modal::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+.modal::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
   background: #c6cad2;
   border-radius: 5px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
-.modal::-webkit-scrollbar-thumb:hover { background: #aab0bb; background-clip: content-box; }
+.modal::-webkit-scrollbar-thumb:hover,
+.modal-body::-webkit-scrollbar-thumb:hover { background: #aab0bb; background-clip: content-box; }
 
 /* 角色编辑/新建弹窗：内容最多（生成区 + 头像 + 背景 + 5 个字段），与消息编辑弹窗同宽。
    选择器加 `.modal` 前缀的理由同 `.modal.edit-modal`（见 10.28）：单写 `.char-modal`
