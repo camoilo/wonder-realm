@@ -250,13 +250,9 @@
 
   <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
     <div class="panel-inner">
-      <div class="panel-head">
-        <h2>面板</h2>
-        <button class="icon-btn" title="收起面板" @click="panelCollapsed = true">✕</button>
-      </div>
-      <!-- 标签栏放在滚动容器**外面**：面板内容一长，滚轮往下滚时标签会被顶出视野、
-           得再滚回顶部才能切标签。放在外面就永远贴在面板顶部。
-           （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->
+      <!-- 面板里不再有"面板"标题与关闭键：收起/展开统一走顶栏那个"面板"按钮
+           （见 10.45）。标签栏因此成为面板最上面的一行，它下面那条分隔线也兼作
+           "标签区 / 内容区"的分界 -->
       <div class="panel-tabs">
         <button class="panel-tab" :class="{on: panelTab === 'gen'}"
                 @click="panelTab = 'gen'">生成要求<span v-if="genDirty" class="tab-dot"></span></button>

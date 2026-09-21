@@ -185,8 +185,7 @@ html, body {
   font-family: inherit;
 }
 .session-row:hover .icon-btn,
-.char-row:hover .icon-btn,
-.panel-head .icon-btn { opacity: 1; }
+.char-row:hover .icon-btn { opacity: 1; }
 /* 角色的「编辑」入口常显（淡化），避免只能靠悬停发现 */
 .char-row .icon-btn { opacity: 0.45; }
 .icon-btn:hover { background: #e8eaf0; color: var(--text); }
@@ -1131,15 +1130,8 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   min-height: 0;
 }
 
-.panel-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.panel-head h2 { font-size: 15px; margin: 0; }
+/* 这里原来有一个"面板"标题 + 关闭键（.panel-head），已删掉：收起/展开统一走顶栏那个
+   "面板"按钮，面板里不必再来一遍（见 10.45）。标签栏因此成了面板最上面的一行 */
 
 /* 滚动容器只包住标签内容：标签栏与"未保存 / 还原"行在它外面（见 .panel-tabs）。
    它们不被滚轮带走，所以这里只负责内容区的内边距 */
@@ -1292,15 +1284,17 @@ mark.search-hit.current {
    得再滚回顶部才能切标签 */
 .panel-tabs {
   flex: none;
-  padding: 12px 16px 8px;
+  /* 上 12px 给顶栏留白、下 10px 让分隔线与标签之间不贴脸 */
+  padding: 12px 16px 10px;
   display: flex;
   /* 角色模式下有 5 个标签（生成要求 / 世界设定 / 角色设定 / 我的设定 / 记忆）。
      330px 面板里等分下来每个只有约 56px，而四个字的标签要 68px——不换行就会被截成
      "生成要…"。换行只在角色模式出现（其它模式只有 3 个标签，仍是一行）。见 10.44 */
   flex-wrap: wrap;
   gap: 4px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 6px;
+  /* 这条线是"标签区 / 内容区"的分界，也是面板里唯一的分隔线（标题行已删，见 10.45）：
+     1px 的 --border 在白色面板上太淡，用户看不清标签到哪儿结束，所以加粗到 2px 并压深一档 */
+  border-bottom: 2px solid #d7dae1;
 }
 
 .panel-tab {
@@ -1318,15 +1312,21 @@ mark.search-hit.current {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-soft);
-  background: none;
-  border: 1px solid transparent;
+  /* 边框常驻：未选中的标签也有边，靠底色与边框色区分选中状态（见 10.45）。
+     只给选中项画边时，未选中的标签看起来像悬空的文字，跟下面的内容分不开 */
+  background: #f7f8fa;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 8px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.panel-tab:hover { background: #f0f2f6; color: var(--text); }
-.panel-tab.on { color: var(--accent-dark); background: #fff; border-color: var(--border); }
+.panel-tab:hover { background: #eef0f4; color: var(--text); }
+.panel-tab.on {
+  color: var(--accent-dark);
+  background: #fff;
+  border-color: var(--accent);
+}
 
 /* 该标签有未保存改动（与顶栏"面板"按钮上那个小圆点同款） */
 .tab-dot {

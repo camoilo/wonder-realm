@@ -15,6 +15,9 @@ from app.character_gen import HIDDEN_FIELDS  # noqa: E402
 js = (ROOT / "app/static/app.js").read_text(encoding="utf-8")
 html = (ROOT / "app/static/index.html").read_text(encoding="utf-8")
 css = (ROOT / "app/static/style.css").read_text(encoding="utf-8")
+# 判断"某条样式是否已清除"时要先去掉注释：注释里解释"这里原来有个 XXX"是正常的，
+# 不该被当成样式还在（反过来也避免有人把规则注释掉却骗过检查）
+css_code = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
 
 FAILED = []
 
@@ -129,10 +132,27 @@ check("标签按钮（模板里五个，自由情境少两个）", html.count('c
 check("内容面板（模板里五个）", html.count("panel-tab-pane"), 5)
 check("旧的折叠结构已清除",
       [w for w in ("panel-section", "panelFold", "togglePanelFold") if (w in html or w in js)], [])
-check("CSS 里的折叠样式已清除", ".panel-section" in css, False)
+check("CSS 里的折叠样式已清除", ".panel-section" in css_code, False)
 check("未保存圆点样式在", ".tab-dot" in css, True)
 check("当前标签的未保存状态有计算属性", "activeTabDirty" in js and "activeTabDirty" in html, True)
 check("切到没有该标签的会话时有兜底", "fixPanelTab" in js, True)
+
+# ---- 面板里不再有标题与关闭键；收起/展开只走顶栏那个"面板"按钮（10.45） ----
+check("面板里没有标题行", 'class="panel-head"' not in html, True)
+check("面板里没有'面板'二字", ">面板</h2>" not in html, True)
+check("面板里没有关闭键", 'title="收起面板"' not in html, True)
+check("面板标题的样式已清除", ".panel-head" in css_code, False)
+check("顶栏的'面板'按钮仍是唯一开关",
+      html.count("panelCollapsed = !panelCollapsed"), 1)
+# 标签栏现在是面板最上面一行，它下面那条线就是"标签区 / 内容区"的分界，必须够清楚
+check("标签栏分隔线加重", "border-bottom: 2px solid #d7dae1;" in css, True)
+panel_tab_css = re.search(r"\.panel-tab \{[^}]*\}", css)
+check("标签边框常驻（不再只给选中项画边）",
+      bool(panel_tab_css) and "border: 1px solid var(--border);" in panel_tab_css.group(0)
+      and "border: 1px solid transparent;" not in panel_tab_css.group(0), True)
+on_tab_css = re.search(r"\.panel-tab\.on \{[^}]*\}", css)
+check("选中标签用强调色边框区分",
+      bool(on_tab_css) and "border-color: var(--accent);" in on_tab_css.group(0), True)
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
