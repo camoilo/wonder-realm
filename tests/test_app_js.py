@@ -152,6 +152,22 @@ check("单张背景时翻页键置灰", ':disabled="bgImages.length < 2"' in htm
 check("关闭键要压得住 .bg-switch button 的 28px",
       ".bg-switch button.bg-close {" in css, True)
 
+# ---- 标签栏必须在滚动容器外面（否则内容一长就被滚轮带走） ----
+check("标签栏排在滚动容器之前", html.index('class="panel-tabs"') < html.index('class="panel-body"'), True)
+check("标签内容面板在滚动容器之内",
+      html.index('class="panel-body"') < html.index("panel-tab-pane"), True)
+check("标签栏与还原行都不参与伸缩", css.count(".panel-tabs {") == 1 and "flex: none;" in css, True)
+check("滚动容器仍是 panel-body", "overflow-y: auto;" in css and ".panel-body {" in css, True)
+
+# ---- 消息旁的发送时间 ----
+check("气泡与时间在同一行", 'class="bubble-line"' in html, True)
+check("时间只在消息行里出现一次（流式占位没有）", html.count('class="msg-time"'), 1)
+check("时间在气泡行内", html.index('class="bubble-line"') < html.index('class="msg-time"'), True)
+check("user 的时间换到气泡左侧", ".msg.user .bubble-line { flex-direction: row-reverse; }" in css, True)
+check("时间样式在", ".msg-time {" in css, True)
+check("有时间格式化方法", "timeOf(m)" in js and "fullTimeOf(m)" in js, True)
+check("时间取 created_at 的时分秒", 's.slice(11, 19)' in js, True)
+
 # 生成区说明里要交代模型与思考开关（用户问过生成是否跟随它们）
 check("生成区说明提到当前模型", "用当前选中的模型" in html, True)
 check("生成区说明提到思考开关", "跟着顶栏的思考开关走" in html, True)

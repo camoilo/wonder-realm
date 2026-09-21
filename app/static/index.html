@@ -125,23 +125,28 @@
             </div>
             <div class="bubble-wrap">
               <div v-if="m.role === 'assistant' && activeChar" class="msg-name">{{ activeChar.name }}</div>
-              <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
-                <template v-if="m.scenario === 'MULTI'">
-                  <template v-for="(seg, si) in segmentsOf(m)" :key="si">
-                    <div v-if="seg.type === 'scenario'" class="scenario">
-                      <span class="scenario-label">情境</span>{{ seg.text }}
-                    </div>
-                    <div v-else class="text">{{ seg.text }}</div>
+              <div class="bubble-line">
+                <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
+                  <template v-if="m.scenario === 'MULTI'">
+                    <template v-for="(seg, si) in segmentsOf(m)" :key="si">
+                      <div v-if="seg.type === 'scenario'" class="scenario">
+                        <span class="scenario-label">情境</span>{{ seg.text }}
+                      </div>
+                      <div v-else class="text">{{ seg.text }}</div>
+                    </template>
                   </template>
-                </template>
-                <template v-else>
-                  <div v-if="m.scenario" class="scenario">
-                    <span class="scenario-label">情境</span>{{ m.scenario }}
-                  </div>
-                  <div class="text">{{ m.content }}</div>
-                </template>
-                <span v-if="m.edited" class="edited-flag">已编辑</span>
-                <span v-if="m.archived" class="archived-flag">已归档</span>
+                  <template v-else>
+                    <div v-if="m.scenario" class="scenario">
+                      <span class="scenario-label">情境</span>{{ m.scenario }}
+                    </div>
+                    <div class="text">{{ m.content }}</div>
+                  </template>
+                  <span v-if="m.edited" class="edited-flag">已编辑</span>
+                  <span v-if="m.archived" class="archived-flag">已归档</span>
+                </div>
+                <!-- 发送时间：贴着气泡底边。assistant 显示在气泡右侧、user 在左侧（CSS 里
+                     用 row-reverse 换向，DOM 顺序保持一致） -->
+                <span v-if="timeOf(m)" class="msg-time" :title="fullTimeOf(m)">{{ timeOf(m) }}</span>
               </div>
               <div class="msg-actions" v-show="!streaming">
                 <button title="复制" @click="copyText(m)">复制</button>
@@ -231,26 +236,25 @@
         <h2>面板</h2>
         <button class="icon-btn" title="收起面板" @click="panelCollapsed = true">✕</button>
       </div>
+      <!-- 标签栏与"未保存 / 还原"行放在滚动容器**外面**：面板内容一长，滚轮往下滚时
+           标签会被顶出视野、得再滚回顶部才能切标签。放在外面就永远贴在面板顶部。
+           （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->
+      <div class="panel-tabs">
+        <button class="panel-tab" :class="{on: panelTab === 'gen'}"
+                @click="panelTab = 'gen'">{{ genSectionTitle }}<span v-if="genDirty" class="tab-dot"></span></button>
+        <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'char'}"
+                @click="panelTab = 'char'">角色设定<span v-if="charDirty" class="tab-dot"></span></button>
+        <button v-if="memoryScope" class="panel-tab" :class="{on: panelTab === 'memory'}"
+                @click="panelTab = 'memory'">{{ memoryScope.label }}<span v-if="memoryDirty" class="tab-dot"></span></button>
+      </div>
+      <div v-if="activeTabDirty" class="panel-tab-actions">
+        <span class="dirty-flag">未保存</span>
+        <button class="revert-btn" :class="{armed: revertArm[panelTab]}"
+                :title="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                @click="armRevert(panelTab)">{{ revertArm[panelTab] ? "确认还原？" : "还原" }}</button>
+      </div>
       <div class="panel-body">
-        <template v-if="activeSession">
-          <!-- 标签页：一次只显示一块。哪个标签有未保存改动就在它右上角点一个圆点，
-               选中标签的内容区顶部出现"未保存 / 还原"那一行 -->
-          <div class="panel-tabs">
-            <button class="panel-tab" :class="{on: panelTab === 'gen'}"
-                    @click="panelTab = 'gen'">{{ genSectionTitle }}<span v-if="genDirty" class="tab-dot"></span></button>
-            <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'char'}"
-                    @click="panelTab = 'char'">角色设定<span v-if="charDirty" class="tab-dot"></span></button>
-            <button v-if="memoryScope" class="panel-tab" :class="{on: panelTab === 'memory'}"
-                    @click="panelTab = 'memory'">{{ memoryScope.label }}<span v-if="memoryDirty" class="tab-dot"></span></button>
-          </div>
-          <div v-if="activeTabDirty" class="panel-tab-actions">
-            <span class="dirty-flag">未保存</span>
-            <button class="revert-btn" :class="{armed: revertArm[panelTab]}"
-                    :title="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
-                    @click="armRevert(panelTab)">{{ revertArm[panelTab] ? "确认还原？" : "还原" }}</button>
-          </div>
-        </template>
-        <div v-if="activeSession" class="panel-tab-pane" v-show="panelTab === 'gen'">
+        <div class="panel-tab-pane" v-show="panelTab === 'gen'">
           <div v-for="f in fieldsOf(activeSession.mode)" :key="f.key" class="field">
             <span class="field-label">{{ f.label }}</span>
             <div v-if="f.type === 'radio'" class="radio-row">
@@ -284,7 +288,7 @@
           <button class="primary-btn full" @click="saveGenSettings">保存生成要求</button>
           <p class="hint">保存后立即生效，只影响后续生成</p>
         </div>
-        <div v-if="activeSession && activeSession.character" class="panel-tab-pane"
+        <div v-if="activeSession.character" class="panel-tab-pane"
              v-show="panelTab === 'char'">
           <div class="avatar-pick">
             <span class="avatar xl">

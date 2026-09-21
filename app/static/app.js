@@ -493,6 +493,18 @@ const app = Vue.createApp({
       return !!max && (value || "").length >= max * 0.9;
     },
 
+    // 消息的发送时间。created_at 存的就是本地时间、格式固定为 "2026-09-21T12:34:45"
+    // （database.now() 用 isoformat(timespec="seconds")），所以直接切片比 new Date()
+    // 再格式化更稳：不走时区解析、不依赖浏览器对 ISO 串的解释，老数据也不会解析失败
+    timeOf(m) {
+      const s = (m && m.created_at) || "";
+      return s.length >= 19 ? s.slice(11, 19) : "";
+    },
+    fullTimeOf(m) {
+      const s = (m && m.created_at) || "";
+      return s ? s.replace("T", " ") : "";
+    },
+
     // 标签页兜底：切到没有该标签的会话或模式（自由情境没有角色设定、未选会话没有记忆）
     // 时回到"生成要求"，否则面板会是一片空白
     fixPanelTab() {
