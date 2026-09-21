@@ -240,9 +240,9 @@ check("Enter / Shift+Enter / Esc 都接上了",
       ('@keydown.enter.exact.prevent="searchNext"' in html)
       and ('@keydown.shift.enter.prevent="searchPrev"' in html)
       and ('@keydown.esc="clearSearch"' in html), True)
-check("有命中计数与上一个/下一个/清空",
+check("有命中计数与上一个/下一个（清空走 Esc）",
       ('class="search-count"' in html) and ('@click="searchPrev"' in html)
-      and ('@click="searchNext"' in html) and ('@click="clearSearch"' in html), True)
+      and ('@click="searchNext"' in html) and ('@keydown.esc="clearSearch"' in html), True)
 check("命中处标黄且区分当前项",
       ("mark.search-hit {" in css) and ("mark.search-hit.current {" in css), True)
 check("消息正文走分块渲染（便于标黄）", "partsOf(m)" in html and "partsOf(m)" in js, True)
@@ -251,6 +251,25 @@ check("关键词按字面转义（元字符不当正则用）", "escapeRegExp(s)
 check("只搜显示中的消息", "for (const m of this.displayMessages)" in js, True)
 check("跳转是环形的", "((this.searchIndex + step) % total + total) % total" in js, True)
 check("换关键词后回到第一处并滚动", "searchQuery() {" in js and "scrollToHit()" in js, True)
+# 尺寸稳定：计数与按键始终占位（曾经按有无关键词显示/隐藏，输入前后整框会变宽变窄）
+check("计数与按键不按关键词显隐", 'v-if="searchQuery"' in html, False)
+check("搜索框里只有上一个/下一个两个键",
+      len(re.findall(r'class="icon-btn"[^>]*@click="search(?:Prev|Next)"', html)), 2)
+check("清空靠 Esc（不再多放一个清空键占宽度）", "清空搜索" in html, False)
+check("搜索框与计数都不伸缩",
+      ".search-box {\n  flex: none;" in css and "min-width: 42px;" in css, True)
+# 按钮必须显式 opacity: 1——.icon-btn 默认是"悬停才显形"（给侧栏用的），
+# 照搬过来会让按钮可点却看不见
+check("搜索框按键可见", ".search-box .icon-btn {\n  flex: none;\n  opacity: 1;" in css, True)
+check("搜索框在模型选择左边",
+      html.index('class="search-box"') < html.index('class="model-select"'), True)
+check("顶栏放不下时换行而不是溢出", "flex-wrap: wrap;" in css, True)
+
+# ---- "面板"按钮上的小点不能改变按钮尺寸 ----
+check("面板按钮可作定位父层", ".panel-toggle { position: relative; }" in css, True)
+check("小点是绝对定位且不吃外边距",
+      ".panel-toggle .dirty-dot {" in css and "position: absolute;" in css
+      and "margin: 0;" in css, True)
 
 # ---- 左侧栏的"模式选择" ----
 check("左侧栏有模式选择标题", '<div class="side-label">模式选择</div>' in html, True)

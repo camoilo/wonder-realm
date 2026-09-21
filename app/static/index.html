@@ -89,6 +89,20 @@
       </div>
       <div class="toolbar">
         <span v-if="modelWarning" class="model-warning">{{ modelWarning }}</span>
+        <!-- 会话内搜索：命中处标黄，↑/↓ 在命中之间跳转（Enter 下一个、Shift+Enter 上一个）。
+             计数与两个键**始终**占位（不按有无关键词显示/隐藏）——否则输入前后整个框会变宽
+             变窄，看起来像换了个控件；清空用 Esc，不再多放一个 ✕ 占顶栏宽度 -->
+        <div v-if="activeSession" class="search-box">
+          <input v-model="searchQuery" type="text" class="search-input"
+                 title="在当前会话里搜索：Enter 下一个、Shift+Enter 上一个、Esc 清空"
+                 placeholder="搜索当前会话"
+                 @keydown.enter.exact.prevent="searchNext"
+                 @keydown.shift.enter.prevent="searchPrev"
+                 @keydown.esc="clearSearch">
+          <span class="search-count">{{ searchTotal ? searchIndex + 1 : 0 }}/{{ searchTotal }}</span>
+          <button class="icon-btn" title="上一个（Shift+Enter）" :disabled="!searchTotal" @click="searchPrev">↑</button>
+          <button class="icon-btn" title="下一个（Enter）" :disabled="!searchTotal" @click="searchNext">↓</button>
+        </div>
         <select v-model="currentModel" class="model-select" :disabled="models.length === 0" @change="switchModel">
           <option value="" disabled>选择模型</option>
           <option v-for="m in models" :key="m.name" :value="m.name">{{ m.name }}{{ m.thinking ? "（思考型）" : "" }}</option>
@@ -97,21 +111,7 @@
                 :disabled="!currentModelSupportsThinking"
                 :title="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
-        <!-- 会话内搜索：命中处标黄，↑/↓ 在命中之间跳转（Enter 下一个、Shift+Enter 上一个）。
-             计数与跳转键只在有关键词时出现——空关键词时它们没有用处，还会白占顶栏宽度 -->
-        <div v-if="activeSession" class="search-box">
-          <input v-model="searchQuery" type="text" class="search-input" placeholder="搜索当前会话"
-                 @keydown.enter.exact.prevent="searchNext"
-                 @keydown.shift.enter.prevent="searchPrev"
-                 @keydown.esc="clearSearch">
-          <template v-if="searchQuery">
-            <span class="search-count">{{ searchTotal ? searchIndex + 1 : 0 }}/{{ searchTotal }}</span>
-            <button class="icon-btn" title="上一个（Shift+Enter）" :disabled="!searchTotal" @click="searchPrev">↑</button>
-            <button class="icon-btn" title="下一个（Enter）" :disabled="!searchTotal" @click="searchNext">↓</button>
-            <button class="icon-btn" title="清空搜索（Esc）" @click="clearSearch">✕</button>
-          </template>
-        </div>
-        <button v-if="activeSession" class="ghost-btn"
+        <button v-if="activeSession" class="ghost-btn panel-toggle"
                 :title="(panelCollapsed ? '展开右侧面板' : '收起右侧面板') + (anyDirty ? '（有未保存的修改）' : '')"
                 @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
       </div>
