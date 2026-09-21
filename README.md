@@ -83,7 +83,7 @@ curl http://localhost:11434/api/tags
 [Environment]::SetEnvironmentVariable("OLLAMA_KV_CACHE_TYPE", "q8_0", "User")
 ```
 
-然后**从托盘退出 Ollama，再从开始菜单重新启动**（这个变量由托盘应用传给服务进程，不重启不生效）。实测 `qwen3.5:4b` 在 32768 窗口下总占用从 4085 MB 降到 3606 MB（KV cache 从 1024 MiB 降到 544 MiB）。它是 Ollama 服务端的**全局**设置，会影响这台机器上所有连 Ollama 的程序；不设也完全能跑，只是多用几百 MB 内存。
+然后**从托盘退出 Ollama，再从开始菜单重新启动**（这个变量由托盘应用传给服务进程，不重启不生效）。实测 `qwen3.5:4b` 在 32768 窗口下总占用从 4085 MiB 降到 3606 MiB（KV cache 从 1024 MiB 降到 544 MiB）。它是 Ollama 服务端的**全局**设置，会影响这台机器上所有连 Ollama 的程序；不设也完全能跑，只是多用几百 MB 内存。
 
 ### 2. 安装 uv
 
