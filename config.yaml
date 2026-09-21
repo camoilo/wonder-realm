@@ -5,11 +5,13 @@ ollama:
   options:
     temperature: 0.9               # 兜底值：对话实际用会话的“发散程度”档位（标准档 = 0.9），
                                    # 记忆压缩与自动命名各自压到 0.3；这里改小也不影响它们
-    num_ctx: 8192
+    num_ctx: 32768                 # 上下文窗口（token）。Ollama 默认 4096，这里显式加大；
+                                   # 超窗时 Ollama 会从最前面静默截断，所以要与 memory 的
+                                   # 压缩阈值配套调整（改动前先看 DEVELOPMENT 10.42）
 
 memory:
   model: ""                       # 压缩用模型默认值，空 = 同对话模型；运行时可改
-  compress_threshold_chars: 6000  # 未归档上下文超过该字符数触发压缩
+  compress_threshold_chars: 20000 # 未归档上下文超过该字符数触发压缩（中文约 1.33 字/token）
   archive_batch_size: 20          # 每次归档的消息条数
   max_memory_chars: 600           # 记忆摘要长度上限（写入提示词约束）
 

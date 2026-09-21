@@ -12,11 +12,15 @@ DEFAULTS = {
         "model": "",
         # temperature 只是兜底：对话生成的实际取值来自会话的「发散程度」档位
         # （见 prompts.chat_options），记忆压缩与会话命名自己压到 0.3
-        "options": {"temperature": 0.9, "num_ctx": 8192},
+        # num_ctx 是硬天花板：超窗时 Ollama 从最前面静默截断，而系统提示词（角色设定 +
+        # 记忆 + 我的设定）正好在最前面。32768 与 memory 的阈值配套，见 10.42
+        "options": {"temperature": 0.9, "num_ctx": 32768},
     },
     "memory": {
         "model": "",
-        "compress_threshold_chars": 6000,
+        # 未归档消息的字符合计到该值就压缩。实测中文约 1.33 字/token，20000 字约
+        # 15000 token，加上系统提示词的几千 token 仍在 num_ctx 之内
+        "compress_threshold_chars": 20000,
         "archive_batch_size": 20,
         "max_memory_chars": 600,
     },
