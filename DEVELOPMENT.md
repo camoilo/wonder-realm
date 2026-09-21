@@ -1391,7 +1391,7 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 
 ### 10.42 记忆阈值与上下文窗口必须一起调（窗口 32768 / 阈值 20000）
 
-用户问"记忆阈值多大、上下文容量多大、能不能再加高"。答案不是单纯把阈值调大：**真正的天花板是 `ollama.options.num_ctx`**（原来 8192 token，Ollama 自己的默认更是只有 4096，不显式传就退回 4096）。超窗时 Ollama **从最前面静默截断**，而系统提示词（角色设定 + 记忆 + "我的设定"）正好排在最前面——被丢掉的会是"角色是谁"，而且**不报错**，事后极难查。所以顺序只能是"先加窗口，再加阈值"。用户选定**方案 B**：`num_ctx: 8192 → 32768`、`compress_threshold_chars: 6000 → 20000`；`history_max_messages` 保持 60（它只是上限，真正的约束来自窗口与阈值）。
+用户问"记忆阈值多大、上下文容量多大、能不能再加高"。答案不是单纯把阈值调大：**真正的天花板是 `ollama.options.num_ctx`**（原来 8192 token，Ollama 自己的默认更是只有 4096，不显式传就退回 4096——不过这台机器上托盘版 Ollama 自己把 `OLLAMA_CONTEXT_LENGTH` 设成了 131072，见 10.43，所以"默认值"只对不传 `num_ctx` 的客户端有意义，本项目始终显式传）。超窗时 Ollama **从最前面静默截断**，而系统提示词（角色设定 + 记忆 + "我的设定"）正好排在最前面——被丢掉的会是"角色是谁"，而且**不报错**，事后极难查。所以顺序只能是"先加窗口，再加阈值"。用户选定**方案 B**：`num_ctx: 8192 → 32768`、`compress_threshold_chars: 6000 → 20000`；`history_max_messages` 保持 60（它只是上限，真正的约束来自窗口与阈值）。
 
 **实测换算比例**（qwen3.5:4b，`prompt_eval_count`）：短样本 1080 字 → 812 token（**1.33 字/token**）；6800 字长文 → 4412 token（**1.54 字/token**）。取 1.4 当典型值。于是 20000 字 ≈ 13000 token，加系统提示词（按角色各项上限估约 4000 字 ≈ 2600 token）≈ 15600 token，**占 32768 的不到一半**，剩下的留给模型自己写正文。
 
@@ -1406,13 +1406,37 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 | 65536 | 5439 MB |
 | 131072 | 7743 MB |
 
-即约 **25–35 MB / 1k 上下文**。这模型是混合注意力（32 层里只有 8 层做全注意力），所以比同规模的普通 transformer 便宜得多——131072 也能塞进 8 GB 以内。
+即约 **25–35 MB / 1k 上下文**。这模型是混合注意力（32 层里只有 8 层做全注意力），所以比同规模的普通 transformer 便宜得多——131072 也能塞进 8 GB 以内。**这张表是在 KV cache 为 f16 时测的**；后来把 KV 量化成 q8_0（见 10.43），同样窗口的总占用少约 480 MB（32768 那档从 4085 MB 降到 3606 MB）。
 
 **速度**：预填充时间只看**实际 token 数**，与窗口大小无关，所以加 `num_ctx` 本身不会让短对话变慢。实测 CPU 上约 **60 token/秒** 的提示词评估速度，也就是说 13000 token 的冷启动提示词要几分钟——但同一会话连续对话时 Ollama 会复用已算过的前缀，只算新增部分；真正会撞上的是**冷启动、换模型、缓存被挤出后**的第一轮。
 
 **残留风险（未消除，只记录）**：单条消息上限 2000 字，而每轮压缩只归档 `archive_batch_size`（20）条。连续多条满上限长消息堆在一起时，未归档量会短暂冲高过阈值，极端情况下仍可能溢出窗口且不报错。把阈值调高会让这个"冲高区间"更靠近窗口上限。真遇到了再调 `archive_batch_size`（一次多归档一些）或把阈值回调。
 
 **验证**：新增 `tests/test_context.py`——钉住生效值（32768 / 20000 / 60）、钉住 `config.yaml` 与 `DEFAULTS` 不能各写一套，并把"阈值 + 系统提示词换算成 token 后仍低于窗口的 90%"做成断言（保守按 1.2 字/token 估算）。这样以后谁只改了其中一个数字，测试会直接拦下来。`config.yaml` 在启动时读取，**改完要重启应用生效**。
+
+### 10.43 Ollama 的 KV cache 量化设成 q8_0（环境变量，不在项目代码里）
+
+先把现状查清：用户问"KV cache 量化有没有开"。查证结论是**没开**，证据两条——`ollama serve --help` 里 `OLLAMA_KV_CACHE_TYPE  Quantization type for the K/V cache (default: f16)`，而用户/系统环境变量里这个键是空的；`%LOCALAPPDATA%\Ollama\server.log` 里真实的加载命令是 `llama-server ... --no-mmap --flash-attn auto -b 1024 -ub 1024`（**没有 `--cache-type-k/-v`**），紧随其后的日志写着 `llama_kv_cache: size = 1024.00 MiB (32768 cells, 8 layers), K (f16): 512.00 MiB, V (f16): 512.00 MiB`。**Flash Attention 倒是已经开着**（`--flash-attn auto` → "Flash Attention was auto, set to enabled"），而它是 KV 量化的前提，所以只差一个变量。
+
+**实测三种类型**（同一模型、`num_ctx=32768`、CPU 推理；另起一个临时 `ollama serve` 只改 `OLLAMA_KV_CACHE_TYPE`，读数取自 llama.cpp 自己的日志与 `/api/ps`）：
+
+| KV 类型 | llama.cpp 报的 KV cache | 进程总占用 |
+| --- | --- | --- |
+| f16（原状） | 1024 MiB（K/V 各 512） | 4085 MB |
+| **q8_0（现用）** | **544 MiB（各 272）** | **3606 MB** |
+| q4_0 | 288 MiB（各 144） | 3350 MB |
+
+（每 token 32 KiB 对得上：8 层全注意力 × `head_count_kv=4` × head_dim 256 × 2（K/V）× 2 字节 = 32 KiB，32768 cells 正好 1024 MiB。）
+
+用户选择 **q8_0**。落地方式是**用户环境变量**：`[Environment]::SetEnvironmentVariable("OLLAMA_KV_CACHE_TYPE","q8_0","User")`。三点值得记住：
+
+- **它是 Ollama 服务端的全局设置，不是每个请求的参数**，所以本项目**一行代码都不用改**（`ollama_client.py` 只发 `messages`/`options`，KV 类型本来也不该由应用控制）。影响范围是这台机器上所有连 Ollama 的程序，换模型也照样生效。
+- **变量必须落在"启动 Ollama 的那个进程"的环境里**：托盘版 `ollama app.exe` 会把自己继承到的环境传给 `ollama serve`（实测：从设过变量的 shell 里启动，服务端 env map 就变成 `OLLAMA_KV_CACHE_TYPE:q8_0`）。所以设完用户变量后要**从托盘退出再从开始菜单重启**（官方 Windows 文档也是这个说法）；只重启应用、不退出托盘是没用的。
+- **别顺手去设 `OLLAMA_FLASH_ATTENTION`**：0.31.1 默认就是 `--flash-attn auto` 且实际已启用，强制设 `=1` 反而丢掉了"模型不支持时自动关"的余地。
+
+**顺带查清的两件既有事实**（不是这次改的，09-10 起的日志里就是这样）：这台机器的托盘应用自己会给服务端设 `OLLAMA_CONTEXT_LENGTH=131072` 与 `OLLAMA_HOST=http://0.0.0.0:11434`。前者意味着**别的客户端**不传 `num_ctx` 时会拿到 131072 的窗口（CPU 上约 7.7 GB），本项目始终显式传 `num_ctx` 因而不受影响；后者意味着 Ollama 监听在所有网卡上，不只是本机。
+
+**验证**（重启后实测）：服务端 env map `OLLAMA_KV_CACHE_TYPE:q8_0`；加载命令带 `--cache-type-k q8_0 --cache-type-v q8_0`；日志 `K (q8_0): 272.00 MiB, V (q8_0): 272.00 MiB`；`/api/ps` 总占用 3605.5 MB；本项目 `GET /api/models` 仍正常返回 4 个模型。
 
 ## 11. 开放问题
 

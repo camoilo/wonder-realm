@@ -77,6 +77,14 @@ curl http://localhost:11434/api/tags
 
 小模型响应快、占用低，适合先跑通；想要更好的角色扮演与格式遵循效果，可以换更大的模型（例如 `qwen3.5:4b`），在界面顶栏切换即可。
 
+**（可选）把 KV cache 量化打开，给长上下文省一半内存**：本项目把上下文窗口默认设成 32768 token，而 Ollama 的 KV cache 默认是 f16，在这个窗口下要占约 1 GB。设一个用户环境变量就能量化成 q8_0（质量基本无损）：
+
+```powershell
+[Environment]::SetEnvironmentVariable("OLLAMA_KV_CACHE_TYPE", "q8_0", "User")
+```
+
+然后**从托盘退出 Ollama，再从开始菜单重新启动**（这个变量由托盘应用传给服务进程，不重启不生效）。实测 `qwen3.5:4b` 在 32768 窗口下总占用从 4085 MB 降到 3606 MB（KV cache 从 1024 MiB 降到 544 MiB）。它是 Ollama 服务端的**全局**设置，会影响这台机器上所有连 Ollama 的程序；不设也完全能跑，只是多用几百 MB 内存。
+
 ### 2. 安装 uv
 
 ```powershell
