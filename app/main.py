@@ -28,7 +28,10 @@ def create_app():
             yield
             return
         current = read_settings()["model"]
-        if current in models:
+        if not current:
+            # 首次使用（或用户还没选过）：不预选任何模型，等他在顶栏选
+            log.info("还没有选择模型，请在顶栏选择一个已安装的模型")
+        elif current in models:
             log.info("当前模型：%s", current)
         else:
             log.warning("模型 %s 未安装，请在界面右上角切换已安装的模型", current)

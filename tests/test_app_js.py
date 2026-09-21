@@ -306,6 +306,29 @@ check("三处头像按钮同文案（无头像=上传头像 / 有头像=更换�
       normalized, ['AV ? "更换头像" : "上传头像"'] * 3)
 check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
 
+# ---- 我的设定的预设 ----
+check("有预设下拉", 'class="preset-select"' in html and '@change="loadPreset"' in html, True)
+check("下拉列出预设（名字 + 身份）",
+      'v-for="p in profilePresets"' in html and "p.identity" in html, True)
+check("有存为预设与删除预设", (">存为预设</button>" in html) and (">删除预设</button>" in html), True)
+check("没有预设时给出提示", "还没有预设" in html, True)
+check("预设方法齐全",
+      all(k in js for k in ("async loadPresets()", "loadPreset() {", "async savePreset()",
+                            "async removePreset()")), True)
+# 载入预设只填表单、不直接落库（否则"选错了"就不可撤销），仍走底部保存
+_load = js[js.index("loadPreset() {"):js.index("async savePreset()")]
+check("载入预设不写库", "this.api(" in _load, False)
+check("载入预设填的是这四项",
+      all(f"{k}: p.{k}" in _load for k in ("name", "identity", "appearance", "avatar")), True)
+check("启动时拉预设列表", "await this.loadPresets();" in js, True)
+check("删除预设要确认", "删除预设「" in js, True)
+check("预设样式在", ".preset-row {" in css and ".preset-select {" in css, True)
+
+# ---- 没选模型时的提示 ----
+check("启动时若没选模型会提示", "还没有选择模型，生成前请先在左边选一个" in js, True)
+check("没选模型时思考开关置灰",
+      "if (!this.currentModel) return false;" in js and "还没有选择模型，先在左边选一个" in js, True)
+
 print()
 if FAILED:
     print(f"失败 {len(FAILED)} 项：{FAILED}")

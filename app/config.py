@@ -8,7 +8,8 @@ CONFIG_PATH = ROOT / "config.yaml"
 DEFAULTS = {
     "ollama": {
         "base_url": "http://localhost:11434",
-        "model": "qwen2.5:3b",
+        # 空 = 首次使用不预选模型：由用户在顶栏自己选，之后沿用上次的选择（app_settings）
+        "model": "",
         # temperature 只是兜底：对话生成的实际取值来自会话的「发散程度」档位
         # （见 prompts.chat_options），记忆压缩与会话命名自己压到 0.3
         "options": {"temperature": 0.9, "num_ctx": 8192},

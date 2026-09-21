@@ -242,6 +242,11 @@ const app = Vue.createApp({
       // `profileForm` 是正在编辑的表单，两者不一致就是"未保存"
       profile: emptyProfile(),
       profileForm: emptyProfile(),
+      // 预设库（同一张表里 id>1 的行）与下拉当前选中项。载入预设只填表单、不直接落库，
+      // 仍然走底部"保存当前配置"，所以载入后会出现"未保存"提示
+      profilePresets: [],
+      presetPick: "",
+      presetError: "",
       // 各输入框的字数上限。与后端 app/limits.py 一致，init() 时用 /api/limits 覆盖，
       // 这里的默认值只是兜底（拿不到接口也不至于没有限制）
       limits: {
@@ -291,10 +296,12 @@ const app = Vue.createApp({
       return this.models.find((m) => m.name === this.currentModel) || null;
     },
     currentModelSupportsThinking() {
+      if (!this.currentModel) return false; // 还没选模型：开关没有对象，置灰
       const info = this.currentModelInfo;
       return info ? !!info.thinking : true; // 模型列表还没到手时不置灰，免得闪一下
     },
     thinkToggleTitle() {
+      if (!this.currentModel) return "还没有选择模型，先在左边选一个";
       if (!this.currentModelSupportsThinking) return "当前模型不支持思考模式，这个开关对它没有作用";
       return this.disableThinking
         ? "思考模式已关闭，点击开启"
@@ -699,6 +706,7 @@ const app = Vue.createApp({
         const p = await this.api("/api/profile");
         this.profile = p;
         this.profileForm = this.snapshot(p);
+        await this.loadPresets();
       } catch (e) {
         /* 拿不到就用空值，面板里照样能填 */
       }
@@ -719,10 +727,10 @@ const app = Vue.createApp({
       if (ollamaOk) {
         if (this.models.length === 0) {
           this.modelWarning = "Ollama 中还没有可用模型，请先拉取一个";
-        } else if (
-          this.currentModel &&
-          !this.models.some((m) => m.name === this.currentModel)
-        ) {
+        } else if (!this.currentModel) {
+          // 首次使用不预选模型：给一句提示，但不拦着用户浏览界面
+          this.modelWarning = "还没有选择模型，生成前请先在左边选一个";
+        } else if (!this.models.some((m) => m.name === this.currentModel)) {
           this.modelWarning = `所选模型 ${this.currentModel} 未安装，请在右侧重新选择`;
         }
       }
@@ -1484,6 +1492,62 @@ const app = Vue.createApp({
         this.profileForm = this.snapshot(p);
       } catch (e) {
         this.error = e.message;
+      }
+    },
+
+    // ---- 我的设定的预设库 ----
+    async loadPresets() {
+      try {
+        this.profilePresets = await this.api("/api/profile/presets");
+        // 选中的那条可能已被删掉（比如另开一个标签页删的），清掉选择
+        if (this.presetPick && !this.profilePresets.some((p) => p.id === this.presetPick)) {
+          this.presetPick = "";
+        }
+      } catch (e) {
+        this.presetError = e.message;
+      }
+    },
+
+    // 载入预设：只把这四项填进表单。用户确认无误后再点底部保存——
+    // 直接覆盖当前设定会让"选错了"变成不可撤销
+    loadPreset() {
+      this.presetError = "";
+      if (!this.presetPick) return;
+      const p = this.profilePresets.find((x) => x.id === this.presetPick);
+      if (!p) return;
+      this.profileForm = {
+        name: p.name || "",
+        identity: p.identity || "",
+        appearance: p.appearance || "",
+        avatar: p.avatar || "",
+      };
+    },
+
+    async savePreset() {
+      this.presetError = "";
+      try {
+        const p = await this.api(
+          "/api/profile/presets",
+          this.jsonOpts("POST", this.profileForm)
+        );
+        await this.loadPresets();
+        this.presetPick = p.id; // 存完直接选中它，方便继续改或删
+      } catch (e) {
+        this.presetError = e.message;
+      }
+    },
+
+    async removePreset() {
+      const p = this.profilePresets.find((x) => x.id === this.presetPick);
+      if (!p) return;
+      if (!(await this.ask(`删除预设「${p.name}」？当前使用的设定不受影响。`))) return;
+      this.presetError = "";
+      try {
+        await this.api(`/api/profile/presets/${p.id}`, { method: "DELETE" });
+        this.presetPick = "";
+        await this.loadPresets();
+      } catch (e) {
+        this.presetError = e.message;
       }
     },
 

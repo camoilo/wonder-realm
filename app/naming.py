@@ -76,6 +76,11 @@ async def maybe_autoname(session_id: int) -> None:
     finally:
         con.close()
 
+    if not model:
+        # 还没选模型（首次使用）：等用户选了模型再命名。标题是附带功能，
+        # 不该因为没选模型就写日志报错
+        log.info("还没有选择模型，会话 %s 暂不自动命名", session_id)
+        return
     _running.add(session_id)
     try:
         opts = dict(cfg["ollama"]["options"])

@@ -1229,6 +1229,28 @@ mark.search-hit.current {
   box-shadow: 0 0 0 1px #e79b2a inset;
 }
 
+/* ---------- "我的设定"里的预设行 ---------- */
+/* 下拉占满剩余宽度，右侧的"存为预设 / 删除预设"不压缩 */
+.preset-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.preset-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+.preset-select:focus { outline: 2px solid rgba(63, 106, 216, 0.25); }
+.preset-row .ghost-btn { flex: none; padding: 6px 10px; font-size: 12.5px; }
+
 /* ---------- 右侧面板的标签页 ---------- */
 /* 三个分区改成一次只显示一块的标签页（原先是"整行可点折叠"）。
    未保存的改动在对应标签右上角点一个圆点，选中标签的内容区顶部显示"未保存 / 还原"。

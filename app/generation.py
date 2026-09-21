@@ -64,6 +64,9 @@ def prepare_generation(con, sid: int):
         (sid,),
     ).fetchall()
     model = con.execute("SELECT model FROM app_settings WHERE id=1").fetchone()["model"]
+    if not model:
+        # 没选模型时说人话。含糊地把空模型名发给 Ollama 只会换回一句看不懂的报错
+        raise HTTPException(400, "还没有选择模型，请先在顶栏选择一个已安装的模型")
     # "我的设定"是全局单行，跟着一起组装；自由情境模式在 prompts 里会忽略它
     msgs = build_messages(session, character, memory_content, rows, read_profile())
     return msgs, model, session["mode"], chat_options(session)

@@ -1,11 +1,20 @@
 """用户本人的设定（右侧面板的"我的设定"）。
 
-全局单行，与角色/会话无关：姓名、身份、外观会注入角色两模式的提示词，
-头像是数据 URL，跟着数据库一起备份。自由情境模式不使用它（见 10.35）。
+`user_profile` 表里 **id=1 是当前设定**、**id>1 是保存下来的预设**（见 10.39）：
+同一个主体一行数据，复用同一张表即可，既不用为预设另开一张，也不必改表结构。
+姓名/身份/外观会注入角色两模式的提示词，头像是数据 URL，跟着数据库一起备份；
+自由情境模式不使用它（见 10.35）。
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
-from ..database import read_profile, write_profile
+from ..database import (
+    add_preset,
+    delete_preset,
+    list_presets,
+    read_profile,
+    read_profile_by_id,
+    write_profile,
+)
 from ..schemas import ProfileIn
 
 router = APIRouter(prefix="/api")
@@ -27,3 +36,34 @@ def update_profile(body: ProfileIn):
             "avatar": body.avatar,
         }
     )
+
+
+@router.get("/profile/presets")
+def get_presets():
+    """已保存的预设（新的在前）。每项就是一份完整设定，含头像。"""
+    return list_presets()
+
+
+@router.post("/profile/presets")
+def create_preset(body: ProfileIn):
+    """把当前表单存成一条预设。名字不能为空——它就是下拉里显示的那一项。"""
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "先给「我的设定」填个名字，才能存为预设")
+    return add_preset(
+        {
+            "name": name,
+            "identity": body.identity.strip(),
+            "appearance": body.appearance.strip(),
+            "avatar": body.avatar,
+        }
+    )
+
+
+@router.delete("/profile/presets/{preset_id}")
+def remove_preset(preset_id: int):
+    # id<=1 是"当前设定"本身，不是预设，删了等于把当前设定清掉
+    if preset_id <= 1 or read_profile_by_id(preset_id) is None:
+        raise HTTPException(404, "预设不存在")
+    delete_preset(preset_id)
+    return {"ok": True}

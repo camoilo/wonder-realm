@@ -390,6 +390,25 @@
         <!-- 我的设定：用户本人。姓名与身份会进角色两模式的提示词，头像与名字显示在
              自己消息的气泡旁；自由情境模式用不到它，所以那个模式下不出现这个标签 -->
         <div v-if="activeSession.character" class="panel-tab-pane" v-show="panelTab === 'profile'">
+          <!-- 预设：选中即把那一份设定填进表单（不直接覆盖已保存的当前设定，
+               仍走底部"保存当前配置"），所以载入后会出现"未保存"提示 -->
+          <div class="preset-row">
+            <select class="preset-select" v-model="presetPick" @change="loadPreset">
+              <option value="">从预设载入…</option>
+              <option v-for="p in profilePresets" :key="p.id" :value="p.id">
+                {{ p.name }}{{ p.identity ? " · " + p.identity : "" }}
+              </option>
+            </select>
+            <button class="ghost-btn" :disabled="!profileForm.name.trim()"
+                    title="把当前这几项存成一条预设，之后可从下拉里一键载入"
+                    @click="savePreset">存为预设</button>
+            <button v-if="presetPick" class="ghost-btn" title="删除选中的这条预设"
+                    @click="removePreset">删除预设</button>
+          </div>
+          <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
+          <p v-if="!profilePresets.length" class="hint">
+            还没有预设：填好下面几项后点「存为预设」，以后就能从下拉里一键载入（含头像）。
+          </p>
           <div class="avatar-pick">
             <span class="avatar xl">
               <img v-if="profileForm.avatar" :src="profileForm.avatar" alt="">

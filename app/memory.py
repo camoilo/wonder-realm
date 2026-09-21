@@ -93,6 +93,11 @@ async def maybe_compress(session_id: int) -> None:
     finally:
         con.close()
 
+    if not model:
+        # 还没选模型（首次使用）：这次不压缩，下一轮生成时再试——记忆是附带功能，
+        # 不该因为没选模型就报错打断对话
+        log.info("还没有选择模型，跳过记忆压缩")
+        return
     if scope in _running:  # 同 scope 已有压缩在途，避免重复合并覆盖
         return
     _running.add(scope)
