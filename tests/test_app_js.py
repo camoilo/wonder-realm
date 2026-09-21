@@ -106,8 +106,8 @@ check("宽度规则不作用于右侧面板",
 
 # ---- 右侧面板改成标签页 ----
 check("有标签栏", html.count('class="panel-tabs"'), 1)
-check("三个标签按钮", html.count('class="panel-tab"'), 3)
-check("三个内容面板", html.count("panel-tab-pane"), 3)
+check("标签按钮（模板里四个，自由情境少两个）", html.count('class="panel-tab"'), 4)
+check("内容面板（模板里四个）", html.count("panel-tab-pane"), 4)
 check("旧的折叠结构已清除",
       [w for w in ("panel-section", "panelFold", "togglePanelFold") if (w in html or w in js)], [])
 check("CSS 里的折叠样式已清除", ".panel-section" in css, False)
@@ -117,7 +117,7 @@ check("切到没有该标签的会话时有兜底", "fixPanelTab" in js, True)
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量", counters, 18)
+check("计数提示数量（含我的设定三项）", counters, 21)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）
@@ -159,14 +159,35 @@ check("标签内容面板在滚动容器之内",
 check("标签栏与还原行都不参与伸缩", css.count(".panel-tabs {") == 1 and "flex: none;" in css, True)
 check("滚动容器仍是 panel-body", "overflow-y: auto;" in css and ".panel-body {" in css, True)
 
-# ---- 消息旁的发送时间 ----
-check("气泡与时间在同一行", 'class="bubble-line"' in html, True)
+# ---- 消息上方那一行：说话人 + 发送时间 ----
+check("有名字与时间的那一行", 'class="msg-head"' in html, True)
 check("时间只在消息行里出现一次（流式占位没有）", html.count('class="msg-time"'), 1)
-check("时间在气泡行内", html.index('class="bubble-line"') < html.index('class="msg-time"'), True)
-check("user 的时间换到气泡左侧", ".msg.user .bubble-line { flex-direction: row-reverse; }" in css, True)
+check("时间在气泡之前（上方那一行）",
+      html.index('class="msg-time"') < html.index('title="双击可编辑这条消息"'), True)
+check("时间在 msg-head 行里", html.index('class="msg-head"') < html.index('class="msg-time"'), True)
+check("名字与时间同一行", 'class="msg-head"' in html and 'class="msg-name"' in html, True)
 check("时间样式在", ".msg-time {" in css, True)
+check("user 侧那一行靠右", ".msg.user .msg-head { justify-content: flex-end; }" in css, True)
 check("有时间格式化方法", "timeOf(m)" in js and "fullTimeOf(m)" in js, True)
 check("时间取 created_at 的时分秒", 's.slice(11, 19)' in js, True)
+
+# ---- 我的设定（用户资料） ----
+check("有我的设定标签", ">我的设定<span" in html, True)
+check("我的设定面板在", 'panelTab === \'profile\'' in html, True)
+check("面板顶部的输出倾向已改名", "输出倾向" in html or "genSectionTitle" in js, False)
+check("生成要求标签写死文案", '>生成要求<span' in html, True)
+check("用户头像有第三个 target", "pickAvatar($event, 'profile')" in html, True)
+check("头像归属有统一入口", "avatarForm(target)" in js, True)
+check("我的设定有独立的脏标记与还原", "profileDirty" in js and 'section === "profile"' in js, True)
+check("保存派发包含我的设定", 'if (this.panelTab === "profile") return this.saveProfile();' in js, True)
+check("启动时加载我的设定", 'await this.api("/api/profile")' in js, True)
+check("消息按模式取名字", "msgName(m)" in js and "msgName(m)" in html, True)
+check("用户头像列有显示条件", "showUserSide" in js and "showUserSide" in html, True)
+check("自由情境不显示用户头像列", "return !!this.activeChar && !!(this.profile.avatar || this.profile.name);" in js, True)
+check("用户头像列排在气泡之后（渲染到右侧）",
+      html.rindex('class="msg-side"') > html.index('class="bubble-wrap"'), True)
+check("那一行排在气泡之前（显示在上方）",
+      html.index('class="msg-head"') < html.index('title="双击可编辑这条消息"'), True)
 
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)
@@ -191,10 +212,10 @@ check("生成区说明提到思考开关", "跟着顶栏的思考开关走" in h
 
 # 头像入口：面板与弹窗的按钮文案必须一致（曾经一个写"选择图片"、一个写"选择头像"）
 picker = re.findall(r'class="ghost-btn file-btn">\{\{([^}]*)\}\}', html)
-normalized = sorted(re.sub(r"char(?:Modal\.form|Form)\.avatar", "AV", p).strip() for p in picker)
-check("两处头像按钮都在", len(picker), 2)
-check("两处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
-      normalized, ['AV ? "更换头像" : "上传头像"'] * 2)
+normalized = sorted(re.sub(r"(?:char(?:Modal\.form|Form)|profileForm)\.avatar", "AV", p).strip() for p in picker)
+check("三处头像按钮都在（面板 / 弹窗 / 我的设定）", len(picker), 3)
+check("三处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
+      normalized, ['AV ? "更换头像" : "上传头像"'] * 3)
 check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
 
 print()

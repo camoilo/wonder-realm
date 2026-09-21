@@ -124,29 +124,29 @@
               </span>
             </div>
             <div class="bubble-wrap">
-              <div v-if="m.role === 'assistant' && activeChar" class="msg-name">{{ activeChar.name }}</div>
-              <div class="bubble-line">
-                <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
-                  <template v-if="m.scenario === 'MULTI'">
-                    <template v-for="(seg, si) in segmentsOf(m)" :key="si">
-                      <div v-if="seg.type === 'scenario'" class="scenario">
-                        <span class="scenario-label">情境</span>{{ seg.text }}
-                      </div>
-                      <div v-else class="text">{{ seg.text }}</div>
-                    </template>
-                  </template>
-                  <template v-else>
-                    <div v-if="m.scenario" class="scenario">
-                      <span class="scenario-label">情境</span>{{ m.scenario }}
-                    </div>
-                    <div class="text">{{ m.content }}</div>
-                  </template>
-                  <span v-if="m.edited" class="edited-flag">已编辑</span>
-                  <span v-if="m.archived" class="archived-flag">已归档</span>
-                </div>
-                <!-- 发送时间：贴着气泡底边。assistant 显示在气泡右侧、user 在左侧（CSS 里
-                     用 row-reverse 换向，DOM 顺序保持一致） -->
+              <!-- 气泡上方那一行：说话人名字 + 发送时间。自由情境模式两边都没有名字，
+                   这一行就只剩时间 -->
+              <div v-if="msgName(m) || timeOf(m)" class="msg-head">
+                <span v-if="msgName(m)" class="msg-name">{{ msgName(m) }}</span>
                 <span v-if="timeOf(m)" class="msg-time" :title="fullTimeOf(m)">{{ timeOf(m) }}</span>
+              </div>
+              <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
+                <template v-if="m.scenario === 'MULTI'">
+                  <template v-for="(seg, si) in segmentsOf(m)" :key="si">
+                    <div v-if="seg.type === 'scenario'" class="scenario">
+                      <span class="scenario-label">情境</span>{{ seg.text }}
+                    </div>
+                    <div v-else class="text">{{ seg.text }}</div>
+                  </template>
+                </template>
+                <template v-else>
+                  <div v-if="m.scenario" class="scenario">
+                    <span class="scenario-label">情境</span>{{ m.scenario }}
+                  </div>
+                  <div class="text">{{ m.content }}</div>
+                </template>
+                <span v-if="m.edited" class="edited-flag">已编辑</span>
+                <span v-if="m.archived" class="archived-flag">已归档</span>
               </div>
               <div class="msg-actions" v-show="!streaming">
                 <button title="复制" @click="copyText(m)">复制</button>
@@ -158,6 +158,14 @@
                 <button @click="removeMessage(m, false)">删除这条</button>
                 <button @click="removeMessage(m, true)">删除这里之后</button>
               </div>
+            </div>
+            <!-- 用户自己的头像在气泡右侧（角色两模式才有；自由情境模式不显示用户的
+                 头像与名字，见 10.35）。还没设名字也没传头像时整列不渲染 -->
+            <div v-if="m.role === 'user' && showUserSide" class="msg-side">
+              <span class="avatar lg">
+                <img v-if="profile.avatar" :src="profile.avatar" :alt="profile.name">
+                <template v-else>{{ (profile.name || "我").slice(0, 1) }}</template>
+              </span>
             </div>
           </div>
           <div v-if="streaming" class="msg assistant">
@@ -241,9 +249,11 @@
            （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->
       <div class="panel-tabs">
         <button class="panel-tab" :class="{on: panelTab === 'gen'}"
-                @click="panelTab = 'gen'">{{ genSectionTitle }}<span v-if="genDirty" class="tab-dot"></span></button>
+                @click="panelTab = 'gen'">生成要求<span v-if="genDirty" class="tab-dot"></span></button>
         <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'char'}"
                 @click="panelTab = 'char'">角色设定<span v-if="charDirty" class="tab-dot"></span></button>
+        <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'profile'}"
+                @click="panelTab = 'profile'">我的设定<span v-if="profileDirty" class="tab-dot"></span></button>
         <button v-if="memoryScope" class="panel-tab" :class="{on: panelTab === 'memory'}"
                 @click="panelTab = 'memory'">{{ memoryScope.label }}<span v-if="memoryDirty" class="tab-dot"></span></button>
       </div>
@@ -366,6 +376,45 @@
             <p class="hint">这三项照常参与生成，但不会显示，可以在对话中慢慢了解。</p>
             <button class="ghost-btn" @click="unlockCharacter('panel')">公开角色设定</button>
           </div>
+        </div>
+        <!-- 我的设定：用户本人。姓名与身份会进角色两模式的提示词，头像与名字显示在
+             自己消息的气泡旁；自由情境模式用不到它，所以那个模式下不出现这个标签 -->
+        <div v-if="activeSession.character" class="panel-tab-pane" v-show="panelTab === 'profile'">
+          <div class="avatar-pick">
+            <span class="avatar xl">
+              <img v-if="profileForm.avatar" :src="profileForm.avatar" alt="">
+              <template v-else>{{ (profileForm.name || "我").slice(0, 1) }}</template>
+            </span>
+            <div class="avatar-pick-actions">
+              <label class="ghost-btn file-btn">{{ profileForm.avatar ? "更换头像" : "上传头像" }}
+                <input type="file" accept="image/*" @change="pickAvatar($event, 'profile')">
+              </label>
+              <button v-if="profileForm.avatar" class="ghost-btn" @click="clearAvatar('profile')">移除头像</button>
+            </div>
+          </div>
+          <p v-if="avatarError" class="avatar-error">{{ avatarError }}</p>
+          <label class="field">名字
+            <div class="counted">
+              <input v-model="profileForm.name" type="text" :maxlength="limits.user_name"
+                     placeholder="角色对你的称呼">
+              <span class="char-count inline" :class="{near: isNear(profileForm.name, limits.user_name)}">{{ len(profileForm.name) }}/{{ limits.user_name }}</span>
+            </div>
+          </label>
+          <label class="field">身份
+            <div class="counted">
+              <textarea v-model="profileForm.identity" rows="3" :maxlength="limits.identity"
+                        placeholder="你是谁：如「被卷入事件的见习侦探」"></textarea>
+              <span class="char-count" :class="{near: isNear(profileForm.identity, limits.identity)}">{{ len(profileForm.identity) }}/{{ limits.identity }}</span>
+            </div>
+          </label>
+          <label class="field">外观
+            <div class="counted">
+              <textarea v-model="profileForm.appearance" rows="3" :maxlength="limits.user_appearance"
+                        placeholder="年龄、身形、衣着等"></textarea>
+              <span class="char-count" :class="{near: isNear(profileForm.appearance, limits.user_appearance)}">{{ len(profileForm.appearance) }}/{{ limits.user_appearance }}</span>
+            </div>
+          </label>
+          <p class="hint">「身份」与「外观」会写进角色两模式的提示词，让角色知道你是谁；自由情境模式不使用这些内容。</p>
         </div>
         <div v-if="memoryScope" class="panel-tab-pane" v-show="panelTab === 'memory'">
           <p class="memory-meta">

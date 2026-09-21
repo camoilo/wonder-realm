@@ -149,6 +149,9 @@ const emptyCharForm = () => ({
 // 探索模式下对用户隐藏、也不允许改写的三个字段（与后端 character_gen.HIDDEN_FIELDS 一致）
 const LOCKED_FIELDS = ["personality", "speech_style", "backstory"];
 
+// "我的设定"（用户本人）。全局单行，与角色无关；三项都可以留空
+const emptyProfile = () => ({ name: "", identity: "", appearance: "", avatar: "" });
+
 const emptyGenerator = () => ({
   hint: "",
   mode: "open", // open = 全部直接展示；explore = 只公开姓名与外观
@@ -227,17 +230,21 @@ const app = Vue.createApp({
       charSaved: emptyCharForm(),
       memorySaved: "",
       // "还原"键的两次点击状态：第一次只是武装，再点一次才真的回退
-      revertArm: { gen: false, char: false, memory: false },
+      revertArm: { gen: false, char: false, profile: false, memory: false },
       // 头像校验/裁剪的就地提示（底部错误条在没打开会话时不渲染，不能承担这个角色）
       avatarError: "",
       // 右侧面板各分区的收起状态（true = 已折叠）。纯界面偏好，不持久化
-      panelTab: "gen", // 右侧面板当前显示哪个标签：gen / char / memory
+      panelTab: "gen", // 右侧面板当前显示哪个标签：gen / char / profile / memory
+      // 我的设定：`profile` 是服务端最近一次确认的状态（消息区显示头像与名字用它），
+      // `profileForm` 是正在编辑的表单，两者不一致就是"未保存"
+      profile: emptyProfile(),
+      profileForm: emptyProfile(),
       // 各输入框的字数上限。与后端 app/limits.py 一致，init() 时用 /api/limits 覆盖，
       // 这里的默认值只是兜底（拿不到接口也不至于没有限制）
       limits: {
         message: 2000, scenario: 2000, name: 20, appearance: 600, personality: 600,
         speech_style: 600, backstory: 1200, genre: 60, extra: 500, hint: 200,
-        memory: 2000, title: 40,
+        memory: 2000, title: 40, user_name: 20, identity: 300, user_appearance: 600,
       },
       // 对话区背景：图片、当前第几张、上限、就地提示
       bgImages: [],
@@ -334,11 +341,6 @@ const app = Vue.createApp({
         this.messages.some((m) => m.role === "assistant")
       );
     },
-    genSectionTitle() {
-      // 面板属于当前会话，标题按会话自身的模式取，避免切换 Tab 后标题不符
-      const m = this.activeSession ? this.activeSession.mode : this.mode;
-      return m === "character_chat" ? "输出倾向" : "生成要求";
-    },
     freeSessions() {
       return this.sessions.filter((s) => s.mode === "free_scenario");
     },
@@ -379,19 +381,28 @@ const app = Vue.createApp({
     memoryDirty() {
       return this.memoryText !== this.memorySaved;
     },
+    profileDirty() {
+      return !this.sameSnapshot(this.profileForm, this.profile);
+    },
     anyDirty() {
-      return this.genDirty || this.charDirty || this.memoryDirty;
+      return this.genDirty || this.charDirty || this.profileDirty || this.memoryDirty;
     },
     // 当前标签是否有未保存改动：面板底部那一行"未保存 / 还原"按它显示。
-    // 键名与 armRevert / revertArm 的取值一致（gen / char / memory）
+    // 键名与 armRevert / revertArm 的取值一致（gen / char / profile / memory）
     activeTabDirty() {
       if (this.panelTab === "char") return this.charDirty;
+      if (this.panelTab === "profile") return this.profileDirty;
       if (this.panelTab === "memory") return this.memoryDirty;
       return this.genDirty;
     },
-    // 面板底部的保存键对三个标签共用：角色设定在姓名为空时不能存（后端也要求非空）
+    // 面板底部的保存键四个标签共用：只有角色设定要求姓名非空（后端也要求）
     saveDisabled() {
       return this.panelTab === "char" && !this.charForm.name.trim();
+    },
+    // 用户消息要不要显示头像那一列：只在角色两模式（有 activeChar）、
+    // 且用户至少设了名字或头像时才渲染，否则会留一个空白列
+    showUserSide() {
+      return !!this.activeChar && !!(this.profile.avatar || this.profile.name);
     },
     displayMessages() {
       return this.showArchived
@@ -445,6 +456,9 @@ const app = Vue.createApp({
     charDirty(v) {
       if (!v) this.disarmRevert("char");
     },
+    profileDirty(v) {
+      if (!v) this.disarmRevert("profile");
+    },
     memoryDirty(v) {
       if (!v) this.disarmRevert("memory");
     },
@@ -495,6 +509,13 @@ const app = Vue.createApp({
     },
     isNear(value, max) {
       return !!max && (value || "").length >= max * 0.9;
+    },
+
+    // 消息上方那一行显示的"说话人"：角色两模式下模型消息用角色名、用户消息用"我的设定"
+    // 里的名字；自由情境模式两边都没有名字（那一行只剩时间）
+    msgName(m) {
+      if (!this.activeChar) return "";
+      return m.role === "assistant" ? this.activeChar.name : this.profile.name || "";
     },
 
     // 消息的发送时间。created_at 存的就是本地时间、格式固定为 "2026-09-21T12:34:45"
@@ -556,6 +577,7 @@ const app = Vue.createApp({
       this.disarmRevert(section);
       if (section === "gen") this.genForm = this.snapshot(this.genSaved);
       else if (section === "char") this.charForm = this.snapshot(this.charSaved);
+      else if (section === "profile") this.profileForm = this.snapshot(this.profile);
       else if (section === "memory") this.memoryText = this.memorySaved;
     },
 
@@ -625,6 +647,14 @@ const app = Vue.createApp({
         this.limits = await this.api("/api/limits");
       } catch (e) {
         /* 用兜底值 */
+      }
+      // "我的设定"是全局的，只在启动时取一次；保存后由 saveProfile 刷新
+      try {
+        const p = await this.api("/api/profile");
+        this.profile = p;
+        this.profileForm = this.snapshot(p);
+      } catch (e) {
+        /* 拿不到就用空值，面板里照样能填 */
       }
       try {
         this.models = await this.api("/api/models");
@@ -1010,8 +1040,7 @@ const app = Vue.createApp({
       try {
         ctx.drawImage(cropImage, sx, sy, side, side, 0, 0, AVATAR_OUT_PX, AVATAR_OUT_PX);
         const dataUrl = canvas.toDataURL("image/jpeg", AVATAR_QUALITY);
-        if (c.target === "modal") this.charModal.form.avatar = dataUrl;
-        else this.charForm.avatar = dataUrl;
+        this.avatarForm(c.target).avatar = dataUrl;
         this.avatarError = "";
         this.cancelCrop();
       } catch (err) {
@@ -1020,10 +1049,16 @@ const app = Vue.createApp({
       }
     },
 
+    // 头像归属的表单对象：角色弹窗 / 右侧面板角色设定 / 我的设定（用户资料）。
+    // 裁剪与移除都通过它写回，不必在每处再写一遍 target 判断
+    avatarForm(target) {
+      if (target === "profile") return this.profileForm;
+      return target === "modal" ? this.charModal.form : this.charForm;
+    },
+
     clearAvatar(target) {
       this.avatarError = "";
-      if (target === "modal") this.charModal.form.avatar = "";
-      else this.charForm.avatar = "";
+      this.avatarForm(target).avatar = "";
     },
 
     // ---------- 对话区背景图 ----------
@@ -1333,12 +1368,24 @@ const app = Vue.createApp({
       }
     },
 
-    // 面板底部那个"保存当前配置"：三个标签各管各的数据，按钮只按当前标签转发。
+    // 面板底部那个"保存当前配置"：四个标签各管各的数据，按钮只按当前标签转发。
     // 这样底部只要一个常驻按钮，不必在每个标签内容里各放一个
     saveCurrentTab() {
       if (this.panelTab === "char") return this.saveCharacterDrawer();
+      if (this.panelTab === "profile") return this.saveProfile();
       if (this.panelTab === "memory") return this.saveMemory();
       return this.saveGenSettings();
+    },
+
+    // 我的设定：整体覆盖式保存；成功后以服务端返回为准刷新基线与显示用的 profile
+    async saveProfile() {
+      try {
+        const p = await this.api("/api/profile", this.jsonOpts("PUT", this.profileForm));
+        this.profile = p;
+        this.profileForm = this.snapshot(p);
+      } catch (e) {
+        this.error = e.message;
+      }
     },
 
     async removeCharacterFromModal() {

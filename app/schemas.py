@@ -16,6 +16,22 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=LIMITS["message"])
 
 
+def _check_avatar(v: str) -> str:
+    """空串合法（回落到姓名首字占位）；非空必须是白名单内的图片 data URL。
+
+    只放行这几种位图，刻意不含 svg——svg 可以带脚本，而它会被直接放进 <img src>。
+    角色头像与"我的设定"头像共用这一份校验。
+    """
+    v = (v or "").strip()
+    if not v:
+        return ""
+    if len(v) > AVATAR_MAX_CHARS:
+        raise ValueError(f"头像数据过大（上限 {AVATAR_MAX_CHARS // 1024}KB）")
+    if not v.startswith(AVATAR_PREFIXES):
+        raise ValueError("头像必须是 jpeg/png/webp 的 data URL")
+    return v
+
+
 class CharacterIn(BaseModel):
     name: str = Field(min_length=1, max_length=LIMITS["name"])
     appearance: str = Field(default="", max_length=LIMITS["appearance"])
@@ -26,19 +42,22 @@ class CharacterIn(BaseModel):
 
     @field_validator("avatar")
     @classmethod
-    def _check_avatar(cls, v: str) -> str:
-        """空串合法（回落到姓名首字占位）；非空必须是白名单内的图片 data URL。
+    def _avatar(cls, v: str) -> str:
+        return _check_avatar(v)
 
-        只放行这几种位图，刻意不含 svg——svg 可以带脚本，而它会被直接放进 <img src>。
-        """
-        v = (v or "").strip()
-        if not v:
-            return ""
-        if len(v) > AVATAR_MAX_CHARS:
-            raise ValueError(f"头像数据过大（上限 {AVATAR_MAX_CHARS // 1024}KB）")
-        if not v.startswith(AVATAR_PREFIXES):
-            raise ValueError("头像必须是 jpeg/png/webp 的 data URL")
-        return v
+
+class ProfileIn(BaseModel):
+    """用户本人的设定（"我的设定"）。全部可选：什么都不填也能保存。"""
+
+    name: str = Field(default="", max_length=LIMITS["user_name"])
+    identity: str = Field(default="", max_length=LIMITS["identity"])
+    appearance: str = Field(default="", max_length=LIMITS["user_appearance"])
+    avatar: str = ""
+
+    @field_validator("avatar")
+    @classmethod
+    def _avatar(cls, v: str) -> str:
+        return _check_avatar(v)
 
 
 class CharacterCreateIn(CharacterIn):

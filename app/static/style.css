@@ -364,6 +364,40 @@ html, body {
   white-space: nowrap;
 }
 
+/* 气泡上方那一行：说话人名字 + 发送时间。两侧都左对齐排，user 那一侧整体靠右
+   （由 .msg.user 的 justify-content 决定） */
+.msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  margin-bottom: 4px;
+}
+/* 用户消息：名字与时间靠右（头像在气泡右侧，微信式） */
+.msg.user .msg-head { justify-content: flex-end; }
+
+/* 角色名：与气泡左对齐 */
+.msg-name {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 发送时间：11px 灰字，跟在名字后面；自由情境模式没有名字，这一行就它一个 */
+.msg-time {
+  flex: none;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-soft);
+  opacity: 0.75;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .bubble-wrap {
   position: relative;
   max-width: min(80%, 680px);
@@ -373,28 +407,6 @@ html, body {
   align-items: flex-start;
 }
 .msg.user .bubble-wrap { align-items: flex-end; }
-
-/* 气泡与它旁边的时间。user 用 row-reverse 把时间换到气泡左边——DOM 顺序两边一致，
-   只在视觉上分左右，省得模板里写两套 */
-.bubble-line {
-  max-width: 100%;
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-.msg.user .bubble-line { flex-direction: row-reverse; }
-
-/* 发送时间：11px 灰字，贴着气泡底边（多行气泡时对齐最后一行） */
-.msg-time {
-  flex: none;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--text-soft);
-  opacity: 0.85;
-  padding-bottom: 2px;
-  white-space: nowrap;
-  user-select: none;
-}
 
 .msg-actions {
   display: flex;

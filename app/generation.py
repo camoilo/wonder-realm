@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
 from . import memory, naming, ollama_client
-from .database import connect, now
+from .database import connect, now, read_profile
 from .parser import parse_output
 from .prompts import build_messages, chat_options
 
@@ -64,7 +64,8 @@ def prepare_generation(con, sid: int):
         (sid,),
     ).fetchall()
     model = con.execute("SELECT model FROM app_settings WHERE id=1").fetchone()["model"]
-    msgs = build_messages(session, character, memory_content, rows)
+    # "我的设定"是全局单行，跟着一起组装；自由情境模式在 prompts 里会忽略它
+    msgs = build_messages(session, character, memory_content, rows, read_profile())
     return msgs, model, session["mode"], chat_options(session)
 
 

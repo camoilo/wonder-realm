@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from . import ollama_client
 from .config import get_config
 from .database import init_db, read_settings
-from .routes import characters, chat, memories, messages, sessions, settings
+from .routes import characters, chat, memories, messages, profile, sessions, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("ollama_agent")
@@ -45,6 +45,7 @@ def create_app():
 
     app.include_router(characters.router)
     app.include_router(settings.router)
+    app.include_router(profile.router)
     app.include_router(sessions.router)
     app.include_router(messages.router)
     app.include_router(memories.router)

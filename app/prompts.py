@@ -219,11 +219,40 @@ def _memory_block(memory_content: str) -> str:
     )
 
 
-def build_character_chat_system(character, memory_content: str, settings: dict) -> str:
+def _user_block(profile) -> str:
+    """用户本人的设定。三项都没填就整块不出现——不要给模型一段空标签。
+
+    只给角色两模式用：自由情境模式是"写故事"，没有"我是谁"这回事（见 10.35）。
+    """
+    p = profile or {}
+    name = (p.get("name") or "").strip()
+    identity = (p.get("identity") or "").strip()
+    appearance = (p.get("appearance") or "").strip()
+    if not (name or identity or appearance):
+        return ""
+    parts = []
+    if name:
+        parts.append(f"姓名：{name}")
+    if identity:
+        parts.append(f"身份：{identity}")
+    if appearance:
+        parts.append(f"外观：{appearance}")
+    return (
+        "# 与你对话的人\n"
+        + "\n".join(parts)
+        + "\n以上是用户本人的设定（不是你要扮演的角色）。据此理解对方的身份与外貌，"
+        "可以直接称呼对方，但不要把这些内容念出来，也不要替对方说话。\n\n"
+    )
+
+
+def build_character_chat_system(
+    character, memory_content: str, settings: dict, profile=None
+) -> str:
     name = character["name"]
     return (
         "你要完全扮演下面这个角色，与用户进行对话。\n\n"
         + _character_block(character)
+        + _user_block(profile)
         + _memory_block(memory_content)
         + "# 回复要求\n"
         f"{render_character_chat_settings(settings)}\n\n"
@@ -233,10 +262,13 @@ def build_character_chat_system(character, memory_content: str, settings: dict) 
     )
 
 
-def build_character_scenario_system(character, memory_content: str, settings: dict) -> str:
+def build_character_scenario_system(
+    character, memory_content: str, settings: dict, profile=None
+) -> str:
     return (
         "你要扮演下面这个角色，与用户在同一个故事情境中互动。\n\n"
         + _character_block(character)
+        + _user_block(profile)
         + _memory_block(memory_content)
         + "# 生成要求\n"
         f"{render_character_scenario_settings(settings)}\n\n"
@@ -271,14 +303,15 @@ def build_free_scenario_system(memory_content: str, settings: dict) -> str:
     )
 
 
-def build_system_prompt(session, character, memory_content: str) -> str:
+def build_system_prompt(session, character, memory_content: str, profile=None) -> str:
     mode = session["mode"]
     settings = get_gen_settings(session)
     if mode == "character_chat" and character is not None:
-        return build_character_chat_system(character, memory_content, settings)
+        return build_character_chat_system(character, memory_content, settings, profile)
     if mode == "character_scenario" and character is not None:
-        return build_character_scenario_system(character, memory_content, settings)
+        return build_character_scenario_system(character, memory_content, settings, profile)
     if mode == "free_scenario":
+        # 自由情境不注入"我的设定"：那里没有"我是谁"，写故事的人不是故事里的角色
         return build_free_scenario_system(memory_content, settings)
     return "你是一个友好的中文对话助手，回答简洁自然。"
 
@@ -296,9 +329,11 @@ def _restore_history(mode: str, row) -> str:
     return content
 
 
-def build_messages(session, character, memory_content: str, history_rows) -> list[dict]:
+def build_messages(
+    session, character, memory_content: str, history_rows, profile=None
+) -> list[dict]:
     mode = session["mode"]
-    system = build_system_prompt(session, character, memory_content)
+    system = build_system_prompt(session, character, memory_content, profile)
     limit = get_config()["chat"]["history_max_messages"]
     msgs = [{"role": "system", "content": system}]
     for r in history_rows[-limit:]:

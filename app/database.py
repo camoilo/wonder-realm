@@ -78,6 +78,18 @@ CREATE TABLE IF NOT EXISTS app_prefs (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
 );
+
+-- 用户本人的设定（右侧面板的"我的设定"）。全局单行表，和 app_settings 一样。
+-- 单开一张表而不是给别的表加列：新表对已有库也会建出来（见 4.2），无需用户删库；
+-- 而且它是"用户"这个主体的属性，跟角色、会话都没有从属关系
+CREATE TABLE IF NOT EXISTS user_profile (
+    id         INTEGER PRIMARY KEY CHECK(id=1),
+    name       TEXT NOT NULL DEFAULT '',
+    identity   TEXT NOT NULL DEFAULT '',
+    appearance TEXT NOT NULL DEFAULT '',
+    avatar     TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+);
 """
 
 DB_PATH: Path | None = None
@@ -105,6 +117,10 @@ def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -
     con.execute(
         "INSERT OR IGNORE INTO app_settings(id, model, memory_model, updated_at) VALUES(1, ?, ?, ?)",
         (default_model, default_memory_model, now()),
+    )
+    # "我的设定"也是单行表：缺了就补一行空白的，读的时候不必到处判 None
+    con.execute(
+        "INSERT OR IGNORE INTO user_profile(id, updated_at) VALUES(1, ?)", (now(),)
     )
     con.commit()
     con.close()
@@ -155,6 +171,41 @@ def write_pref(key: str, value: str) -> None:
 def thinking_disabled() -> bool:
     """生成时是否禁用思考模式。集中在这里读，聊天/重新生成/记忆压缩/自动命名就都会遵守。"""
     return read_pref(PREF_DISABLE_THINKING, "0") == "1"
+
+
+PROFILE_FIELDS = ("name", "identity", "appearance", "avatar")
+
+
+def read_profile() -> dict:
+    """用户本人的设定。行不存在时返回全空，调用方不必判 None（init_db 会补行）。"""
+    con = connect()
+    try:
+        row = con.execute(
+            "SELECT name, identity, appearance, avatar FROM user_profile WHERE id=1"
+        ).fetchone()
+    finally:
+        con.close()
+    return dict(row) if row else {k: "" for k in PROFILE_FIELDS}
+
+
+def write_profile(values: dict) -> dict:
+    """整体覆盖式写入（表单就是整体提交的），返回写入后的结果。"""
+    con = connect()
+    try:
+        con.execute(
+            "UPDATE user_profile SET name=?, identity=?, appearance=?, avatar=?, updated_at=? WHERE id=1",
+            (
+                values.get("name", ""),
+                values.get("identity", ""),
+                values.get("appearance", ""),
+                values.get("avatar", ""),
+                now(),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return read_profile()
 
 
 def read_settings() -> dict:
