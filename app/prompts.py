@@ -1,6 +1,7 @@
 import json
 
 from .config import get_config
+from .limits import LIMITS
 
 REPLY_LENGTH_DESC = {
     "short": "每次回复不超过2句话",
@@ -86,7 +87,9 @@ TEMPERATURE_FIELD = {
     "options": TEMPERATURE_OPTIONS,
 }
 
-# 生成要求表单字段定义，供前端渲染（GET /api/gen-settings）
+# 生成要求表单字段定义，供前端渲染（GET /api/gen-settings）。
+# 自由文本字段带 "max"：前端据此设 maxlength 并显示右下角计数，数字来自 limits.LIMITS，
+# 不在前端另写一份
 FIELDS = {
     "character_chat": [
         {"key": "reply_length", "label": "回复长度", "type": "radio",
@@ -94,7 +97,7 @@ FIELDS = {
         {"key": "proactive", "label": "主动性", "type": "radio",
          "options": [("low", "低"), ("medium", "中"), ("high", "高")]},
         TEMPERATURE_FIELD,
-        {"key": "extra", "label": "附加要求", "type": "textarea",
+        {"key": "extra", "label": "附加要求", "type": "textarea", "max": LIMITS["extra"],
          "placeholder": "任意补充要求，原样注入提示词"},
     ],
     "character_scenario": [
@@ -103,13 +106,15 @@ FIELDS = {
         {"key": "pace", "label": "推进速度", "type": "radio",
          "options": [("slow", "平缓"), ("medium", "适中"), ("fast", "快速")]},
         TEMPERATURE_FIELD,
-        {"key": "director_notes", "label": "导演指令", "type": "textarea",
+        {"key": "director_notes", "label": "导演指令", "type": "textarea", "max": LIMITS["extra"],
          "hint": "只影响情境走向，不进入对话", "placeholder": "如：让两人的关系逐渐缓和"},
-        {"key": "extra", "label": "附加要求", "type": "textarea"},
+        {"key": "extra", "label": "附加要求", "type": "textarea", "max": LIMITS["extra"]},
     ],
     "free_scenario": [
-        {"key": "genre", "label": "题材", "type": "text", "placeholder": "如：都市奇幻、武侠"},
-        {"key": "style", "label": "文风", "type": "text", "placeholder": "如：细腻文学风、轻喜剧"},
+        {"key": "genre", "label": "题材", "type": "text", "max": LIMITS["genre"],
+         "placeholder": "如：都市奇幻、武侠"},
+        {"key": "style", "label": "文风", "type": "text", "max": LIMITS["genre"],
+         "placeholder": "如：细腻文学风、轻喜剧"},
         {"key": "length", "label": "单次篇幅", "type": "radio",
          "options": [("short", "短"), ("medium", "中"), ("long", "长")]},
         {"key": "composition", "label": "情境/台词配比", "type": "radio",
@@ -117,7 +122,7 @@ FIELDS = {
          "options": [("scenario_only", "只有情境"), ("scenario_heavy", "情境为主"),
                      ("balanced", "均衡"), ("dialog_heavy", "台词为主")]},
         TEMPERATURE_FIELD,
-        {"key": "extra", "label": "附加要求", "type": "textarea"},
+        {"key": "extra", "label": "附加要求", "type": "textarea", "max": LIMITS["extra"]},
     ],
 }
 

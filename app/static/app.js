@@ -231,10 +231,19 @@ const app = Vue.createApp({
       // 头像校验/裁剪的就地提示（底部错误条在没打开会话时不渲染，不能承担这个角色）
       avatarError: "",
       // 右侧面板各分区的收起状态（true = 已折叠）。纯界面偏好，不持久化
-      panelFold: { gen: false, char: false, memory: false },
+      panelTab: "gen", // 右侧面板当前显示哪个标签：gen / char / memory
+      // 各输入框的字数上限。与后端 app/limits.py 一致，init() 时用 /api/limits 覆盖，
+      // 这里的默认值只是兜底（拿不到接口也不至于没有限制）
+      limits: {
+        message: 2000, scenario: 2000, name: 20, appearance: 600, personality: 600,
+        speech_style: 600, backstory: 1200, genre: 60, extra: 500, hint: 200,
+        memory: 2000, title: 40,
+      },
       // 对话区背景：图片、当前第几张、上限、就地提示
       bgImages: [],
       bgIndex: 0,
+      // 临时关掉背景显示（不持久化：切会话或刷新后恢复），见 10.32
+      bgHidden: false,
       bgMax: BG_MAX_COUNT,
       bgError: "",
       bgBusy: false,
@@ -282,14 +291,16 @@ const app = Vue.createApp({
         : "思考模式已开启，点击关闭（能明显加快回复）";
     },
     // 对话区背景：只有角色两模式、且该角色有背景图时才有；自由情境、未选会话、
-    // 角色已删除都回落到空白背景
+    // 角色已删除都回落到空白背景。被"关闭背景"临时关掉时同样回落到空白
     chatBgUrl() {
-      if (!this.activeChar || !this.bgImages.length) return "";
+      if (!this.activeChar || !this.bgImages.length || this.bgHidden) return "";
       const i = Math.min(Math.max(this.bgIndex, 0), this.bgImages.length - 1);
       return this.bgImages[i] || "";
     },
-    showBgNav() {
-      return !!this.chatBgUrl && this.bgImages.length > 1;
+    // 背景条：只要该角色有图就出现。**不能**跟着背景是否显示来决定——否则一关掉，
+    // 连"重新显示"的按钮都没了，只能靠切会话或刷新恢复
+    showBgBar() {
+      return !!this.activeChar && this.bgImages.length > 0;
     },
     // 裁剪弹窗里那张图的位移与缩放。transform 里 translate 在前、scale 在后，
     // 所以 (x, y) 就是"缩放后图片左上角"在取景框坐标系里的位置
@@ -371,6 +382,13 @@ const app = Vue.createApp({
     anyDirty() {
       return this.genDirty || this.charDirty || this.memoryDirty;
     },
+    // 当前标签是否有未保存改动：面板顶部那一行"未保存 / 还原"按它显示。
+    // 键名与 armRevert / revertArm 的取值一致（gen / char / memory）
+    activeTabDirty() {
+      if (this.panelTab === "char") return this.charDirty;
+      if (this.panelTab === "memory") return this.memoryDirty;
+      return this.genDirty;
+    },
     displayMessages() {
       return this.showArchived
         ? this.messages
@@ -405,6 +423,7 @@ const app = Vue.createApp({
         this.charLocked = false;
       }
       this.charSaved = this.snapshot(this.charForm); // 重新载入即视为已保存
+      this.fixPanelTab();
     },
     // 生成前换了模式，之前那份结果就不适用了：探索模式的结果前端压根没拿到隐藏字段，
     // 开放模式的结果也不该直接变成"锁定"。清掉草稿，请用户重新生成
@@ -462,6 +481,24 @@ const app = Vue.createApp({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       };
+    },
+
+    // 字数提示用的两个小工具：输入框右下角显示 已用/上限，接近上限时变色。
+    // 真正的拦截由 maxlength（前端）与 schemas 的 max_length（后端 422）负责，
+    // 这里只负责显示
+    len(value) {
+      return (value || "").length;
+    },
+    isNear(value, max) {
+      return !!max && (value || "").length >= max * 0.9;
+    },
+
+    // 标签页兜底：切到没有该标签的会话或模式（自由情境没有角色设定、未选会话没有记忆）
+    // 时回到"生成要求"，否则面板会是一片空白
+    fixPanelTab() {
+      const hasChar = !!(this.activeSession && this.activeSession.character);
+      if (this.panelTab === "char" && !hasChar) this.panelTab = "gen";
+      if (this.panelTab === "memory" && !this.memoryScope) this.panelTab = "gen";
     },
 
     // 键顺序无关的快照比对：重建表单后键序可能不同，直接 JSON.stringify 会误判为已修改
@@ -567,6 +604,12 @@ const app = Vue.createApp({
 
     async init() {
       let ollamaOk = true;
+      // 字数上限以后端为准；拿不到就沿用 data 里的兜底值，不影响使用
+      try {
+        this.limits = await this.api("/api/limits");
+      } catch (e) {
+        /* 用兜底值 */
+      }
       try {
         this.models = await this.api("/api/models");
       } catch (e) {
@@ -968,13 +1011,11 @@ const app = Vue.createApp({
     },
 
     // ---------- 对话区背景图 ----------
-    togglePanelFold(key) {
-      this.panelFold[key] = !this.panelFold[key];
-    },
-
     resetBackgrounds() {
       this.bgImages = [];
       this.bgIndex = 0;
+      // "关闭背景"是临时的：换会话/角色就恢复显示
+      this.bgHidden = false;
       this.bgError = "";
     },
 

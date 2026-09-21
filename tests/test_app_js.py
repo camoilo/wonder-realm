@@ -98,11 +98,59 @@ check("角色弹窗宽度用复合选择器并与编辑弹窗同宽",
 check("操作行按键不被压缩", ".edit-btns { display: flex; flex: none; gap: 8px; }" in css, True)
 
 # 角色弹窗里的填写框默认高度（不能只靠 rows，样式里也要有下限）
-check("角色弹窗文本框有最小高度", "min-height: 104px;" in css, True)
+check("角色弹窗文本框有最小高度", "min-height: 118px;" in css, True)
 check("背景故事框更高", ".modal.char-modal .field textarea.grow-lg" in css, True)
 check("背景故事框用了 grow-lg 类", 'class="grow-lg"' in html, True)
 check("宽度规则不作用于右侧面板",
       ".modal.char-modal .field textarea {" in css and css.count(".modal.char-modal .field") >= 2, True)
+
+# ---- 右侧面板改成标签页 ----
+check("有标签栏", html.count('class="panel-tabs"'), 1)
+check("三个标签按钮", html.count('class="panel-tab"'), 3)
+check("三个内容面板", html.count("panel-tab-pane"), 3)
+check("旧的折叠结构已清除",
+      [w for w in ("panel-section", "panelFold", "togglePanelFold") if (w in html or w in js)], [])
+check("CSS 里的折叠样式已清除", ".panel-section" in css, False)
+check("未保存圆点样式在", ".tab-dot" in css, True)
+check("当前标签的未保存状态有计算属性", "activeTabDirty" in js and "activeTabDirty" in html, True)
+check("切到没有该标签的会话时有兜底", "fixPanelTab" in js, True)
+
+# ---- 字数上限与右下角实时提示 ----
+counters = html.count('class="char-count')
+check("计数提示数量", counters, 18)
+check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
+check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
+# 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）
+free_boxes = []
+for tag, attrs in re.findall(r"<(input|textarea)([^>]*)>", html, flags=re.S):
+    if tag == "input" and any(k in attrs for k in ('type="file"', 'type="radio"', 'type="range"')):
+        continue
+    if ":maxlength" not in attrs:
+        free_boxes.append(attrs.strip().splitlines()[0][:60])
+check("没有漏掉 maxlength 的文本输入", free_boxes, [])
+check("上限从后端取", 'this.limits = await this.api("/api/limits")' in js, True)
+# 前端兜底值与后端必须一致，否则接口拿不到时两边限制不同
+from app.limits import LIMITS  # noqa: E402
+
+for key, value in LIMITS.items():
+    if f"{key}: {value}" not in js:
+        free_boxes.append(f"{key}={value}")
+check("前端兜底上限与后端一致", free_boxes, [])
+# 单行框的提示要垂直居中（否则贴底边很挤），且注释说明了为什么
+check("单行提示有 inline 变体", ".char-count.inline" in css and "char-count inline" in html, True)
+check("接近上限时变色", ".char-count.near" in css, True)
+
+# ---- 关闭背景（放在翻页键旁边） ----
+check("背景条用 showBgBar", html.count("showBgBar"), 1)
+check("有关闭背景键", 'class="bg-close"' in html, True)
+check("关闭/显示两种文案", ("关闭背景" in html) and ("显示背景" in html), True)
+check("关闭后背景条仍在（不依赖 chatBgUrl）",
+      "!!this.activeChar && this.bgImages.length > 0" in js, True)
+check("关掉背景时回落到空白", "|| this.bgHidden" in js, True)
+check("切会话或角色时恢复显示", "this.bgHidden = false;" in js, True)
+check("单张背景时翻页键置灰", ':disabled="bgImages.length < 2"' in html, True)
+check("关闭键要压得住 .bg-switch button 的 28px",
+      ".bg-switch button.bg-close {" in css, True)
 
 # 生成区说明里要交代模型与思考开关（用户问过生成是否跟随它们）
 check("生成区说明提到当前模型", "用当前选中的模型" in html, True)

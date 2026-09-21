@@ -75,8 +75,11 @@
         <button class="icon-btn rail-toggle" :title="sideCollapsed ? '展开左侧栏' : '收起左侧栏'"
                 @click="sideCollapsed = !sideCollapsed">&#9776;</button>
         <template v-if="activeSession">
-          <input v-if="renaming" v-model="renameText" class="title-input"
-                 @keydown.enter.prevent="saveRename" @blur="saveRename" />
+          <span v-if="renaming" class="counted title-counted">
+            <input v-model="renameText" class="title-input" :maxlength="limits.title"
+                   @keydown.enter.prevent="saveRename" @blur="saveRename" />
+            <span class="char-count inline" :class="{near: isNear(renameText, limits.title)}">{{ len(renameText) }}/{{ limits.title }}</span>
+          </span>
           <h1 v-else class="title" title="点击重命名" @click="startRename">{{ activeSession.title }}</h1>
           <span class="chip">{{ MODES[activeSession.mode].label }}</span>
           <span v-if="orphanActive" class="chip warn">角色已删除 · 仅可查看</span>
@@ -182,20 +185,28 @@
           <button class="dismiss" @click="error = ''">&times;</button>
         </div>
         <div class="input-row">
-          <textarea
-            v-model="input"
-            :disabled="orphanActive"
-            rows="3"
-            placeholder="输入消息，Enter 发送（Shift+Enter 换行）"
-            @keydown.enter.exact.prevent="send"
-          ></textarea>
+          <div class="counted">
+            <textarea
+              v-model="input"
+              :disabled="orphanActive"
+              rows="3"
+              :maxlength="limits.message"
+              placeholder="输入消息，Enter 发送（Shift+Enter 换行）"
+              @keydown.enter.exact.prevent="send"
+            ></textarea>
+            <span class="char-count" :class="{near: isNear(input, limits.message)}">{{ len(input) }}/{{ limits.message }}</span>
+          </div>
           <div class="send-col">
             <!-- 背景切换与"继续"互斥：前者只在角色两模式出现，后者只在自由情境出现，
-                 所以它们共用发送键上方这个位置，样式也用同一套（次级按钮） -->
-            <div v-if="showBgNav" class="bg-switch">
-              <button type="button" title="上一张背景" @click="prevBg">‹</button>
+                 所以它们共用发送键上方这个位置，样式也用同一套（次级按钮）。
+                 有关闭键，所以只要有一张背景就出现（单张时翻页键置灰） -->
+            <div v-if="showBgBar" class="bg-switch">
+              <button type="button" title="上一张背景" :disabled="bgImages.length < 2" @click="prevBg">‹</button>
               <span class="bg-switch-count">{{ bgIndex + 1 }}/{{ bgImages.length }}</span>
-              <button type="button" title="下一张背景" @click="nextBg">›</button>
+              <button type="button" title="下一张背景" :disabled="bgImages.length < 2" @click="nextBg">›</button>
+              <button type="button" class="bg-close" :class="{off: bgHidden}"
+                      :title="bgHidden ? '重新显示这个角色的对话背景' : '暂时不显示背景（切会话或刷新后恢复）'"
+                      @click="bgHidden = !bgHidden">{{ bgHidden ? "显示背景" : "关闭背景" }}</button>
             </div>
             <button v-if="isFreeScenario" class="continue-btn" :disabled="!canContinue"
                     title="基于上一条回复继续生成（相当于发送“继续”）"
@@ -222,145 +233,163 @@
       </div>
       <div class="panel-body">
         <template v-if="activeSession">
-          <div class="panel-section foldable" @click="togglePanelFold('gen')">
-            <span class="chevron" :class="{open: !panelFold.gen}">›</span>
-            <span class="panel-title">{{ genSectionTitle }}</span>
-            <span v-if="genDirty" class="dirty-tools" @click.stop>
-              <span class="dirty-flag">未保存</span>
-              <button class="revert-btn" :class="{armed: revertArm.gen}"
-                      :title="revertArm.gen ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
-                      @click="armRevert('gen')">{{ revertArm.gen ? "确认还原？" : "还原" }}</button>
-            </span>
+          <!-- 标签页：一次只显示一块。哪个标签有未保存改动就在它右上角点一个圆点，
+               选中标签的内容区顶部出现"未保存 / 还原"那一行 -->
+          <div class="panel-tabs">
+            <button class="panel-tab" :class="{on: panelTab === 'gen'}"
+                    @click="panelTab = 'gen'">{{ genSectionTitle }}<span v-if="genDirty" class="tab-dot"></span></button>
+            <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'char'}"
+                    @click="panelTab = 'char'">角色设定<span v-if="charDirty" class="tab-dot"></span></button>
+            <button v-if="memoryScope" class="panel-tab" :class="{on: panelTab === 'memory'}"
+                    @click="panelTab = 'memory'">{{ memoryScope.label }}<span v-if="memoryDirty" class="tab-dot"></span></button>
           </div>
-          <div class="panel-section-body" v-show="!panelFold.gen">
-            <div v-for="f in fieldsOf(activeSession.mode)" :key="f.key" class="field">
-              <span class="field-label">{{ f.label }}</span>
-              <div v-if="f.type === 'radio'" class="radio-row">
-                <label v-for="opt in f.options" :key="opt[0]" class="radio-item" :class="{on: genForm[f.key] === opt[0]}">
-                  <input type="radio" :name="f.key" :value="opt[0]" v-model="genForm[f.key]">{{ opt[1] }}
-                </label>
-              </div>
-              <div v-else-if="f.type === 'tags'" class="tags-box">
-                <div class="tag-chips">
-                  <span v-for="p in f.presets" :key="p" class="chip-btn"
-                        :class="{on: (genForm[f.key] || []).includes(p)}" @click="toggleTag(f.key, p)">{{ p }}</span>
-                </div>
-                <div class="tag-custom">
-                  <span v-for="t in customTags(f)" :key="t" class="tag">{{ t }}<button class="tag-x" @click="removeTag(f.key, t)">&times;</button></span>
-                  <input class="tag-input" v-model="tagDraft[f.key]" :placeholder="f.placeholder"
-                         @keydown.enter.prevent="addTag(f.key)" @blur="addTag(f.key)">
-                </div>
-              </div>
-              <div v-else class="input-wrap">
-                <textarea v-if="f.type === 'textarea'" v-model="genForm[f.key]" rows="2" :placeholder="f.placeholder"></textarea>
-                <input v-else type="text" v-model="genForm[f.key]" :placeholder="f.placeholder">
-                <button v-if="genForm[f.key]" class="clear-btn" title="清空这一栏" tabindex="-1"
-                        @click="genForm[f.key] = ''">✕</button>
-              </div>
-              <span v-if="f.hint" class="field-hint">{{ f.hint }}</span>
-            </div>
-            <button class="primary-btn full" @click="saveGenSettings">保存生成要求</button>
-            <p class="hint">保存后立即生效，只影响后续生成</p>
+          <div v-if="activeTabDirty" class="panel-tab-actions">
+            <span class="dirty-flag">未保存</span>
+            <button class="revert-btn" :class="{armed: revertArm[panelTab]}"
+                    :title="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                    @click="armRevert(panelTab)">{{ revertArm[panelTab] ? "确认还原？" : "还原" }}</button>
           </div>
         </template>
-        <template v-if="activeSession && activeSession.character">
-          <div class="panel-section foldable" @click="togglePanelFold('char')">
-            <span class="chevron" :class="{open: !panelFold.char}">›</span>
-            <span class="panel-title">角色设定</span>
-            <span v-if="charDirty" class="dirty-tools" @click.stop>
-              <span class="dirty-flag">未保存</span>
-              <button class="revert-btn" :class="{armed: revertArm.char}"
-                      :title="revertArm.char ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
-                      @click="armRevert('char')">{{ revertArm.char ? "确认还原？" : "还原" }}</button>
-            </span>
-          </div>
-          <div class="panel-section-body" v-show="!panelFold.char">
-            <div class="avatar-pick">
-              <span class="avatar xl">
-                <img v-if="charForm.avatar" :src="charForm.avatar" alt="">
-                <template v-else>{{ (charForm.name || "?").slice(0, 1) }}</template>
-              </span>
-              <div class="avatar-pick-actions">
-                <label class="ghost-btn file-btn">{{ charForm.avatar ? "更换头像" : "上传头像" }}
-                  <input type="file" accept="image/*" @change="pickAvatar($event, 'panel')">
-                </label>
-                <button v-if="charForm.avatar" class="ghost-btn" @click="clearAvatar('panel')">移除头像</button>
+        <div v-if="activeSession" class="panel-tab-pane" v-show="panelTab === 'gen'">
+          <div v-for="f in fieldsOf(activeSession.mode)" :key="f.key" class="field">
+            <span class="field-label">{{ f.label }}</span>
+            <div v-if="f.type === 'radio'" class="radio-row">
+              <label v-for="opt in f.options" :key="opt[0]" class="radio-item" :class="{on: genForm[f.key] === opt[0]}">
+                <input type="radio" :name="f.key" :value="opt[0]" v-model="genForm[f.key]">{{ opt[1] }}
+              </label>
+            </div>
+            <div v-else-if="f.type === 'tags'" class="tags-box">
+              <div class="tag-chips">
+                <span v-for="p in f.presets" :key="p" class="chip-btn"
+                      :class="{on: (genForm[f.key] || []).includes(p)}" @click="toggleTag(f.key, p)">{{ p }}</span>
+              </div>
+              <div class="tag-custom">
+                <span v-for="t in customTags(f)" :key="t" class="tag">{{ t }}<button class="tag-x" @click="removeTag(f.key, t)">&times;</button></span>
+                <input class="tag-input" v-model="tagDraft[f.key]" :placeholder="f.placeholder"
+                       :maxlength="f.max" @keydown.enter.prevent="addTag(f.key)" @blur="addTag(f.key)">
               </div>
             </div>
-            <p v-if="avatarError" class="avatar-error">{{ avatarError }}</p>
-            <div class="bg-pick">
-              <div class="bg-pick-head">
-                <span class="field-label">对话背景</span>
-                <span class="hint">{{ (charForm.backgrounds || []).length }} / {{ bgMax }}</span>
+            <div v-else class="input-wrap">
+              <div class="counted">
+                <textarea v-if="f.type === 'textarea'" v-model="genForm[f.key]" rows="2"
+                          :maxlength="f.max" :placeholder="f.placeholder"></textarea>
+                <input v-else type="text" v-model="genForm[f.key]" :maxlength="f.max" :placeholder="f.placeholder">
+                <span class="char-count" :class="{near: isNear(genForm[f.key], f.max), inline: f.type !== 'textarea'}">{{ len(genForm[f.key]) }}/{{ f.max }}</span>
               </div>
-              <div class="bg-thumbs">
-                <div v-for="(bg, i) in charForm.backgrounds" :key="i" class="bg-thumb"
-                     :class="{ dragging: bgDragging('panel', i), over: bgDropTarget('panel', i) }"
-                     draggable="true" title="拖动可调整顺序"
-                     @dragstart="bgDragStart($event, 'panel', i)"
-                     @dragover.prevent="bgDragOver($event, 'panel', i)"
-                     @drop.prevent="bgDrop($event, 'panel', i)"
-                     @dragend="bgDragEnd">
-                  <img :src="bg" alt="" draggable="false">
-                  <span class="bg-num">{{ i + 1 }}</span>
-                  <button type="button" class="bg-del" title="移除这张" @click="removeBackground('panel', i)">×</button>
-                  <div class="bg-move">
-                    <button type="button" :disabled="i === 0" title="前移"
-                            @click="moveBackground('panel', i, i - 1)">‹</button>
-                    <button type="button" :disabled="i === (charForm.backgrounds || []).length - 1" title="后移"
-                            @click="moveBackground('panel', i, i + 1)">›</button>
-                  </div>
+              <button v-if="genForm[f.key]" class="clear-btn" title="清空这一栏" tabindex="-1"
+                      @click="genForm[f.key] = ''">✕</button>
+            </div>
+            <span v-if="f.hint" class="field-hint">{{ f.hint }}</span>
+          </div>
+          <button class="primary-btn full" @click="saveGenSettings">保存生成要求</button>
+          <p class="hint">保存后立即生效，只影响后续生成</p>
+        </div>
+        <div v-if="activeSession && activeSession.character" class="panel-tab-pane"
+             v-show="panelTab === 'char'">
+          <div class="avatar-pick">
+            <span class="avatar xl">
+              <img v-if="charForm.avatar" :src="charForm.avatar" alt="">
+              <template v-else>{{ (charForm.name || "?").slice(0, 1) }}</template>
+            </span>
+            <div class="avatar-pick-actions">
+              <label class="ghost-btn file-btn">{{ charForm.avatar ? "更换头像" : "上传头像" }}
+                <input type="file" accept="image/*" @change="pickAvatar($event, 'panel')">
+              </label>
+              <button v-if="charForm.avatar" class="ghost-btn" @click="clearAvatar('panel')">移除头像</button>
+            </div>
+          </div>
+          <p v-if="avatarError" class="avatar-error">{{ avatarError }}</p>
+          <div class="bg-pick">
+            <div class="bg-pick-head">
+              <span class="field-label">对话背景</span>
+              <span class="hint">{{ (charForm.backgrounds || []).length }} / {{ bgMax }}</span>
+            </div>
+            <div class="bg-thumbs">
+              <div v-for="(bg, i) in charForm.backgrounds" :key="i" class="bg-thumb"
+                   :class="{ dragging: bgDragging('panel', i), over: bgDropTarget('panel', i) }"
+                   draggable="true" title="拖动可调整顺序"
+                   @dragstart="bgDragStart($event, 'panel', i)"
+                   @dragover.prevent="bgDragOver($event, 'panel', i)"
+                   @drop.prevent="bgDrop($event, 'panel', i)"
+                   @dragend="bgDragEnd">
+                <img :src="bg" alt="" draggable="false">
+                <span class="bg-num">{{ i + 1 }}</span>
+                <button type="button" class="bg-del" title="移除这张" @click="removeBackground('panel', i)">×</button>
+                <div class="bg-move">
+                  <button type="button" :disabled="i === 0" title="前移"
+                          @click="moveBackground('panel', i, i - 1)">‹</button>
+                  <button type="button" :disabled="i === (charForm.backgrounds || []).length - 1" title="后移"
+                          @click="moveBackground('panel', i, i + 1)">›</button>
                 </div>
-                <label v-if="(charForm.backgrounds || []).length < bgMax"
-                       class="bg-add" :class="{disabled: bgBusy}">
-                  {{ bgBusy ? "处理中…" : "＋" }}
-                  <input type="file" accept="image/*" multiple :disabled="bgBusy"
-                         @change="addBackgrounds($event, 'panel')">
-                </label>
               </div>
-              <p v-if="bgError" class="avatar-error">{{ bgError }}</p>
+              <label v-if="(charForm.backgrounds || []).length < bgMax"
+                     class="bg-add" :class="{disabled: bgBusy}">
+                {{ bgBusy ? "处理中…" : "＋" }}
+                <input type="file" accept="image/*" multiple :disabled="bgBusy"
+                       @change="addBackgrounds($event, 'panel')">
+              </label>
             </div>
-            <label class="field">姓名<input v-model="charForm.name" type="text"></label>
-            <label class="field">外观<textarea v-model="charForm.appearance" rows="3" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
-            <template v-if="!charLocked">
-              <label class="field">性格<textarea v-model="charForm.personality" rows="3"></textarea></label>
-              <label class="field">语言风格<textarea v-model="charForm.speech_style" rows="3" placeholder="口癖、语气、用词习惯"></textarea></label>
-              <label class="field">背景故事<textarea v-model="charForm.backstory" rows="4"></textarea></label>
-            </template>
-            <div v-else class="locked-box">
-              <div class="locked-title">🔒 性格 / 语言风格 / 背景故事 已锁定</div>
-              <p class="hint">这三项照常参与生成，但不会显示，可以在对话中慢慢了解。</p>
-              <button class="ghost-btn" @click="unlockCharacter('panel')">公开角色设定</button>
+            <p v-if="bgError" class="avatar-error">{{ bgError }}</p>
+          </div>
+          <label class="field">姓名
+            <div class="counted">
+              <input v-model="charForm.name" type="text" :maxlength="limits.name">
+              <span class="char-count inline" :class="{near: isNear(charForm.name, limits.name)}">{{ len(charForm.name) }}/{{ limits.name }}</span>
             </div>
-            <div class="panel-actions">
-              <button class="danger-btn" @click="removeCharacter">删除角色</button>
-              <button class="primary-btn" :disabled="!charForm.name.trim()" @click="saveCharacterDrawer">保存</button>
+          </label>
+          <label class="field">外观
+            <div class="counted">
+              <textarea v-model="charForm.appearance" rows="3" :maxlength="limits.appearance"
+                        placeholder="年龄、身形、衣着、标志性特征"></textarea>
+              <span class="char-count" :class="{near: isNear(charForm.appearance, limits.appearance)}">{{ len(charForm.appearance) }}/{{ limits.appearance }}</span>
             </div>
-            <p class="hint">保存后，下一次生成即按新设定回复</p>
+          </label>
+          <template v-if="!charLocked">
+            <label class="field">性格
+              <div class="counted">
+                <textarea v-model="charForm.personality" rows="3" :maxlength="limits.personality"></textarea>
+                <span class="char-count" :class="{near: isNear(charForm.personality, limits.personality)}">{{ len(charForm.personality) }}/{{ limits.personality }}</span>
+              </div>
+            </label>
+            <label class="field">语言风格
+              <div class="counted">
+                <textarea v-model="charForm.speech_style" rows="3" :maxlength="limits.speech_style"
+                          placeholder="口癖、语气、用词习惯"></textarea>
+                <span class="char-count" :class="{near: isNear(charForm.speech_style, limits.speech_style)}">{{ len(charForm.speech_style) }}/{{ limits.speech_style }}</span>
+              </div>
+            </label>
+            <label class="field">背景故事
+              <div class="counted">
+                <textarea v-model="charForm.backstory" rows="4" :maxlength="limits.backstory"></textarea>
+                <span class="char-count" :class="{near: isNear(charForm.backstory, limits.backstory)}">{{ len(charForm.backstory) }}/{{ limits.backstory }}</span>
+              </div>
+            </label>
+          </template>
+          <div v-else class="locked-box">
+            <div class="locked-title">🔒 性格 / 语言风格 / 背景故事 已锁定</div>
+            <p class="hint">这三项照常参与生成，但不会显示，可以在对话中慢慢了解。</p>
+            <button class="ghost-btn" @click="unlockCharacter('panel')">公开角色设定</button>
           </div>
-        </template>
-        <template v-if="memoryScope">
-          <div class="panel-section foldable" @click="togglePanelFold('memory')">
-            <span class="chevron" :class="{open: !panelFold.memory}">›</span>
-            <span class="panel-title">{{ memoryScope.label }}</span>
-            <span v-if="memoryDirty" class="dirty-tools" @click.stop>
-              <span class="dirty-flag">未保存</span>
-              <button class="revert-btn" :class="{armed: revertArm.memory}"
-                      :title="revertArm.memory ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
-                      @click="armRevert('memory')">{{ revertArm.memory ? "确认还原？" : "还原" }}</button>
-            </span>
+          <div class="panel-actions">
+            <button class="danger-btn" @click="removeCharacter">删除角色</button>
+            <button class="primary-btn" :disabled="!charForm.name.trim()" @click="saveCharacterDrawer">保存</button>
           </div>
-          <div class="panel-section-body" v-show="!panelFold.memory">
-            <p class="memory-meta">
-              已归档 {{ memoryData.message_count }} 条消息<template v-if="memoryData.updated_at"> · 更新于 {{ memoryData.updated_at }}</template>
-              <a class="refresh-link" @click="loadMemory">刷新</a>
-              <span v-if="memoryData.compress_failed" class="warn-text">上次压缩失败</span>
-            </p>
-            <textarea class="memory-text" v-model="memoryText" rows="10" placeholder="暂无记忆，随对话自动沉淀"></textarea>
-            <button class="primary-btn full" @click="saveMemory">保存记忆</button>
-            <p class="hint">手动编辑保存后，下一次生成即生效</p>
+          <p class="hint">保存后，下一次生成即按新设定回复</p>
+        </div>
+        <div v-if="memoryScope" class="panel-tab-pane" v-show="panelTab === 'memory'">
+          <p class="memory-meta">
+            已归档 {{ memoryData.message_count }} 条消息<template v-if="memoryData.updated_at"> · 更新于 {{ memoryData.updated_at }}</template>
+            <a class="refresh-link" @click="loadMemory">刷新</a>
+            <span v-if="memoryData.compress_failed" class="warn-text">上次压缩失败</span>
+          </p>
+          <div class="counted">
+            <textarea class="memory-text" v-model="memoryText" rows="10" :maxlength="limits.memory"
+                      placeholder="暂无记忆，随对话自动沉淀"></textarea>
+            <span class="char-count" :class="{near: isNear(memoryText, limits.memory)}">{{ len(memoryText) }}/{{ limits.memory }}</span>
           </div>
-        </template>
+          <button class="primary-btn full" @click="saveMemory">保存记忆</button>
+          <p class="hint">手动编辑保存后，下一次生成即生效</p>
+        </div>
       </div>
     </div>
   </aside>
@@ -375,8 +404,11 @@
           <span class="field-label">让模型生成角色</span>
           <span class="hint">用当前选中的模型，只出文字设定（不含头像与背景）</span>
         </div>
-        <input v-model="charModal.gen.hint" type="text" maxlength="200"
-               placeholder="想要的设定，可留空让模型自由发挥（如：古风江湖的女剑客）">
+        <div class="counted">
+          <input v-model="charModal.gen.hint" type="text" :maxlength="limits.hint"
+                 placeholder="想要的设定，可留空让模型自由发挥（如：古风江湖的女剑客）">
+          <span class="char-count inline" :class="{near: isNear(charModal.gen.hint, limits.hint)}">{{ len(charModal.gen.hint) }}/{{ limits.hint }}</span>
+        </div>
         <div class="radio-row">
           <label class="radio-item" :class="{on: charModal.gen.mode === 'open'}">
             <input type="radio" value="open" v-model="charModal.gen.mode">开放模式
@@ -439,12 +471,40 @@
         </div>
         <p v-if="bgError" class="avatar-error">{{ bgError }}</p>
       </div>
-      <label class="field">姓名 *<input v-model="charModal.form.name" type="text"></label>
-      <label class="field">外观<textarea v-model="charModal.form.appearance" rows="4" placeholder="年龄、身形、衣着、标志性特征"></textarea></label>
+      <label class="field">姓名 *
+        <div class="counted">
+          <input v-model="charModal.form.name" type="text" :maxlength="limits.name">
+          <span class="char-count inline" :class="{near: isNear(charModal.form.name, limits.name)}">{{ len(charModal.form.name) }}/{{ limits.name }}</span>
+        </div>
+      </label>
+      <label class="field">外观
+        <div class="counted">
+          <textarea v-model="charModal.form.appearance" rows="4" :maxlength="limits.appearance"
+                    placeholder="年龄、身形、衣着、标志性特征"></textarea>
+          <span class="char-count" :class="{near: isNear(charModal.form.appearance, limits.appearance)}">{{ len(charModal.form.appearance) }}/{{ limits.appearance }}</span>
+        </div>
+      </label>
       <template v-if="!charModal.locked">
-        <label class="field">性格<textarea v-model="charModal.form.personality" rows="4"></textarea></label>
-        <label class="field">语言风格<textarea v-model="charModal.form.speech_style" rows="4" placeholder="口癖、语气、用词习惯"></textarea></label>
-        <label class="field">背景故事<textarea class="grow-lg" v-model="charModal.form.backstory" rows="6"></textarea></label>
+        <label class="field">性格
+          <div class="counted">
+            <textarea v-model="charModal.form.personality" rows="4" :maxlength="limits.personality"></textarea>
+            <span class="char-count" :class="{near: isNear(charModal.form.personality, limits.personality)}">{{ len(charModal.form.personality) }}/{{ limits.personality }}</span>
+          </div>
+        </label>
+        <label class="field">语言风格
+          <div class="counted">
+            <textarea v-model="charModal.form.speech_style" rows="4" :maxlength="limits.speech_style"
+                      placeholder="口癖、语气、用词习惯"></textarea>
+            <span class="char-count" :class="{near: isNear(charModal.form.speech_style, limits.speech_style)}">{{ len(charModal.form.speech_style) }}/{{ limits.speech_style }}</span>
+          </div>
+        </label>
+        <label class="field">背景故事
+          <div class="counted">
+            <textarea class="grow-lg" v-model="charModal.form.backstory" rows="6"
+                      :maxlength="limits.backstory"></textarea>
+            <span class="char-count" :class="{near: isNear(charModal.form.backstory, limits.backstory)}">{{ len(charModal.form.backstory) }}/{{ limits.backstory }}</span>
+          </div>
+        </label>
       </template>
       <div v-else class="locked-box">
         <div class="locked-title">🔒 性格 / 语言风格 / 背景故事 已锁定</div>
@@ -470,7 +530,13 @@
           <option v-for="c in characters" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
       </label>
-      <label class="field">标题（可选）<input v-model="newSessionModal.title" type="text" placeholder="留空则首轮对话后自动命名"></label>
+      <label class="field">标题（可选）
+        <div class="counted">
+          <input v-model="newSessionModal.title" type="text" :maxlength="limits.title"
+                 placeholder="留空则首轮对话后自动命名">
+          <span class="char-count inline" :class="{near: isNear(newSessionModal.title, limits.title)}">{{ len(newSessionModal.title) }}/{{ limits.title }}</span>
+        </div>
+      </label>
       <div class="modal-actions">
         <button class="ghost-btn" @click="newSessionModal.visible = false">取消</button>
         <button class="primary-btn" :disabled="!newSessionModal.characterId" @click="confirmNewSession">创建</button>
@@ -492,12 +558,20 @@
       <h2>编辑消息</h2>
       <label v-if="editForm.hasScenario" class="edit-field">
         <span class="edit-label">情境说明</span>
-        <textarea v-model="editForm.scenario" rows="4" @input="autoGrow"
-                  placeholder="场景、动作、氛围等（留空则不显示情境块）"></textarea>
+        <div class="counted">
+          <textarea v-model="editForm.scenario" rows="4" @input="autoGrow"
+                    :maxlength="limits.scenario"
+                    placeholder="场景、动作、氛围等（留空则不显示情境块）"></textarea>
+          <span class="char-count" :class="{near: isNear(editForm.scenario, limits.scenario)}">{{ len(editForm.scenario) }}/{{ limits.scenario }}</span>
+        </div>
       </label>
       <label class="edit-field">
         <span class="edit-label">{{ editForm.contentLabel }}</span>
-        <textarea v-model="editForm.content" rows="5" @input="autoGrow" :placeholder="editForm.contentPlaceholder"></textarea>
+        <div class="counted">
+          <textarea v-model="editForm.content" rows="5" @input="autoGrow"
+                    :maxlength="limits.message" :placeholder="editForm.contentPlaceholder"></textarea>
+          <span class="char-count" :class="{near: isNear(editForm.content, limits.message)}">{{ len(editForm.content) }}/{{ limits.message }}</span>
+        </div>
       </label>
       <p v-if="editForm.contentHint" class="hint">{{ editForm.contentHint }}</p>
       <div class="edit-actions">

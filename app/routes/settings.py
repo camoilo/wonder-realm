@@ -3,10 +3,17 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import ollama_client
 from ..database import PREF_DISABLE_THINKING, get_db, now, read_settings, write_pref
+from ..limits import LIMITS
 from ..prompts import DEFAULT_SETTINGS, FIELDS
 from ..schemas import SettingsIn
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/limits")
+def get_limits():
+    """各输入框的字数上限。前端据此设 maxlength 并显示右下角实时计数。"""
+    return LIMITS
 
 
 @router.get("/gen-settings")

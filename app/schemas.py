@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 
+from .limits import LIMITS
+
 # 头像以 data URL 存进数据库（跟着库走，备份才完整）。前端已把图片缩到最长边 256px，
 # 这里的上限只是兜底：超限多半说明前端压缩没生效，或有人在直接调接口。
 AVATAR_MAX_CHARS = 256 * 1024
@@ -11,15 +13,15 @@ AVATAR_PREFIXES = (
 
 
 class ChatIn(BaseModel):
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=LIMITS["message"])
 
 
 class CharacterIn(BaseModel):
-    name: str = Field(min_length=1)
-    appearance: str = ""
-    personality: str = ""
-    speech_style: str = ""
-    backstory: str = ""
+    name: str = Field(min_length=1, max_length=LIMITS["name"])
+    appearance: str = Field(default="", max_length=LIMITS["appearance"])
+    personality: str = Field(default="", max_length=LIMITS["personality"])
+    speech_style: str = Field(default="", max_length=LIMITS["speech_style"])
+    backstory: str = Field(default="", max_length=LIMITS["backstory"])
     avatar: str = ""
 
     @field_validator("avatar")
@@ -52,7 +54,7 @@ class CharacterCreateIn(CharacterIn):
 class GenerateIn(BaseModel):
     """让模型生成角色的入参。"""
 
-    hint: str = ""
+    hint: str = Field(default="", max_length=LIMITS["hint"])
     mode: str = "open"  # open = 全部直接展示；explore = 只公开姓名与外观
 
     @field_validator("mode")
@@ -66,24 +68,25 @@ class GenerateIn(BaseModel):
 class SessionIn(BaseModel):
     mode: str = "free_scenario"
     character_id: int | None = None
-    title: str = ""  # 留空表示交给模型自动命名（sessions.title_auto）
+    # 留空表示交给模型自动命名（sessions.title_auto）
+    title: str = Field(default="", max_length=LIMITS["title"])
     gen_settings: dict = {}
 
 
 class SessionPatch(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=LIMITS["title"])
     gen_settings: dict | None = None
 
 
 class MessageEdit(BaseModel):
     # 允许空正文：角色情境里模型可能只写了情境没写台词，那条消息的正文就是空的，
     # 用户编辑情境时不该被迫补一句台词。真正的约束在路由里（正文与情境不能同时为空）
-    content: str = ""
-    scenario: str | None = None
+    content: str = Field(default="", max_length=LIMITS["message"])
+    scenario: str | None = Field(default=None, max_length=LIMITS["scenario"])
 
 
 class MemoryEdit(BaseModel):
-    content: str = ""
+    content: str = Field(default="", max_length=LIMITS["memory"])
 
 
 # 对话区背景图：每角色至多这么多张
