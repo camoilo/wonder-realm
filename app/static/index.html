@@ -11,6 +11,7 @@
 <div id="app" v-cloak>
   <aside class="sidebar" :class="{collapsed: sideCollapsed}">
     <div class="sidebar-inner">
+      <div class="side-label">模式选择</div>
       <nav class="mode-tabs">
         <button v-for="(m, key) in MODES" :key="key" class="mode-tab" :class="{active: mode === key}"
                 @click="switchMode(key)">{{ m.label }}</button>
@@ -96,6 +97,20 @@
                 :disabled="!currentModelSupportsThinking"
                 :title="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
+        <!-- 会话内搜索：命中处标黄，↑/↓ 在命中之间跳转（Enter 下一个、Shift+Enter 上一个）。
+             计数与跳转键只在有关键词时出现——空关键词时它们没有用处，还会白占顶栏宽度 -->
+        <div v-if="activeSession" class="search-box">
+          <input v-model="searchQuery" type="text" class="search-input" placeholder="搜索当前会话"
+                 @keydown.enter.exact.prevent="searchNext"
+                 @keydown.shift.enter.prevent="searchPrev"
+                 @keydown.esc="clearSearch">
+          <template v-if="searchQuery">
+            <span class="search-count">{{ searchTotal ? searchIndex + 1 : 0 }}/{{ searchTotal }}</span>
+            <button class="icon-btn" title="上一个（Shift+Enter）" :disabled="!searchTotal" @click="searchPrev">↑</button>
+            <button class="icon-btn" title="下一个（Enter）" :disabled="!searchTotal" @click="searchNext">↓</button>
+            <button class="icon-btn" title="清空搜索（Esc）" @click="clearSearch">✕</button>
+          </template>
+        </div>
         <button v-if="activeSession" class="ghost-btn"
                 :title="(panelCollapsed ? '展开右侧面板' : '收起右侧面板') + (anyDirty ? '（有未保存的修改）' : '')"
                 @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
@@ -131,20 +146,16 @@
                 <span v-if="timeOf(m)" class="msg-time" :title="fullTimeOf(m)">{{ timeOf(m) }}</span>
               </div>
               <div class="bubble" title="双击可编辑这条消息" @dblclick="startEdit(m)">
-                <template v-if="m.scenario === 'MULTI'">
-                  <template v-for="(seg, si) in segmentsOf(m)" :key="si">
-                    <div v-if="seg.type === 'scenario'" class="scenario">
-                      <span class="scenario-label">情境</span>{{ seg.text }}
-                    </div>
-                    <div v-else class="text">{{ seg.text }}</div>
-                  </template>
-                </template>
-                <template v-else>
-                  <div v-if="m.scenario" class="scenario">
-                    <span class="scenario-label">情境</span>{{ m.scenario }}
-                  </div>
-                  <div class="text">{{ m.content }}</div>
-                </template>
+                <!-- 消息正文按"块"渲染：情境块与话语块。搜索时命中的字词用 <mark> 包起来
+                     （仍然全部是文本节点，不走 v-html：模型输出永远不当 HTML 解释） -->
+                <div v-for="(part, pi) in partsOf(m)" :key="pi"
+                     :class="part.kind === 'scenario' ? 'scenario' : 'text'">
+                  <span v-if="part.kind === 'scenario'" class="scenario-label">情境</span><template
+                    v-for="(piece, ci) in part.pieces" :key="ci"><mark
+                      v-if="piece.hit" class="search-hit"
+                      :class="{current: piece.index === searchIndex}">{{ piece.text }}</mark><template
+                      v-else>{{ piece.text }}</template></template>
+                </div>
                 <span v-if="m.archived" class="archived-flag">已归档</span>
               </div>
               <div class="msg-actions" v-show="!streaming">

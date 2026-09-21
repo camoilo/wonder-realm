@@ -63,6 +63,15 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 
+/* 左侧栏顶部的小标题：说明下面这排按钮是干什么的 */
+.side-label {
+  padding: 12px 12px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+  letter-spacing: 0.5px;
+}
+
 .mode-tab {
   padding: 8px 0;
   font-size: 13px;
@@ -1136,6 +1145,54 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 }
 /* 子项不参与压缩：否则记忆框（rows=10）会被 flex 挤扁，看起来像被下面的按钮遮住 */
 .panel-body > * { flex: 0 0 auto; }
+
+/* ---------- 会话内搜索 ---------- */
+/* 关键词输入 + 命中计数 + 上一个/下一个 + 清空，放在顶栏右侧 */
+.search-box {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.search-box:focus-within { border-color: var(--accent); }
+.search-input {
+  width: 132px;
+  /* 不能给 min-width: 0：计数那格是 flex: none，行内一紧就会把输入框挤成 0 宽、
+     看起来像搜索框消失了。留一个下限，宁可让整条工具栏换行 */
+  min-width: 72px;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 5px 0;
+  background: transparent;
+  color: var(--text);
+}
+.search-count {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums; /* 数字等宽，"3/12" 跳动时按钮不抖 */
+}
+.search-box .icon-btn { width: 22px; height: 22px; font-size: 12px; }
+.search-box .icon-btn:disabled { color: #c3c7cf; cursor: not-allowed; }
+.search-box .icon-btn:disabled:hover { background: none; }
+
+/* 命中标黄；当前那一处用更深的橙色，和"还有别的命中"区分开 */
+mark.search-hit {
+  background: #fff3a3;
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+mark.search-hit.current {
+  background: #ffc46b;
+  box-shadow: 0 0 0 1px #e79b2a inset;
+}
 
 /* ---------- 右侧面板的标签页 ---------- */
 /* 三个分区改成一次只显示一块的标签页（原先是"整行可点折叠"）。

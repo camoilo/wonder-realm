@@ -58,6 +58,25 @@ def top_keys(text, indent):
     return out
 
 
+# ---- HTML 标签配对 ----
+# 先剥掉注释：注释里可以出现 <mark> 这类字面标签（说明文字里就会写），
+# 浏览器会忽略注释内容，解析器也必须照做，否则会数出多余的"开标签"
+VOID_TAGS = {"input", "br", "img", "hr", "meta", "link", "source", "textarea"}
+markup = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+stack, bad = [], []
+for close, name, attrs, selfc in re.findall(r"<(/?)([a-zA-Z][\w-]*)([^>]*?)(/?)>", markup):
+    n = name.lower()
+    if n in VOID_TAGS or selfc:
+        continue
+    if close:
+        if stack and stack[-1] == n:
+            stack.pop()
+        else:
+            bad.append((n, stack[-3:]))
+    else:
+        stack.append(n)
+check("HTML 标签配对", (stack[-5:], bad[:2]), ([], []))
+
 data = top_keys(block(r"\n  data\(\)"), 6)
 computed = top_keys(block(r"\n  computed:"), 4)
 methods = top_keys(block(r"\n  methods:"), 4)
@@ -120,10 +139,13 @@ counters = html.count('class="char-count')
 check("计数提示数量（含我的设定三项）", counters, 21)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
-# 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）
+# 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）；会话内搜索框是
+# 界面过滤器、不落库，也不该占一个上限，所以单独放行
 free_boxes = []
 for tag, attrs in re.findall(r"<(input|textarea)([^>]*)>", html, flags=re.S):
     if tag == "input" and any(k in attrs for k in ('type="file"', 'type="radio"', 'type="range"')):
+        continue
+    if "search-input" in attrs:
         continue
     if ":maxlength" not in attrs:
         free_boxes.append(attrs.strip().splitlines()[0][:60])
@@ -208,6 +230,33 @@ check("编辑弹窗的操作行在字段区之外",
       html.rindex('class="edit-actions"') > html.index('class="modal-body"'), True)
 check("保存失败提示也在字段区之外（与按钮一起常驻）",
       html.index('charModal.saveError') > html.index('class="modal-body"'), True)
+
+# ---- 会话内搜索 ----
+check("顶栏有搜索框", 'class="search-box"' in html and 'class="search-input"' in html, True)
+check("搜索框在工具栏里（面板按钮之前）",
+      html.index('class="search-box"') < html.index('面板 ‹'), True)
+check("搜索框只在有会话时出现", 'v-if="activeSession" class="search-box"' in html, True)
+check("Enter / Shift+Enter / Esc 都接上了",
+      ('@keydown.enter.exact.prevent="searchNext"' in html)
+      and ('@keydown.shift.enter.prevent="searchPrev"' in html)
+      and ('@keydown.esc="clearSearch"' in html), True)
+check("有命中计数与上一个/下一个/清空",
+      ('class="search-count"' in html) and ('@click="searchPrev"' in html)
+      and ('@click="searchNext"' in html) and ('@click="clearSearch"' in html), True)
+check("命中处标黄且区分当前项",
+      ("mark.search-hit {" in css) and ("mark.search-hit.current {" in css), True)
+check("消息正文走分块渲染（便于标黄）", "partsOf(m)" in html and "partsOf(m)" in js, True)
+check("搜索与渲染共用切块", "textParts(m)" in js and "this.textParts(m)" in js, True)
+check("关键词按字面转义（元字符不当正则用）", "escapeRegExp(s)" in js, True)
+check("只搜显示中的消息", "for (const m of this.displayMessages)" in js, True)
+check("跳转是环形的", "((this.searchIndex + step) % total + total) % total" in js, True)
+check("换关键词后回到第一处并滚动", "searchQuery() {" in js and "scrollToHit()" in js, True)
+
+# ---- 左侧栏的"模式选择" ----
+check("左侧栏有模式选择标题", '<div class="side-label">模式选择</div>' in html, True)
+check("标题在模式按钮之前",
+      html.index('class="side-label"') < html.index('class="mode-tabs"'), True)
+check("标题样式在", ".side-label {" in css, True)
 
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)

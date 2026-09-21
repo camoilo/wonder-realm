@@ -235,6 +235,9 @@ const app = Vue.createApp({
       avatarError: "",
       // 右侧面板各分区的收起状态（true = 已折叠）。纯界面偏好，不持久化
       panelTab: "gen", // 右侧面板当前显示哪个标签：gen / char / profile / memory
+      // 会话内搜索：关键词与当前命中序号（0 基）。命中位置由 searchPlan 现算，不另存
+      searchQuery: "",
+      searchIndex: 0,
       // 我的设定：`profile` 是服务端最近一次确认的状态（消息区显示头像与名字用它），
       // `profileForm` 是正在编辑的表单，两者不一致就是"未保存"
       profile: emptyProfile(),
@@ -409,6 +412,40 @@ const app = Vue.createApp({
         ? this.messages
         : this.messages.filter((m) => !m.archived);
     },
+    // 会话内搜索的计划：把每条消息按"渲染块"切开，标出每块里命中的片段以及它们的
+    // 全局序号。一次算完，模板按 id 取用——渲染时不必再关心"这是第几个命中"。
+    // 只搜当前显示出来的消息（已归档且未展开的不参与），与用户看到的一致
+    searchPlan() {
+      const plan = { parts: {}, total: 0 };
+      if (!this.searchQuery.trim()) return plan;
+      // 转义后按正则搜：这样大小写不敏感，且命中位置直接是原串下标
+      // （先用 toLowerCase 再 indexOf 在少数 Unicode 上会因长度变化而错位）
+      const re = new RegExp(this.escapeRegExp(this.searchQuery.trim()), "gi");
+      let n = 0;
+      for (const m of this.displayMessages) {
+        const parts = [];
+        for (const p of this.textParts(m)) {
+          const pieces = [];
+          let last = 0;
+          let hit;
+          re.lastIndex = 0;
+          while ((hit = re.exec(p.text)) !== null) {
+            if (hit[0] === "") break; // 空匹配会死循环，理论上不会发生
+            if (hit.index > last) pieces.push({ text: p.text.slice(last, hit.index), hit: false });
+            pieces.push({ text: hit[0], hit: true, index: n++ });
+            last = hit.index + hit[0].length;
+          }
+          pieces.push({ text: p.text.slice(last), hit: false });
+          parts.push({ kind: p.kind, pieces });
+        }
+        plan.parts[m.id] = parts;
+      }
+      plan.total = n;
+      return plan;
+    },
+    searchTotal() {
+      return this.searchPlan.total;
+    },
   },
   watch: {
     activeSessionId() {
@@ -458,6 +495,15 @@ const app = Vue.createApp({
     },
     profileDirty(v) {
       if (!v) this.disarmRevert("profile");
+    },
+    // 换了关键词就从头开始数，并直接把第一处命中滚到眼前
+    searchQuery() {
+      this.searchIndex = 0;
+      this.scrollToHit();
+    },
+    // 命中数变少（消息被编辑/删除、归档折叠）时把序号夹回范围内
+    searchTotal(v) {
+      if (this.searchIndex >= v) this.searchIndex = 0;
     },
     memoryDirty(v) {
       if (!v) this.disarmRevert("memory");
@@ -518,7 +564,7 @@ const app = Vue.createApp({
       return m.role === "assistant" ? this.activeChar.name : this.profile.name || "";
     },
 
-    // 消息的发送时间。created_at 存的就是本地时间、格式固定为 "2026-09-21T12:34:45"
+    // 消息的时间。created_at 存的就是本地时间、格式固定为 "2026-09-21T12:34:45"
     // （database.now() 用 isoformat(timespec="seconds")），所以直接切片比 new Date()
     // 再格式化更稳：不走时区解析、不依赖浏览器对 ISO 串的解释，老数据也不会解析失败
     timeOf(m) {
@@ -816,6 +862,59 @@ const app = Vue.createApp({
       if (segs.length) return segs;
       // 只有空标记：没有可渲染的内容，别把裸标记当正文显示
       return sawTag ? [] : [{ type: "dialog", text }];
+    },
+
+    // 一条消息要渲染（也参与搜索）的文本块。MULTI 走分段，其余是"情境 + 正文"。
+    // 渲染与搜索共用它，两边的切法才不会不一致（否则命中数会对不上看到的字）
+    textParts(m) {
+      if (m.scenario === "MULTI") {
+        return this.segmentsOf(m).map((s) => ({ kind: s.type, text: s.text }));
+      }
+      const out = [];
+      if (m.scenario) out.push({ kind: "scenario", text: m.scenario });
+      out.push({ kind: "text", text: m.content || "" });
+      return out;
+    },
+
+    // 模板用的分块：有搜索计划就取它（带命中标记），否则退回纯文本块
+    partsOf(m) {
+      const planned = this.searchPlan.parts[m.id];
+      if (planned) return planned;
+      return this.textParts(m).map((p) => ({
+        kind: p.kind,
+        pieces: [{ text: p.text, hit: false }],
+      }));
+    },
+
+    // 关键词按字面搜，正则元字符要转义，否则搜 "a.b" 会命中 "axb"
+    escapeRegExp(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    },
+
+    // ---- 会话内搜索 ----
+    searchNext() {
+      this.searchStep(1);
+    },
+    searchPrev() {
+      this.searchStep(-1);
+    },
+    searchStep(step) {
+      const total = this.searchTotal;
+      if (!total) return;
+      // 环形移动：走到头再点就绕回另一端
+      this.searchIndex = ((this.searchIndex + step) % total + total) % total;
+      this.scrollToHit();
+    },
+    clearSearch() {
+      this.searchQuery = "";
+      this.searchIndex = 0;
+    },
+    // 把当前命中滚到视野中间。等 Vue 把 .current 类挂上去之后再找元素
+    scrollToHit() {
+      this.$nextTick(() => {
+        const el = document.querySelector(".search-hit.current");
+        if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
     },
 
     toggleChar(id) {
