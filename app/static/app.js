@@ -382,12 +382,16 @@ const app = Vue.createApp({
     anyDirty() {
       return this.genDirty || this.charDirty || this.memoryDirty;
     },
-    // 当前标签是否有未保存改动：面板顶部那一行"未保存 / 还原"按它显示。
+    // 当前标签是否有未保存改动：面板底部那一行"未保存 / 还原"按它显示。
     // 键名与 armRevert / revertArm 的取值一致（gen / char / memory）
     activeTabDirty() {
       if (this.panelTab === "char") return this.charDirty;
       if (this.panelTab === "memory") return this.memoryDirty;
       return this.genDirty;
+    },
+    // 面板底部的保存键对三个标签共用：角色设定在姓名为空时不能存（后端也要求非空）
+    saveDisabled() {
+      return this.panelTab === "char" && !this.charForm.name.trim();
     },
     displayMessages() {
       return this.showArchived
@@ -1329,10 +1333,12 @@ const app = Vue.createApp({
       }
     },
 
-    async removeCharacter() {
-      const c = this.activeSession.character;
-      if (!(await this.ask(`删除角色「${c.name}」？其记忆将删除，已有会话保留但无法继续生成。`))) return;
-      await this.deleteCharacter(c.id);
+    // 面板底部那个"保存当前配置"：三个标签各管各的数据，按钮只按当前标签转发。
+    // 这样底部只要一个常驻按钮，不必在每个标签内容里各放一个
+    saveCurrentTab() {
+      if (this.panelTab === "char") return this.saveCharacterDrawer();
+      if (this.panelTab === "memory") return this.saveMemory();
+      return this.saveGenSettings();
     },
 
     async removeCharacterFromModal() {

@@ -1180,12 +1180,24 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
 
 /* 与标签栏一样放在滚动容器外面：改过之后"还原"键一直够得着 */
 .panel-tab-actions {
-  flex: none;
-  padding: 8px 16px 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+}
+
+/* ---------- 面板底部常驻的保存区 ---------- */
+/* 保存键与"未保存 / 还原"固定在面板底部：内容再长也不会跟着滚走、不会被内容量挤位置
+   （原先是每个标签内容末尾各放一个保存键，三处文案还不一样）。
+   底色与面板一致，内容滚到它底下时不会透上来 */
+.panel-footer {
+  flex: none;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .panel-tab-pane {
@@ -1439,13 +1451,6 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   padding: 0 5px;
   margin-right: 6px;
   vertical-align: 1px;
-}
-
-.panel-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 4px;
 }
 
 .hint { font-size: 12px; color: var(--text-soft); margin: 0; }

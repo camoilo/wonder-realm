@@ -168,6 +168,23 @@ check("时间样式在", ".msg-time {" in css, True)
 check("有时间格式化方法", "timeOf(m)" in js and "fullTimeOf(m)" in js, True)
 check("时间取 created_at 的时分秒", 's.slice(11, 19)' in js, True)
 
+# ---- 面板底部常驻的保存区 ----
+check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)
+check("面板里旧的保存文案已清除",
+      [w for w in ("保存生成要求", "保存记忆") if w in html], [])
+check("保存区在滚动容器之外",
+      html.index('class="panel-footer"') > html.index('class="panel-body"'), True)
+check("保存区不参与伸缩", ".panel-footer {" in css and "flex: none;" in css, True)
+check("未保存 / 还原移到了保存区",
+      html.index('class="dirty-flag"') > html.index('class="panel-footer"'), True)
+check("保存按当前标签派发",
+      'if (this.panelTab === "char") return this.saveCharacterDrawer();' in js
+      and "return this.saveMemory();" in js and "return this.saveGenSettings();" in js, True)
+check("姓名为空时不能保存", "saveDisabled()" in js and ":disabled=\"saveDisabled\"" in html, True)
+check("面板里不再有删除角色", html.count(">删除角色</button>"), 1)  # 只剩角色弹窗里那个
+check("面板用的删除方法已删除", "async removeCharacter()" in js, False)
+check("弹窗用的删除方法还在", "removeCharacterFromModal" in js, True)
+
 # 生成区说明里要交代模型与思考开关（用户问过生成是否跟随它们）
 check("生成区说明提到当前模型", "用当前选中的模型" in html, True)
 check("生成区说明提到思考开关", "跟着顶栏的思考开关走" in html, True)
