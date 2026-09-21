@@ -277,6 +277,24 @@ check("标题在模式按钮之前",
       html.index('class="side-label"') < html.index('class="mode-tabs"'), True)
 check("标题样式在", ".side-label {" in css, True)
 
+
+def css_block(sel):
+    m = re.search(re.escape(sel) + r"\s*\{([^}]*)\}", css)
+    return m.group(1) if m else ""
+
+
+def css_font_size(sel):
+    m = re.search(r"font-size:\s*(\d+)px", css_block(sel))
+    return int(m.group(1)) if m else 0
+
+
+# 用户要求：标题居中加粗、字号调大，并在与模式按钮之间加一条分隔线
+sl = css_block(".side-label")
+check("标题居中", "text-align: center;" in sl, True)
+check("标题加粗", "font-weight: 700;" in sl, True)
+check("标题字号比模式按钮大", css_font_size(".side-label") > css_font_size(".mode-tab"), True)
+check("标题底部有分隔线", "border-bottom: 1px solid var(--border);" in sl, True)
+
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)
 check("面板里旧的保存文案已清除",

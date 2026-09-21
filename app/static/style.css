@@ -63,13 +63,16 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 
-/* 左侧栏顶部的小标题：说明下面这排按钮是干什么的 */
+/* 左侧栏顶部的小标题：说明下面这排按钮是干什么的。
+   比按钮本身更醒目（加大加粗居中），并用一条分隔线把它和模式按钮分开 */
 .side-label {
-  padding: 12px 12px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-soft);
-  letter-spacing: 0.5px;
+  padding: 14px 12px 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 1px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
 }
 
 .mode-tab {
