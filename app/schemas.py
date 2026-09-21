@@ -60,6 +60,27 @@ class ProfileIn(BaseModel):
         return _check_avatar(v)
 
 
+class WorldTerm(BaseModel):
+    """词库的一条：专有名词 + 它的解释。两项都能留空——空行在保存时被丢弃。"""
+
+    term: str = Field(default="", max_length=LIMITS["world_term"])
+    meaning: str = Field(default="", max_length=LIMITS["world_term_meaning"])
+
+
+class WorldIn(BaseModel):
+    """世界设定（全局一份）。四项全可选，什么都不填就是"没有世界设定"。
+
+    `name` 只给自己辨认，**不进提示词**；其余三项进提示词（见 prompts._world_block）。
+    """
+
+    name: str = Field(default="", max_length=LIMITS["world_name"])
+    description: str = Field(default="", max_length=LIMITS["world_description"])
+    rules: str = Field(default="", max_length=LIMITS["world_rules"])
+    terms: list[WorldTerm] = Field(
+        default_factory=list, max_length=LIMITS["world_terms_max"]
+    )
+
+
 class CharacterCreateIn(CharacterIn):
     """新建角色。带 draft_id 时说明这一份来自模型生成的草稿。
 

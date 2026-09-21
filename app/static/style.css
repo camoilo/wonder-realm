@@ -1254,6 +1254,37 @@ mark.search-hit.current {
 .preset-select:focus { outline: 2px solid rgba(63, 106, 216, 0.25); }
 .preset-row .ghost-btn { flex: none; padding: 6px 10px; font-size: 12.5px; }
 
+/* ---------- "世界设定"里的词库 ---------- */
+/* 一条词条 = 名词 + 解释，各自带字数计数。用小卡片分隔，避免几条连在一起看不出一条到哪结束 */
+.term-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+.term-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+.term-del {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.term-del:hover { color: var(--error-text); border-color: var(--border); background: #fff; }
+
 /* ---------- 右侧面板的标签页 ---------- */
 /* 三个分区改成一次只显示一块的标签页（原先是"整行可点折叠"）。
    未保存的改动在对应标签右上角点一个圆点，选中标签的内容区顶部显示"未保存 / 还原"。
@@ -1263,6 +1294,10 @@ mark.search-hit.current {
   flex: none;
   padding: 12px 16px 8px;
   display: flex;
+  /* 角色模式下有 5 个标签（生成要求 / 世界设定 / 角色设定 / 我的设定 / 记忆）。
+     330px 面板里等分下来每个只有约 56px，而四个字的标签要 68px——不换行就会被截成
+     "生成要…"。换行只在角色模式出现（其它模式只有 3 个标签，仍是一行）。见 10.44 */
+  flex-wrap: wrap;
   gap: 4px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 6px;
@@ -1270,7 +1305,11 @@ mark.search-hit.current {
 
 .panel-tab {
   position: relative;
-  flex: 1;
+  /* 换行后每行自己等分。基准取 30% 是量出来的：330px 面板扣掉内边距只剩 298px，
+     30%（≈89px）刚好一行放 3 个、第 4 个换行，于是 5 个标签排成 3+2；
+     若取 33% 就会变成 2+2+1，取 56px 则 5 个挤在一行、每格只有 56px 而四个汉字要 56px 以上，
+     会被截成"生成要…"（实测过）。自由情境模式只有 3 个标签，仍是一行 */
+  flex: 1 1 30%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1768,6 +1807,13 @@ mark.search-hit.current {
 
 /* 生成提示词那栏在 .gen-box 里有自己的 padding 规则（更具体），单行提示要让开 */
 .gen-box .counted > input { padding: 8px 64px 8px 10px; }
+
+/* 词库那两栏在 330px 面板里本来就只有两百来像素宽，计数再吃掉 64px 就太挤：
+   名词一栏只有 30 字上限、计数是 "0/30" 这种短串，收紧到 46px 足够
+   （与上面同类覆盖一样，靠顺序压住 .field .counted > input） */
+.term-row .counted > input { padding-right: 46px; }
+.term-row .counted > textarea { padding-bottom: 24px; }
+.term-row .char-count.inline { right: 8px; }
 
 /* 输入框让出底部一行后，内容高度会被压缩，这里把下限补回来（否则等于缩小了输入区） */
 .input-row textarea { min-height: 100px; }

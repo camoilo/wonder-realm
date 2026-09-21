@@ -219,6 +219,39 @@ def _memory_block(memory_content: str) -> str:
     )
 
 
+def _world_block(world) -> str:
+    """世界设定。**名称不进来**（用户要求：只给自己辨认）；其余三项都空就整块不出现。
+
+    三种模式都注入，位置在角色设定之前——世界是最外层的框架，"你身处这个世界、并且扮演
+    这个角色"比反过来自然。
+    """
+    w = world or {}
+    description = (w.get("description") or "").strip()
+    rules = (w.get("rules") or "").strip()
+    terms = []
+    for t in w.get("terms") or []:
+        term = (t.get("term") or "").strip()
+        if not term:
+            continue
+        meaning = (t.get("meaning") or "").strip()
+        terms.append(f"- {term}：{meaning}" if meaning else f"- {term}")
+    if not (description or rules or terms):
+        return ""
+    parts = ["# 世界设定"]
+    if description:
+        parts.append(f"描述：{description}")
+    if rules:
+        parts.append(f"规则：{rules}")
+    if terms:
+        parts.append("词库：")
+        parts.extend(terms)
+    parts.append(
+        "以上是这个世界的既定设定：描述与规则必须遵守，词库里的专有名词按给定含义使用，"
+        "不要改写这些设定，也不要向用户复述这份设定。"
+    )
+    return "\n".join(parts) + "\n\n"
+
+
 def _user_block(profile) -> str:
     """用户本人的设定。三项都没填就整块不出现——不要给模型一段空标签。
 
@@ -246,11 +279,12 @@ def _user_block(profile) -> str:
 
 
 def build_character_chat_system(
-    character, memory_content: str, settings: dict, profile=None
+    character, memory_content: str, settings: dict, profile=None, world=None
 ) -> str:
     name = character["name"]
     return (
         "你要完全扮演下面这个角色，与用户进行对话。\n\n"
+        + _world_block(world)
         + _character_block(character)
         + _user_block(profile)
         + _memory_block(memory_content)
@@ -263,10 +297,11 @@ def build_character_chat_system(
 
 
 def build_character_scenario_system(
-    character, memory_content: str, settings: dict, profile=None
+    character, memory_content: str, settings: dict, profile=None, world=None
 ) -> str:
     return (
         "你要扮演下面这个角色，与用户在同一个故事情境中互动。\n\n"
+        + _world_block(world)
         + _character_block(character)
         + _user_block(profile)
         + _memory_block(memory_content)
@@ -284,12 +319,13 @@ def build_character_scenario_system(
     )
 
 
-def build_free_scenario_system(memory_content: str, settings: dict) -> str:
+def build_free_scenario_system(memory_content: str, settings: dict, world=None) -> str:
     # 这个模式没有独立的"导演指令"字段：用户在对话里发的内容本身就是对下一步的指令，
     # 再单设一个字段属于重复，且会让"当前指令"分散在两处。
     return (
         "你是创意写作引擎，根据用户的引导生成故事情境与角色对话。\n\n"
-        "# 本会话此前的剧情\n"
+        + _world_block(world)
+        + "# 本会话此前的剧情\n"
         f"{memory_content.strip() or '（暂无，这是新的故事）'}\n\n"
         "# 生成要求\n"
         f"{render_free_scenario_settings(settings)}\n\n"
@@ -303,16 +339,23 @@ def build_free_scenario_system(memory_content: str, settings: dict) -> str:
     )
 
 
-def build_system_prompt(session, character, memory_content: str, profile=None) -> str:
+def build_system_prompt(
+    session, character, memory_content: str, profile=None, world=None
+) -> str:
     mode = session["mode"]
     settings = get_gen_settings(session)
     if mode == "character_chat" and character is not None:
-        return build_character_chat_system(character, memory_content, settings, profile)
+        return build_character_chat_system(
+            character, memory_content, settings, profile, world
+        )
     if mode == "character_scenario" and character is not None:
-        return build_character_scenario_system(character, memory_content, settings, profile)
+        return build_character_scenario_system(
+            character, memory_content, settings, profile, world
+        )
     if mode == "free_scenario":
-        # 自由情境不注入"我的设定"：那里没有"我是谁"，写故事的人不是故事里的角色
-        return build_free_scenario_system(memory_content, settings)
+        # 自由情境不注入"我的设定"：那里没有"我是谁"，写故事的人不是故事里的角色。
+        # 但世界设定要注入：故事就发生在那个世界里
+        return build_free_scenario_system(memory_content, settings, world)
     return "你是一个友好的中文对话助手，回答简洁自然。"
 
 
@@ -330,10 +373,10 @@ def _restore_history(mode: str, row) -> str:
 
 
 def build_messages(
-    session, character, memory_content: str, history_rows, profile=None
+    session, character, memory_content: str, history_rows, profile=None, world=None
 ) -> list[dict]:
     mode = session["mode"]
-    system = build_system_prompt(session, character, memory_content, profile)
+    system = build_system_prompt(session, character, memory_content, profile, world)
     limit = get_config()["chat"]["history_max_messages"]
     msgs = [{"role": "system", "content": system}]
     for r in history_rows[-limit:]:

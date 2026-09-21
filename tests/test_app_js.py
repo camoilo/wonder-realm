@@ -125,8 +125,8 @@ check("宽度规则不作用于右侧面板",
 
 # ---- 右侧面板改成标签页 ----
 check("有标签栏", html.count('class="panel-tabs"'), 1)
-check("标签按钮（模板里四个，自由情境少两个）", html.count('class="panel-tab"'), 4)
-check("内容面板（模板里四个）", html.count("panel-tab-pane"), 4)
+check("标签按钮（模板里五个，自由情境少两个）", html.count('class="panel-tab"'), 5)
+check("内容面板（模板里五个）", html.count("panel-tab-pane"), 5)
 check("旧的折叠结构已清除",
       [w for w in ("panel-section", "panelFold", "togglePanelFold") if (w in html or w in js)], [])
 check("CSS 里的折叠样式已清除", ".panel-section" in css, False)
@@ -136,7 +136,7 @@ check("切到没有该标签的会话时有兜底", "fixPanelTab" in js, True)
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量（含我的设定三项）", counters, 21)
+check("计数提示数量（含我的设定三项、世界设定三项与词条两项）", counters, 26)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）；会话内搜索框是
@@ -204,6 +204,28 @@ check("头像归属有统一入口", "avatarForm(target)" in js, True)
 check("我的设定有独立的脏标记与还原", "profileDirty" in js and 'section === "profile"' in js, True)
 check("保存派发包含我的设定", 'if (this.panelTab === "profile") return this.saveProfile();' in js, True)
 check("启动时加载我的设定", 'await this.api("/api/profile")' in js, True)
+
+# ---- 世界设定（全局一份，三种模式都用得上） ----
+check("有世界设定标签", ">世界设定<span" in html, True)
+check("世界设定面板在", "panelTab === 'world'" in html, True)
+check("世界设定标签不判模式（自由情境也显示）",
+      "v-if" not in re.search(r"<button([^>]*)panelTab = 'world'", html).group(1), True)
+check("世界设定有独立的脏标记与还原", "worldDirty" in js and 'section === "world"' in js, True)
+check("保存派发包含世界设定", 'if (this.panelTab === "world") return this.saveWorld();' in js, True)
+check("启动时加载世界设定", 'await this.api("/api/world")' in js, True)
+check("词条可增可删", "addTerm()" in js and "removeTerm(index)" in js, True)
+check("到上限后不能再加词条",
+      ':disabled="worldForm.terms.length >= limits.world_terms_max"' in html, True)
+check("名称注明不发给模型", "只用于自己辨认，不发给模型" in html, True)
+check("词库说明写清空行会被丢弃", "名词留空的行在保存时自动丢弃" in html, True)
+# 5 个标签在 330px 面板里等分只有约 56px，四字标签需要约 68px：必须能换行
+tabs_css = re.search(r"\.panel-tabs \{[^}]*\}", css)
+check("标签栏可换行", bool(tabs_css) and "flex-wrap: wrap;" in tabs_css.group(0), True)
+check("标签栏仍不参与伸缩", bool(tabs_css) and "flex: none;" in tabs_css.group(0), True)
+# 实测：基准 56px 时 5 个标签挤在一行、每格 56px，四个汉字要 56px 以上 → 被截成"生成要…"；
+# 30% 时排成 3+2、每格 97px，不截断。改这个数字前请重新量一遍
+tab_css = re.search(r"\.panel-tab \{[^}]*\}", css)
+check("标签基准宽度能排下三个（30%）", bool(tab_css) and "flex: 1 1 30%;" in tab_css.group(0), True)
 check("消息按模式取名字", "msgName(m)" in js and "msgName(m)" in html, True)
 check("用户头像列有显示条件", "showUserSide" in js and "showUserSide" in html, True)
 check("自由情境不显示用户头像列", "return !!this.activeChar && !!(this.profile.avatar || this.profile.name);" in js, True)

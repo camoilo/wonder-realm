@@ -152,6 +152,10 @@ const LOCKED_FIELDS = ["personality", "speech_style", "backstory"];
 // "我的设定"（用户本人）。全局单行，与角色无关；三项都可以留空
 const emptyProfile = () => ({ name: "", identity: "", appearance: "", avatar: "" });
 
+// "世界设定"。全局一份，与角色/会话无关；四项都可以留空。
+// terms 是词库：[{term, meaning}]，顺序就是注入提示词的顺序。
+const emptyWorld = () => ({ name: "", description: "", rules: "", terms: [] });
+
 const emptyGenerator = () => ({
   hint: "",
   mode: "open", // open = 全部直接展示；explore = 只公开姓名与外观
@@ -230,11 +234,11 @@ const app = Vue.createApp({
       charSaved: emptyCharForm(),
       memorySaved: "",
       // "还原"键的两次点击状态：第一次只是武装，再点一次才真的回退
-      revertArm: { gen: false, char: false, profile: false, memory: false },
+      revertArm: { gen: false, char: false, profile: false, memory: false, world: false },
       // 头像校验/裁剪的就地提示（底部错误条在没打开会话时不渲染，不能承担这个角色）
       avatarError: "",
       // 右侧面板各分区的收起状态（true = 已折叠）。纯界面偏好，不持久化
-      panelTab: "gen", // 右侧面板当前显示哪个标签：gen / char / profile / memory
+      panelTab: "gen", // 右侧面板当前显示哪个标签：gen / world / char / profile / memory
       // 会话内搜索：关键词与当前命中序号（0 基）。命中位置由 searchPlan 现算，不另存
       searchQuery: "",
       searchIndex: 0,
@@ -247,12 +251,18 @@ const app = Vue.createApp({
       profilePresets: [],
       presetPick: "",
       presetError: "",
+      // 世界设定：全局一份，三种模式都注入提示词（名称只给自己看、不进提示词）。
+      // 与"我的设定"同样的两份：`world` 是服务端确认过的状态，`worldForm` 是正在编辑的表单
+      world: emptyWorld(),
+      worldForm: emptyWorld(),
       // 各输入框的字数上限。与后端 app/limits.py 一致，init() 时用 /api/limits 覆盖，
       // 这里的默认值只是兜底（拿不到接口也不至于没有限制）
       limits: {
         message: 2000, scenario: 2000, name: 20, appearance: 600, personality: 600,
         speech_style: 600, backstory: 1200, genre: 60, extra: 500, hint: 200,
         memory: 2000, title: 40, user_name: 20, identity: 300, user_appearance: 600,
+        world_name: 40, world_description: 2000, world_rules: 2000, world_term: 30,
+        world_term_meaning: 150, world_terms_max: 30,
       },
       // 对话区背景：图片、当前第几张、上限、就地提示
       bgImages: [],
@@ -394,18 +404,26 @@ const app = Vue.createApp({
     profileDirty() {
       return !this.sameSnapshot(this.profileForm, this.profile);
     },
+    worldDirty() {
+      return !this.sameSnapshot(this.worldForm, this.world);
+    },
     anyDirty() {
-      return this.genDirty || this.charDirty || this.profileDirty || this.memoryDirty;
+      return (
+        this.genDirty || this.charDirty || this.profileDirty ||
+        this.memoryDirty || this.worldDirty
+      );
     },
     // 当前标签是否有未保存改动：面板底部那一行"未保存 / 还原"按它显示。
-    // 键名与 armRevert / revertArm 的取值一致（gen / char / profile / memory）
+    // 键名与 armRevert / revertArm 的取值一致（gen / world / char / profile / memory）
     activeTabDirty() {
+      if (this.panelTab === "world") return this.worldDirty;
       if (this.panelTab === "char") return this.charDirty;
       if (this.panelTab === "profile") return this.profileDirty;
       if (this.panelTab === "memory") return this.memoryDirty;
       return this.genDirty;
     },
-    // 面板底部的保存键四个标签共用：只有角色设定要求姓名非空（后端也要求）
+    // 面板底部的保存键几个标签共用：只有角色设定要求姓名非空（后端也要求）；
+    // 世界设定与"我的设定"一样可以全空保存
     saveDisabled() {
       return this.panelTab === "char" && !this.charForm.name.trim();
     },
@@ -631,6 +649,7 @@ const app = Vue.createApp({
       if (section === "gen") this.genForm = this.snapshot(this.genSaved);
       else if (section === "char") this.charForm = this.snapshot(this.charSaved);
       else if (section === "profile") this.profileForm = this.snapshot(this.profile);
+      else if (section === "world") this.worldForm = this.snapshot(this.world);
       else if (section === "memory") this.memoryText = this.memorySaved;
     },
 
@@ -709,6 +728,14 @@ const app = Vue.createApp({
         await this.loadPresets();
       } catch (e) {
         /* 拿不到就用空值，面板里照样能填 */
+      }
+      // "世界设定"同样是全局的，也只在启动时取一次；保存后由 saveWorld 刷新
+      try {
+        const w = await this.api("/api/world");
+        this.world = w;
+        this.worldForm = this.snapshot(w);
+      } catch (e) {
+        /* 拿不到就用空值 */
       }
       try {
         this.models = await this.api("/api/models");
@@ -1475,13 +1502,25 @@ const app = Vue.createApp({
       }
     },
 
-    // 面板底部那个"保存当前配置"：四个标签各管各的数据，按钮只按当前标签转发。
+    // 面板底部那个"保存当前配置"：几个标签各管各的数据，按钮只按当前标签转发。
     // 这样底部只要一个常驻按钮，不必在每个标签内容里各放一个
     saveCurrentTab() {
+      if (this.panelTab === "world") return this.saveWorld();
       if (this.panelTab === "char") return this.saveCharacterDrawer();
       if (this.panelTab === "profile") return this.saveProfile();
       if (this.panelTab === "memory") return this.saveMemory();
       return this.saveGenSettings();
+    },
+
+    // ---- 世界设定（全局一份，三种模式都注入） ----
+    // 加一条空词条：界面上先出现输入框，名词留空的行保存时由后端丢弃
+    addTerm() {
+      if (this.worldForm.terms.length >= this.limits.world_terms_max) return;
+      this.worldForm.terms.push({ term: "", meaning: "" });
+    },
+
+    removeTerm(index) {
+      this.worldForm.terms.splice(index, 1);
     },
 
     // 我的设定：整体覆盖式保存；成功后以服务端返回为准刷新基线与显示用的 profile
@@ -1490,6 +1529,18 @@ const app = Vue.createApp({
         const p = await this.api("/api/profile", this.jsonOpts("PUT", this.profileForm));
         this.profile = p;
         this.profileForm = this.snapshot(p);
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    // 世界设定：整体覆盖式保存。服务端会把"名词为空的行"丢掉、把文本 strip 掉，
+    // 所以用返回结果刷新表单——用户会看到那行空词条自己消失了
+    async saveWorld() {
+      try {
+        const w = await this.api("/api/world", this.jsonOpts("PUT", this.worldForm));
+        this.world = w;
+        this.worldForm = this.snapshot(w);
       } catch (e) {
         this.error = e.message;
       }

@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
 from . import memory, naming, ollama_client
-from .database import connect, now, read_profile
+from .database import connect, now, read_profile, read_world
 from .parser import parse_output
 from .prompts import build_messages, chat_options
 
@@ -67,8 +67,11 @@ def prepare_generation(con, sid: int):
     if not model:
         # 没选模型时说人话。含糊地把空模型名发给 Ollama 只会换回一句看不懂的报错
         raise HTTPException(400, "还没有选择模型，请先在顶栏选择一个已安装的模型")
-    # "我的设定"是全局单行，跟着一起组装；自由情境模式在 prompts 里会忽略它
-    msgs = build_messages(session, character, memory_content, rows, read_profile())
+    # "我的设定"是全局单行，"世界设定"同样是全局一份，跟着一起组装；
+    # 自由情境模式在 prompts 里会忽略前者、但仍会用后者
+    msgs = build_messages(
+        session, character, memory_content, rows, read_profile(), read_world()
+    )
     return msgs, model, session["mode"], chat_options(session)
 
 

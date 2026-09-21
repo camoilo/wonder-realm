@@ -20,7 +20,7 @@ from app.limits import LIMITS  # noqa: E402
 from app.prompts import FIELDS  # noqa: E402
 from app.routes import settings as settings_routes  # noqa: E402
 from app.schemas import (  # noqa: E402
-    ChatIn, CharacterIn, GenerateIn, MemoryEdit, MessageEdit, SessionIn, SessionPatch,
+    ChatIn, CharacterIn, GenerateIn, MemoryEdit, MessageEdit, SessionIn, SessionPatch, WorldIn,
 )
 
 FAILED = []
@@ -47,6 +47,10 @@ CASES = [
     ("编辑消息情境", MessageEdit, {}, "scenario", LIMITS["scenario"]),
     ("记忆内容", MemoryEdit, {}, "content", LIMITS["memory"]),
     ("生成角色提示词", GenerateIn, {}, "hint", LIMITS["hint"]),
+    # 世界设定：名称只给自己看，描述/规则进提示词（词库的嵌套上限在 test_world.py 里测）
+    ("世界名称", WorldIn, {}, "name", LIMITS["world_name"]),
+    ("世界描述", WorldIn, {}, "description", LIMITS["world_description"]),
+    ("世界规则", WorldIn, {}, "rules", LIMITS["world_rules"]),
 ]
 
 for label, cls, base, field, limit in CASES:

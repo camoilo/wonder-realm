@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -92,6 +93,20 @@ CREATE TABLE IF NOT EXISTS user_profile (
     avatar     TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL
 );
+
+-- 世界设定（右侧面板的"世界设定"）。**全局一份**，约定 id=1，三种模式都注入提示词。
+-- 同样不写 CHECK(id=1)：以后若要做"多世界切换"，往这张表插 id>1 的行即可（同 10.39 的预设）。
+-- 单开一张表而不是给 app_settings 加列：新表对已有库也会建出来（见 4.2），无需用户删库。
+-- terms 存 JSON 数组 [{"term": ..., "meaning": ...}]：它有序、可增删，整体读写最省事；
+-- 名称只给自己辨认，**不进提示词**（用户明确要求）。
+CREATE TABLE IF NOT EXISTS world (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    rules       TEXT NOT NULL DEFAULT '',
+    terms       TEXT NOT NULL DEFAULT '[]',
+    updated_at  TEXT NOT NULL
+);
 """
 
 DB_PATH: Path | None = None
@@ -124,6 +139,8 @@ def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -
     con.execute(
         "INSERT OR IGNORE INTO user_profile(id, updated_at) VALUES(1, ?)", (now(),)
     )
+    # "世界设定"同理（全局一份）
+    con.execute("INSERT OR IGNORE INTO world(id, updated_at) VALUES(1, ?)", (now(),))
     con.commit()
     con.close()
 
@@ -278,6 +295,86 @@ def delete_preset(preset_id: int) -> bool:
         return cur.rowcount > 0
     finally:
         con.close()
+
+
+# ---- 世界设定：全局一份（id=1），三种模式都注入提示词 ----
+
+WORLD_FIELDS = ("name", "description", "rules", "terms")
+
+
+def _parse_terms(raw: str) -> list[dict]:
+    """词库那串 JSON 出库时解成 [{"term", "meaning"}]。
+
+    解不出来（手改过库、字段被写坏）时退回空列表：这里宁可能力降级，也不要让整次读取、
+    进而让整个生成都失败——词库只是锦上添花。
+    """
+    try:
+        data = json.loads(raw or "[]")
+    except ValueError:
+        return []
+    if not isinstance(data, list):
+        return []
+    out = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "term": str(item.get("term") or ""),
+                "meaning": str(item.get("meaning") or ""),
+            }
+        )
+    return out
+
+
+def read_world() -> dict:
+    """世界设定。行不存在时返回空设定，调用方不必判 None（init_db 会补行）。"""
+    con = connect()
+    try:
+        row = con.execute(
+            "SELECT name, description, rules, terms FROM world WHERE id=1"
+        ).fetchone()
+    finally:
+        con.close()
+    if not row:
+        return {"name": "", "description": "", "rules": "", "terms": []}
+    return {
+        "name": row["name"],
+        "description": row["description"],
+        "rules": row["rules"],
+        "terms": _parse_terms(row["terms"]),
+    }
+
+
+def write_world(values: dict) -> dict:
+    """整体覆盖式写入（表单就是整体提交的），返回写入后的结果。
+
+    文本的 strip 与"丢掉名词为空的行"都在这里做，而不是丢给接口：读（`_parse_terms`）与写
+    是一对形状规则，放一处才不会出现"某个调用方写进去的行读出来是坏的"。名词为空的行直接
+    丢弃——界面上刚点出来、还没填的空行不该让整次保存失败。
+    """
+    terms = []
+    for item in values.get("terms") or []:
+        term = str(item.get("term") or "").strip()
+        if not term:
+            continue
+        terms.append({"term": term, "meaning": str(item.get("meaning") or "").strip()})
+    con = connect()
+    try:
+        con.execute(
+            "UPDATE world SET name=?, description=?, rules=?, terms=?, updated_at=? WHERE id=1",
+            (
+                str(values.get("name") or "").strip(),
+                str(values.get("description") or "").strip(),
+                str(values.get("rules") or "").strip(),
+                json.dumps(terms, ensure_ascii=False),
+                now(),
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return read_world()
 
 
 def read_settings() -> dict:
