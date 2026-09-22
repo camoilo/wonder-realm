@@ -2,7 +2,7 @@
 //
 // 只依赖 state.js（唯一的 reactive 对象），不 import 别的领域模块 —— 依赖是星形的，
 // 所以不存在循环依赖；跨领域的调用都走 store.xxx（运行时才解析）。
-import { store } from "./state.js";
+import { chatBoxEl, store } from "./state.js";
 import { computed, nextTick } from "vue";
 import { CONTINUE_PROMPT, SEGMENT_RE, isScenarioTag } from "./helpers.js";
 

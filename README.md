@@ -268,7 +268,7 @@ uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
 uv run python tests/test_parser.py         # 输出解析与分段
 uv run python tests/test_naming.py         # 标题清洗、建表
 uv run python tests/test_character_gen.py  # 角色生成草稿与探索模式锁定
-uv run python tests/test_app_js.py         # 前端结构、data/computed/methods 重名检查
+uv run python tests/test_app_js.py         # 前端结构、重名检查、每个 store 模块的导入来源
 uv run python tests/test_limits.py         # 各输入的字数上限（前后端同一份）
 uv run python tests/test_profile.py        # 我的设定的预设 + 未选模型时的行为
 uv run python tests/test_context.py        # 记忆阈值必须留在 num_ctx 窗口内

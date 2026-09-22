@@ -4,7 +4,7 @@
 // 所以不存在循环依赖；跨领域的调用都走 store.xxx（运行时才解析）。
 import { store } from "./state.js";
 import { computed } from "vue";
-import { AVATAR_OUT_PX, AVATAR_QUALITY, BG_MAX_COUNT, BG_MAX_PX, BG_QUALITY, CROP_MAX_ZOOM, CROP_VIEW_PX, LOCKED_FIELDS, avatarFileError, avatarImageError, backgroundFileError, backgroundImageError, clampOffset, coverScale, cropSourceRect, encodeJpeg, fitSize, loadImage, readAsDataURL, zoomAroundCenter } from "./helpers.js";
+import { AVATAR_OUT_PX, AVATAR_QUALITY, BG_MAX_COUNT, BG_MAX_PX, BG_QUALITY, CROP_MAX_ZOOM, CROP_VIEW_PX, LOCKED_FIELDS, avatarFileError, avatarImageError, backgroundFileError, backgroundImageError, clampOffset, coverScale, cropSourceRect, emptyCharModal, encodeJpeg, fitSize, loadImage, readAsDataURL, zoomAroundCenter } from "./helpers.js";
 
 // 本模块独有的可变私有状态（原来在 store.js 顶层；别放进 helpers，因为它是 let、会被赋值）
 let cropImage = null;

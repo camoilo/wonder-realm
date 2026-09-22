@@ -1614,7 +1614,9 @@ _SKIP = {
     "Math", "JSON", "Object", "Array", "String", "Number", "Boolean", "Date", "RegExp",
     "Error", "Promise", "Map", "Set", "Number", "parseInt", "parseFloat", "isNaN",
     "window", "document", "console", "setTimeout", "clearTimeout", "$event",
-    "MODES",  # 模块级常量，从 store.js 具名导入，不算 store 成员
+    # 注意：MODES 这类"从 store.js 具名导入的模块级常量"**不放进白名单** ——
+    # 放进来等于"组件用了却不导入也算过"，而它同样是漏导入就会 ReferenceError 的名字。
+    # 组件自己 import 了，就会出现在下面 _declared 里，不会误报。
 }
 
 
@@ -2002,6 +2004,78 @@ check("预设样式在", ".preset-row {" in css and ".preset-select {" in css, T
 check("启动时若没选模型会提示", "还没有选择模型，生成前请先在左边选一个" in js, True)
 check("没选模型时思考开关置灰",
       "if (!this.currentModel) return false;" in js and "还没有选择模型，先在左边选一个" in js, True)
+
+# ---- 拆 store 后的守卫：模块里用到的"模块级名字"必须导入或就地声明（10.47） ----
+# 星形依赖的代价是每个模块都得自己 import 用到的 helper。漏一个，打包器不会吭声
+# （ESM 是静态的，缺的标识符只在真的执行到那一行才 ReferenceError），于是
+# "点开角色弹窗就崩"这种问题只能靠人拿浏览器点出来。这里把它变成静态检查。
+_LIT = re.compile(
+    r'"(?:\\.|[^"\\])*"' r"|'(?:\\.|[^'\\])*'" r"|`(?:\\.|[^`\\])*`"
+    r"|//[^\n]*" r"|/\*.*?\*/", re.S)
+_VUE_APIS = ("computed", "watch", "watchEffect", "nextTick", "reactive", "ref", "toRefs",
+             "onMounted", "onBeforeUnmount", "shallowRef")
+
+
+def _declared_names(src: str) -> set:
+    """顶层声明（含 export）与顶层解构出来的名字。"""
+    out = set(re.findall(
+        r"^(?:export\s+)?(?:const|let|var|function|async\s+function|class)\s+([A-Za-z_$][\w$]*)",
+        src, re.M))
+    for _m in re.finditer(r"^(?:export\s+)?(?:const|let|var)\s*\{([^}]*)\}", src, re.M):
+        for _part in _m.group(1).split(","):
+            _n = _part.split(":")[-1].strip().split("=")[0].strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", _n):
+                out.add(_n)
+    return out
+
+
+def _local_names(src: str) -> set:
+    """模块里本地可用的名字：import 进来的（含 as 重命名）+ 顶层声明的。"""
+    out = _declared_names(src)
+    for _re_m in re.finditer(r"^export\s*\{([^}]*)\}\s*from\s*[\"'][^\"']+[\"'];", src, re.M):
+        for _p in _re_m.group(1).split(","):  # barrel 的转发导出
+            _n = _p.split(" as ")[-1].strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", _n):
+                out.add(_n)
+    for _im in re.finditer(r"^import\s+(.+?)\s+from\s+[\"'][^\"']+[\"'];", src, re.M):
+        _clause = _im.group(1)
+        _dm = re.match(r"([A-Za-z_$][\w$]*)", _clause)
+        if _dm:
+            out.add(_dm.group(1))
+        _br = re.search(r"\{([^}]*)\}", _clause, re.S)
+        if _br:
+            for _p in _br.group(1).split(","):
+                _n = _p.strip().split(" as ")[-1].strip()
+                if re.fullmatch(r"[A-Za-z_$][\w$]*", _n):
+                    out.add(_n)
+    return out
+
+
+def _uses(code: str, name: str) -> bool:
+    # 先把展开/剩余运算符 ...x 抹平：否则 "..." 会被误当成属性访问而漏判
+    # （第一版生成器就是这样漏掉 ...emptyCharModal() 的）
+    return re.search(r"(?<![\w$.])" + re.escape(name) + r"(?![\w$])",
+                     code.replace("...", " ")) is not None
+
+
+# 待查的"外部名字"= 所有 store 模块顶层声明的名字（helpers 的常量/纯函数、state 里的
+# 私有量与导出……凡是在别处顶层声明过的都算）+ 会用到的 vue 具名导出。
+# 注意别只取 helpers.js 的导出：chat.js 用了 state.js 的 chatBoxEl、character.js 用了
+# helpers 的 emptyCharModal，两次都漏在同一类地方。
+_MOD_NAMES = set()
+for _f in store_files:
+    _MOD_NAMES |= _declared_names(_f.read_text(encoding="utf-8"))
+for _f in store_files:
+    _rel = str(_f.relative_to(frontend / "src")).replace("\\", "/")
+    if _f.name == "helpers.js":
+        continue
+    _raw = _f.read_text(encoding="utf-8")
+    _code = _LIT.sub(" ", _raw)
+    _have = _local_names(_raw)
+    _miss = [n for n in sorted(_MOD_NAMES) + list(_VUE_APIS) if _uses(_code, n) and n not in _have]
+    check(f"{_rel} 用到的模块级名字都有来源", _miss, [])
+    _dead = [n for n in sorted(_local_names(_raw) - _declared_names(_raw)) if not _uses(_code, n)]
+    check(f"{_rel} 没有导入了却没用到的名字", _dead, [])
 
 print()
 if FAILED:
