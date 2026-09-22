@@ -24,7 +24,7 @@
       <input v-else type="text" v-model="genForm[f.key]" :maxlength="f.max" :placeholder="f.placeholder">
       <span class="char-count" :class="{near: isNear(genForm[f.key], f.max), inline: f.type !== 'textarea'}">{{ len(genForm[f.key]) }}/{{ f.max }}</span>
     </div>
-    <button v-if="genForm[f.key]" class="clear-btn" title="清空这一栏" tabindex="-1"
+    <button v-if="genForm[f.key]" class="clear-btn" v-hint="'清空这一栏'" aria-label="清空这一栏" tabindex="-1"
             @click="genForm[f.key] = ''">✕</button>
   </div>
   <span v-if="f.hint" class="field-hint">{{ f.hint }}</span>

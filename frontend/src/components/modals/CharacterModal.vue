@@ -55,18 +55,18 @@
           <div class="bg-thumbs">
             <div v-for="(bg, i) in charModal.form.backgrounds" :key="i" class="bg-thumb"
                  :class="{ dragging: bgDragging('modal', i), over: bgDropTarget('modal', i) }"
-                 draggable="true" title="拖动可调整顺序"
+                 draggable="true" v-hint="'拖动可调整顺序'"
                  @dragstart="bgDragStart($event, 'modal', i)"
                  @dragover.prevent="bgDragOver($event, 'modal', i)"
                  @drop.prevent="bgDrop($event, 'modal', i)"
                  @dragend="bgDragEnd">
               <img :src="bg" alt="" draggable="false">
               <span class="bg-num">{{ i + 1 }}</span>
-              <button type="button" class="bg-del" title="移除这张" @click="removeBackground('modal', i)">×</button>
+              <button type="button" class="bg-del" v-hint="'移除这张'" aria-label="移除这张" @click="removeBackground('modal', i)">×</button>
               <div class="bg-move">
-                <button type="button" :disabled="i === 0" title="前移"
+                <button type="button" :disabled="i === 0" v-hint="'前移'" aria-label="前移"
                         @click="moveBackground('modal', i, i - 1)">‹</button>
-                <button type="button" :disabled="i === (charModal.form.backgrounds || []).length - 1" title="后移"
+                <button type="button" :disabled="i === (charModal.form.backgrounds || []).length - 1" v-hint="'后移'" aria-label="后移"
                         @click="moveBackground('modal', i, i + 1)">›</button>
               </div>
             </div>

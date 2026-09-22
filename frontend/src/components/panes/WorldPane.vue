@@ -28,7 +28,7 @@
   <div v-for="(t, i) in worldForm.terms" :key="i" class="term-row">
     <div class="term-head">
       <span class="term-index">词条 {{ i + 1 }}</span>
-      <button type="button" class="term-del" title="删除这一条"
+      <button type="button" class="term-del" v-hint="'删除这一条'" aria-label="删除这一条"
               @click="removeTerm(i)">删除</button>
     </div>
     <div class="counted">

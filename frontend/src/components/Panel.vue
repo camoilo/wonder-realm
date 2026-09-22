@@ -47,7 +47,7 @@
         <div v-if="activeTabDirty" class="panel-tab-actions">
           <span class="dirty-flag">未保存</span>
           <button class="revert-btn" :class="{armed: revertArm[panelTab]}"
-                  :title="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                  v-hint="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
                   @click="armRevert(panelTab)">{{ revertArm[panelTab] ? "确认还原？" : "还原" }}</button>
         </div>
         <button class="primary-btn full" :disabled="saveDisabled" @click="saveCurrentTab">保存当前配置</button>

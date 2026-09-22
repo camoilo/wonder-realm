@@ -25,6 +25,10 @@
 <ConfirmModal />
 <EditMessageModal />
 <CropModal />
+
+<!-- 悬停提示的浮层：全局只有这一个，由 v-hint 指令驱动（文本与位置都从指令那边来），
+     这样提示的样式与行为在整页统一。放在最后，层级高于弹窗遮罩，弹窗里的提示也能看见 -->
+<div v-if="hintText" class="hint-tip" role="tooltip" :style="hintStyle">{{ hintText }}</div>
 </template>
 
 <script setup>
@@ -34,6 +38,7 @@
 import { onBeforeUnmount, onMounted } from "vue";
 
 import { disposeApp, initApp, registerWatchers } from "./store.js";
+import { hintStyle, hintText } from "./composables/hint.js";
 import SideBar from "./components/SideBar.vue";
 import TopBar from "./components/TopBar.vue";
 import ChatArea from "./components/ChatArea.vue";

@@ -918,6 +918,7 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 - **不使用 Pinia**：单一 store 对象 + 组合式 API 足够这个体量，省一个依赖。
 - **对话滚动容器**：`ChatArea.vue` 挂载时调 `setChatBox(el)` 把它交给 store（`scrollBottom` / `jumpToBottom` 用它）。
 - **样式仍是全局一份**（`frontend/src/style.css`，在 `main.js` 里 import）：这个项目的 CSS 依赖源码顺序与跨上下文优先级，拆成 `<style scoped>` 会改变匹配范围、把那些修好的坑重新踩一遍。
+- **悬停提示走 `v-hint` 指令**（`src/composables/hint.js`）：全项目不再用原生 `title`；指令只加事件监听、不改 DOM 结构（包一层组件会多一层元素、动到 flex/grid 布局），浮层是 `App.vue` 里的单例。
 - **Vite 侧要记住的配置**（`frontend/vite.config.js`）：`build.outDir` 指到 `../app/static` 并显式 `emptyOutDir`；`plugins: [vue()]`；显式 define `__VUE_OPTIONS_API__` 等特性开关。**不需要**再 alias 到带编译器的 `vue.esm-bundler`——模板都在 `.vue` 里、构建期就编译好了（只有 DOM 内模板才需要那条 alias）。
 - 无路由库（Tab 切换用组件状态即可）
 - SSE 用原生 `EventSource` 不支持 POST，改用 `fetch` + `ReadableStream` 手动解析 `text/event-stream`（封装一个约 30 行的 `ssePost()` 工具函数）
@@ -971,7 +972,7 @@ ollama_agent/
 │       ├── store/          #   状态与逻辑，按领域分：state / helpers / api / session / chat
 │       │                   #   / search / panel / character / profile / ui（星形依赖，见 7.3）
 │       ├── style.css       #   全局样式（不拆 scoped，理由见 7.3）
-│       ├── composables/    #   与具体界面无关的复用逻辑：maskClose.js（弹窗"点窗口外"判定）
+│       ├── composables/    #   与具体界面无关的复用逻辑：maskClose.js（弹窗"点窗口外"判定）、hint.js（v-hint 悬停提示）
 │       ├── App.vue         #   布局骨架（.main / .work / .work-main）+ 生命周期
 │       └── components/
 │           ├── SideBar.vue     TopBar.vue      ChatArea.vue
@@ -1090,7 +1091,8 @@ data_dir: ./data                  # 数据库目录，直接指定
 - **关键键的位置固定**：顶栏「配置」键在整页的坐标不随面板开合、有无会话而变（它常驻、只在两个箭头间换文案）。
 - **"滚不走"的部分移出滚动容器**，不用 `position: sticky`（sticky 会让内容从背后穿过、且仍占 `scrollHeight`）。
 - **点遮罩关闭以"按下"的位置为准**：只有 mousedown 就落在遮罩上才算点了窗口外。用 `@click.self` 会把"在弹窗里选文字、拖到遮罩或窗口外松开"误判成关闭（click 的目标是 mousedown 与 mouseup 的共同祖先），五个弹窗统一走 `frontend/src/composables/maskClose.js`。
-- **浮层不占布局、不吃鼠标**：提示类浮层（如模式介绍）用绝对定位 + `pointer-events: none`，既不改变任何控件的位置，也不会因为鼠标移向浮层而触发原控件的 mouseleave、把自己晃掉。
+- **悬停提示统一走 `v-hint`**，不用原生 `title`（它延迟约一秒、样式跟浏览器走、不能换行）。指令在 `main.js` 里全局注册，浮层是 `App.vue` 里唯一的一个 `.hint-tip`；提示文案写在指令值里（静态写 `v-hint="'文案'"`，动态直接写表达式），纯图标按钮（✎ / ✕ / ‹ / › / ↑ / ↓）另加 `aria-label` 保无障碍。定位与宽度的两个坑：浮层最终坐标**不用 `transform`**（动画一旦碰 transform 就会把坐标带偏），且必须给 `width: max-content`——fixed 元素只给了 `left` 时宽度按"视口宽 − left"收缩，目标靠右边缘时提示会被挤成一列一个字。
+- **浮层不占布局、不吃鼠标**：提示类浮层（模式介绍 `.mode-tip` 与 `v-hint` 的 `.hint-tip` 共用一套样式）都是"绝对/固定定位 + `pointer-events: none`"，既不改变任何控件的位置，也不会因为鼠标移向浮层而触发原控件的 mouseleave、把自己晃掉。
 - **弹窗的操作行钉底**（中间一层 `.modal-body` 滚动）；弹窗变体宽度必须压得住基类——单类选择器优先级相同时**按源码顺序决胜**，写在基础规则之前会被覆盖。
 - **未保存用标识提示**（标签上的小点 + 面板底部"未保存/还原"），不用弹窗拦截；还原键两次点击确认。
 - 文案与布局的改动要过真实渲染验证：字号、宽度、按钮是否被挤成竖排这类问题**读代码看不出来**。

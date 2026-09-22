@@ -96,16 +96,13 @@ html, body {
 .mode-tab.active { background: var(--accent); color: #fff; font-weight: 500; }
 .mode-tab:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* 模式介绍浮层：绝对定位在按钮行下方，浮在下面的列表之上，所以不占布局。
-   pointer-events: none 是必须的——否则鼠标移向浮层时会先触发按钮的 mouseleave，
+/* 悬浮提示（深色小卡片）：两种提示共用这一套视觉——
+   .mode-tip 是模式按钮那一排整行下方的介绍，.hint-tip 是 v-hint 指令给单个元素弹的提示。
+   pointer-events: none 是必须的：否则鼠标移向浮层时会先触发原元素的 mouseleave，
    浮层自己把自己关掉，看起来像在闪。 */
-.mode-tip {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  top: calc(100% + 6px);
-  z-index: 40;
-  padding: 10px 12px;
+.mode-tip,
+.hint-tip {
+  padding: 9px 12px;
   border-radius: 10px;
   background: #2f3441;
   color: #fff;
@@ -115,8 +112,28 @@ html, body {
   pointer-events: none;
   animation: mode-tip-in 0.12s ease-out;
 }
+.mode-tip {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: calc(100% + 6px);
+  z-index: 40;
+}
+/* 单个元素的提示：fixed 定位在目标下方（空间不够自动翻到上方），层级高于弹窗遮罩，
+   所以弹窗里的提示也看得见。
+   width: max-content 是必须的——fixed 元素只给了 left 时，宽度按"视口宽度 − left"
+   收缩；目标靠近右边缘时提示会被挤成一列一个字。max-content 先按内容取宽，
+   再由 max-width 封顶换行。 */
+.hint-tip {
+  position: fixed;
+  z-index: 1300;
+  width: max-content;
+  max-width: 260px;
+}
 @keyframes mode-tip-in {
-  from { opacity: 0; transform: translateY(-3px); }
+  /* 只做透明度：动画期间会盖住内联的 transform，若在这里写 translateY，
+     浮层的居中（或 v-hint 的最终坐标）会被顶偏一下。位移改成由指令算坐标实现 */
+  from { opacity: 0; }
 }
 
 .side-list {

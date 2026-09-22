@@ -43,15 +43,15 @@
                  所以它们共用发送键上方这个位置，样式也用同一套（次级按钮）。
                  有关闭键，所以只要有一张背景就出现（单张时翻页键置灰） -->
             <div v-if="showBgBar" class="bg-switch">
-              <button type="button" title="上一张背景" :disabled="bgImages.length < 2" @click="prevBg">‹</button>
+              <button type="button" v-hint="'上一张背景'" aria-label="上一张背景" :disabled="bgImages.length < 2" @click="prevBg">‹</button>
               <span class="bg-switch-count">{{ bgIndex + 1 }}/{{ bgImages.length }}</span>
-              <button type="button" title="下一张背景" :disabled="bgImages.length < 2" @click="nextBg">›</button>
+              <button type="button" v-hint="'下一张背景'" aria-label="下一张背景" :disabled="bgImages.length < 2" @click="nextBg">›</button>
               <button type="button" class="bg-close" :class="{off: bgHidden}"
-                      :title="bgHidden ? '重新显示这个角色的对话背景' : '暂时不显示背景（切会话或刷新后恢复）'"
+                      v-hint="bgHidden ? '重新显示这个角色的对话背景' : '暂时不显示背景（切会话或刷新后恢复）'"
                       @click="bgHidden = !bgHidden">{{ bgHidden ? "显示背景" : "关闭背景" }}</button>
             </div>
             <button v-if="isDirectorMode" class="continue-btn" :disabled="!canContinue"
-                    title="基于上一条回复继续生成（相当于发送“继续”）"
+                    v-hint="'基于上一条回复继续生成（相当于发送“继续”）'"
                     @click="continueGeneration">继续</button>
             <div class="send-row">
               <button v-if="streaming" class="stop-btn" @click="stop">
@@ -59,7 +59,7 @@
               </button>
               <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
               <!-- 消息很长、往上翻过之后，一键回到最新：不用一路拖滚动条 -->
-              <button class="jump-btn" title="回到页面底部（最新消息）" @click="jumpToBottom">↓</button>
+              <button class="jump-btn" v-hint="'回到页面底部（最新消息）'" aria-label="回到页面底部（最新消息）" @click="jumpToBottom">↓</button>
             </div>
           </div>
         </div>

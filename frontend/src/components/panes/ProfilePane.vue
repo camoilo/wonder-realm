@@ -9,9 +9,9 @@
     </option>
   </select>
   <button class="ghost-btn" :disabled="!profileForm.name.trim()"
-          title="把当前这几项存成一条预设，之后可从下拉里一键载入"
+          v-hint="'把当前这几项存成一条预设，之后可从下拉里一键载入'"
           @click="savePreset">存为预设</button>
-  <button v-if="presetPick" class="ghost-btn" title="删除选中的这条预设"
+  <button v-if="presetPick" class="ghost-btn" v-hint="'删除选中的这条预设'"
           @click="removePreset">删除预设</button>
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>

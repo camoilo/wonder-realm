@@ -95,7 +95,7 @@ check("store 导出 reactive 状态", "export const store = reactive({" in js, T
 check("store 里没有残留的 this.", "this." in store_js, False)
 check("入口挂载根组件",
       'import App from "./App.vue";' in main_js
-      and 'createApp(App).mount("#app")' in main_js, True)
+      and 'createApp(App)' in main_js and '.mount("#app")' in main_js, True)
 check("入口引入样式", 'import "./style.css";' in main_js, True)
 check("Vite 把产物写进后端静态目录", '"../app/static"' in vite_cfg, True)
 # 产物守卫：改了源码忘了构建、或产物被删，都在这里拦下（产物是提交进仓库的）
@@ -1838,7 +1838,7 @@ check("滚动容器仍是 panel-body", "overflow-y: auto;" in css and ".panel-bo
 check("有名字与时间的那一行", 'class="msg-head"' in html, True)
 check("时间只在消息行里出现一次（流式占位没有）", html.count('class="msg-time"'), 1)
 check("时间在气泡之前（上方那一行）",
-      html.index('class="msg-time"') < html.index('title="双击可编辑这条消息"'), True)
+      html.index('class="msg-time"') < html.index("class=\"bubble\" v-hint"), True)
 check("时间在 msg-head 行里", html.index('class="msg-head"') < html.index('class="msg-time"'), True)
 check("名字与时间同一行", 'class="msg-head"' in html and 'class="msg-name"' in html, True)
 check("时间样式在", ".msg-time {" in css, True)
@@ -1885,7 +1885,7 @@ check("导演模式不显示用户头像列", "return !!this.activeChar && !!(th
 check("用户头像列排在气泡之后（渲染到右侧）",
       html.rindex('class="msg-side"') > html.index('class="bubble-wrap"'), True)
 check("那一行排在气泡之前（显示在上方）",
-      html.index('class="msg-head"') < html.index('title="双击可编辑这条消息"'), True)
+      html.index('class="msg-head"') < html.index("class=\"bubble\" v-hint"), True)
 # 两侧气泡到头像的间距要一致（user 那侧的头像是后加的，漏了 gap 就会紧贴）
 check("两侧消息用同一份间距",
       ".msg.user,\n.msg.assistant { align-items: flex-start; gap: 12px; }" in css, True)
@@ -1958,6 +1958,18 @@ def css_block(sel):
     return m.group(1) if m else ""
 
 
+def css_rule(sel):
+    """选择器**完全等于** sel 的那条规则。
+
+    css_block 是"按前缀找"，遇到共用规则（`.mode-tip, .hint-tip { … }`）会先撞上它，
+    所以这种场景要按整条选择器精确匹配。
+    """
+    for _s, _b in re.findall(r"([^{}]+)\{([^{}]*)\}", css_code):
+        if _s.strip() == sel:
+            return _b
+    return ""
+
+
 def css_font_size(sel):
     m = re.search(r"font-size:\s*(\d+)px", css_block(sel))
     return int(m.group(1)) if m else 0
@@ -1983,8 +1995,13 @@ check("鼠标移入与键盘聚焦都显示",
       all(k in _side_src for k in ('@mouseenter="hoveredMode = key"', "@mouseleave=\"hoveredMode = ''\"",
                                    '@focus="hoveredMode = key"', "@blur=\"hoveredMode = ''\"")), True)
 _tip = css_block(".mode-tip")
+# 两种浮层共用一条规则（.mode-tip, .hint-tip { ... }），css_block 会先撞上它，
+# 所以这里单独取：共用块 + .hint-tip 自己的定位块
+_shared_m = re.search(r"\.mode-tip,\s*\.hint-tip\s*\{([^}]*)\}", css)
+_shared_tip = _shared_m.group(1) if _shared_m else ""
+_hint_css = css_rule(".hint-tip")
 check("介绍浮层绝对定位（不改变布局）", "position: absolute;" in _tip, True)
-check("介绍浮层不吃鼠标（否则自己把自己关掉）", "pointer-events: none;" in _tip, True)
+check("介绍浮层不吃鼠标（否则自己把自己关掉）", "pointer-events: none;" in _shared_tip, True)
 check("浮层的父层可作定位参照", "position: relative;" in css_block(".mode-tabs"), True)
 
 # ---- 面板底部常驻的保存区 ----
@@ -2146,6 +2163,27 @@ _ib_css = css_block(".input-field")
 check("两栏用标签区分（两个并排的框没标签会分不清）",
       ".input-field-label {" in css and ".input-field.scenario-field { flex: 0 0 36%; }" in css
       and "flex-direction: column;" in _ib_css, True)
+
+# ---- 悬停提示统一走 v-hint（不用原生 title） ----
+# 原生 title 延迟约一秒、样式跟浏览器走、不能换行；统一用自研浮层（composables/hint.js +
+# App.vue 里的单例 .hint-tip），视觉与模式介绍浮层共用一套 CSS。
+_all_vue = "\n".join(vue_sources)
+check("组件里不再有原生 title",
+      [rel for rel, src in zip(VUE_ORDER, vue_sources) if re.search(r'(?<![\w-])title\s*=', src)], [])
+check("悬停提示都用 v-hint", len(re.findall(r'v-hint="', _all_vue)) >= 30, True)
+check("指令在入口注册", 'directive("hint", hintDirective)' in main_js, True)
+check("浮层挂在根组件", 'class="hint-tip"' in _all_vue and "hintText" in _all_vue, True)
+check("指令模块在", (frontend / "src/composables/hint.js").exists(), True)
+# 两种浮层共用一套视觉；.hint-tip 是 fixed 定位、不吃鼠标、层级高于弹窗遮罩（1200）
+check("两种浮层共用一套样式",
+      "pointer-events: none;" in _shared_tip and "background: #2f3441;" in _shared_tip, True)
+check("v-hint 浮层定位与层级",
+      "position: fixed;" in _hint_css and "z-index: 1300;" in _hint_css, True)
+check("浮层层级高于弹窗遮罩", "z-index: 1200" in css and "z-index: 1300;" in _hint_css, True)
+# 纯图标按钮（可见内容是个符号）去掉 title 后必须能读出来
+check("图标按钮都有 aria-label", [rel for rel, src in zip(VUE_ORDER, vue_sources)
+      for _l in src.splitlines()
+      if "v-hint=" in _l and re.search(r">\s*(✎|✕|‹|›|×|↑|↓|☰)\s*<", _l) and "aria-label" not in _l], [])
 
 print()
 if FAILED:

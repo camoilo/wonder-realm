@@ -20,18 +20,18 @@
   <div class="bg-thumbs">
     <div v-for="(bg, i) in charForm.backgrounds" :key="i" class="bg-thumb"
          :class="{ dragging: bgDragging('panel', i), over: bgDropTarget('panel', i) }"
-         draggable="true" title="拖动可调整顺序"
+         draggable="true" v-hint="'拖动可调整顺序'"
          @dragstart="bgDragStart($event, 'panel', i)"
          @dragover.prevent="bgDragOver($event, 'panel', i)"
          @drop.prevent="bgDrop($event, 'panel', i)"
          @dragend="bgDragEnd">
       <img :src="bg" alt="" draggable="false">
       <span class="bg-num">{{ i + 1 }}</span>
-      <button type="button" class="bg-del" title="移除这张" @click="removeBackground('panel', i)">×</button>
+      <button type="button" class="bg-del" v-hint="'移除这张'" aria-label="移除这张" @click="removeBackground('panel', i)">×</button>
       <div class="bg-move">
-        <button type="button" :disabled="i === 0" title="前移"
+        <button type="button" :disabled="i === 0" v-hint="'前移'" aria-label="前移"
                 @click="moveBackground('panel', i, i - 1)">‹</button>
-        <button type="button" :disabled="i === (charForm.backgrounds || []).length - 1" title="后移"
+        <button type="button" :disabled="i === (charForm.backgrounds || []).length - 1" v-hint="'后移'" aria-label="后移"
                 @click="moveBackground('panel', i, i + 1)">›</button>
       </div>
     </div>

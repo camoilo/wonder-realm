@@ -7,5 +7,8 @@ import { createApp } from "vue";
 
 import "./style.css";
 import App from "./App.vue";
+import { hintDirective } from "./composables/hint.js";
 
-createApp(App).mount("#app");
+// 悬停提示统一走 v-hint（不用原生 title，理由见 composables/hint.js）。
+// 指令全局注册，模板里直接写 v-hint="'文案'"，不必逐个组件 import。
+createApp(App).directive("hint", hintDirective).mount("#app");

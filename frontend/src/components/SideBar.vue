@@ -27,13 +27,13 @@
                 <template v-else>{{ c.name.slice(0, 1) }}</template>
               </span>
               <span class="char-name">{{ c.name }}</span>
-              <button class="icon-btn" title="编辑角色" @click.stop="openCharacterModal(c)">✎</button>
+              <button class="icon-btn" v-hint="'编辑角色'" aria-label="编辑角色" @click.stop="openCharacterModal(c)">✎</button>
             </div>
             <div v-show="expandedChars[c.id]" class="char-sessions">
               <div v-for="s in sessionsOf(c.id)" :key="s.id" class="session-row"
                    :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
                 <span class="session-title">{{ s.title }}</span>
-                <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
+                <button class="icon-btn danger" v-hint="'删除会话'" aria-label="删除会话" @click.stop="removeSession(s)">✕</button>
               </div>
               <div class="session-row add" @click="createSessionForCharacter(c.id)">＋ 新会话</div>
             </div>
@@ -44,7 +44,7 @@
               <div v-for="s in orphanSessions" :key="s.id" class="session-row"
                    :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
                 <span class="session-title">{{ s.title }}</span>
-                <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
+                <button class="icon-btn danger" v-hint="'删除会话'" aria-label="删除会话" @click.stop="removeSession(s)">✕</button>
               </div>
             </div>
           </div>
@@ -54,7 +54,7 @@
           <div v-for="s in directorSessions" :key="s.id" class="session-row"
                :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
             <span class="session-title">{{ s.title }}</span>
-            <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
+            <button class="icon-btn danger" v-hint="'删除会话'" aria-label="删除会话" @click.stop="removeSession(s)">✕</button>
           </div>
         </template>
       </div>
