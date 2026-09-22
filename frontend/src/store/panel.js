@@ -148,7 +148,7 @@ Object.assign(store, {
 
 store.memoryScope = computed(() => {
       if (!store.activeSession) return null;
-      if (store.activeSession.mode === "free_scenario") {
+      if (store.activeSession.mode === "director") {
         return { type: "session", id: store.activeSession.id, label: "会话记忆" };
       }
       if (store.activeSession.character) {

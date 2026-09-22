@@ -22,11 +22,11 @@ _status: dict[tuple[str, int], dict] = {}
 
 
 def scope_for_session(session) -> tuple[str, int] | None:
-    if session["mode"] in ("character_chat", "character_scenario"):
+    if session["mode"] in ("chat", "immersive"):
         if session["character_id"] is None:
             return None
         return ("character", session["character_id"])
-    if session["mode"] == "free_scenario":
+    if session["mode"] == "director":
         return ("session", session["id"])
     return None
 

@@ -7,7 +7,7 @@ import { BG_MAX_COUNT, CROP_MAX_ZOOM, CROP_VIEW_PX, MODES, emptyCharForm, emptyC
 
 export const store = reactive({
       MODES,
-      mode: "character_chat",
+      mode: "chat",
       models: [],
       currentModel: "",
       modelWarning: "",

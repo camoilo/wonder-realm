@@ -178,8 +178,8 @@ Object.assign(store, {
     store.editingId = m.id;
     const mode = store.activeSession.mode;
     const isMulti = m.scenario === "MULTI";
-    // 角色情境模式：无论当前有没有情境都给出情境输入框，方便手动补上
-    const hasScenario = mode === "character_scenario";
+    // 沉浸模式：无论当前有没有情境都给出情境输入框，方便手动补上
+    const hasScenario = mode === "immersive";
     store.editForm = {
       content: m.content,
       scenario: m.scenario && !isMulti ? m.scenario : "",
@@ -188,7 +188,7 @@ Object.assign(store, {
       contentLabel: hasScenario ? "话语内容" : "消息内容",
       contentPlaceholder: hasScenario ? "这一幕里该角色说出的话" : "消息正文",
       contentHint: isMulti
-        ? "自由情境的消息用 [SCENARIO] 标记情境说明、[DIALOG] 标记对话，保留这两个标记即可继续分段显示。"
+        ? "导演模式的消息用 [SCENARIO] 标记情境说明、[DIALOG] 标记对话，保留这两个标记即可继续分段显示。"
         : "",
     };
     // 打开后按内容把输入框撑到实际高度，长消息不会被塞进一个小框里
@@ -316,7 +316,7 @@ Object.assign(store, {
 
 store.canContinue = computed(() => {
       return (
-        store.isFreeScenario &&
+        store.isDirectorMode &&
         !store.streaming &&
         !store.orphanActive &&
         store.messages.some((m) => m.role === "assistant")

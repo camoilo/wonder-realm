@@ -108,7 +108,7 @@ CHARACTER = {
     "name": "阿岚", "appearance": "", "personality": "", "speech_style": "", "backstory": "",
 }
 
-for mode in ("character_chat", "character_scenario", "free_scenario"):
+for mode in ("chat", "immersive", "director"):
     session = {"mode": mode, "gen_settings": "{}"}
     system = prompts.build_system_prompt(session, CHARACTER, "", None, WORLD)
     check(f"{mode} 注入描述", "终年雾锁的海港城" in system, True)
@@ -118,7 +118,7 @@ for mode in ("character_chat", "character_scenario", "free_scenario"):
     check(f"{mode} 世界名称不进提示词", "灰港秘闻录" in system, False)
 
 system = prompts.build_system_prompt(
-    {"mode": "character_chat", "gen_settings": "{}"}, CHARACTER, "", None, WORLD
+    {"mode": "chat", "gen_settings": "{}"}, CHARACTER, "", None, WORLD
 )
 check("世界设定排在角色设定之前",
       system.index("# 世界设定") < system.index("# 角色设定"), True)
@@ -127,19 +127,19 @@ check("世界块带一句约束说明", "不要改写这些设定" in system, Tr
 # 只填了名称 = 等于没填：整块不出现（不给模型一段空标签）
 only_name = {"name": "只填了名字", "description": "", "rules": "", "terms": []}
 system = prompts.build_system_prompt(
-    {"mode": "character_chat", "gen_settings": "{}"}, CHARACTER, "", None, only_name
+    {"mode": "chat", "gen_settings": "{}"}, CHARACTER, "", None, only_name
 )
 check("只有名称时不注入世界块", "# 世界设定" in system, False)
 check("只有名称时名字也不出现", "只填了名字" in system, False)
 
 system = prompts.build_system_prompt(
-    {"mode": "character_chat", "gen_settings": "{}"}, CHARACTER, "", None, None
+    {"mode": "chat", "gen_settings": "{}"}, CHARACTER, "", None, None
 )
 check("没有世界设定时也不报错", "# 世界设定" in system, False)
 
 # 组装成消息时也带着（生成走的是 build_messages 这条路）
 msgs = prompts.build_messages(
-    {"mode": "free_scenario", "gen_settings": "{}"}, None, "", [], None, WORLD
+    {"mode": "director", "gen_settings": "{}"}, None, "", [], None, WORLD
 )
 check("build_messages 的 system 消息含世界设定", "# 世界设定" in msgs[0]["content"], True)
 

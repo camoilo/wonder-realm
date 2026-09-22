@@ -39,8 +39,8 @@ def _session_scope(con, sid: int) -> tuple[str, int]:
     s = con.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
     if not s:
         raise HTTPException(404, "会话不存在")
-    if s["mode"] != "free_scenario":
-        raise HTTPException(400, "仅情境生成模式的会话有会话级记忆")
+    if s["mode"] != "director":
+        raise HTTPException(400, "仅导演模式的会话有会话级记忆")
     return ("session", sid)
 
 

@@ -52,7 +52,7 @@
     <span class="char-count" :class="{near: isNear(profileForm.appearance, limits.user_appearance)}">{{ len(profileForm.appearance) }}/{{ limits.user_appearance }}</span>
   </div>
 </label>
-<p class="hint">「身份」与「外观」会写进角色两模式的提示词，让角色知道你是谁；自由情境模式不使用这些内容。</p>
+<p class="hint">「身份」与「外观」会写进聊天与沉浸两种模式的提示词，让角色知道你是谁；导演模式不使用这些内容。</p>
 </template>
 
 <script setup>

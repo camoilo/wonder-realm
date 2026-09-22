@@ -20,7 +20,7 @@
             <span class="char-count" :class="{near: isNear(input, limits.message)}">{{ len(input) }}/{{ limits.message }}</span>
           </div>
           <div class="send-col">
-            <!-- 背景切换与"继续"互斥：前者只在角色两模式出现，后者只在自由情境出现，
+            <!-- 背景切换与"继续"互斥：前者只在聊天与沉浸两种模式出现，后者只在导演模式出现，
                  所以它们共用发送键上方这个位置，样式也用同一套（次级按钮）。
                  有关闭键，所以只要有一张背景就出现（单张时翻页键置灰） -->
             <div v-if="showBgBar" class="bg-switch">
@@ -31,7 +31,7 @@
                       :title="bgHidden ? '重新显示这个角色的对话背景' : '暂时不显示背景（切会话或刷新后恢复）'"
                       @click="bgHidden = !bgHidden">{{ bgHidden ? "显示背景" : "关闭背景" }}</button>
             </div>
-            <button v-if="isFreeScenario" class="continue-btn" :disabled="!canContinue"
+            <button v-if="isDirectorMode" class="continue-btn" :disabled="!canContinue"
                     title="基于上一条回复继续生成（相当于发送“继续”）"
                     @click="continueGeneration">继续</button>
             <div class="send-row">
@@ -61,7 +61,7 @@ const {
   canContinue,
   error,
   input,
-  isFreeScenario,
+  isDirectorMode,
   lastFailedUser,
   limits,
   orphanActive,

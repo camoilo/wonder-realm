@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS characters (
 
 CREATE TABLE IF NOT EXISTS sessions (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    mode         TEXT NOT NULL CHECK(mode IN ('character_chat','character_scenario','free_scenario')),
+    mode         TEXT NOT NULL CHECK(mode IN ('chat','immersive','director')),
     character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,
     title        TEXT NOT NULL DEFAULT '新会话',
     title_auto   INTEGER NOT NULL DEFAULT 1,

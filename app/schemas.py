@@ -106,7 +106,7 @@ class GenerateIn(BaseModel):
 
 
 class SessionIn(BaseModel):
-    mode: str = "free_scenario"
+    mode: str = "director"
     character_id: int | None = None
     # 留空表示交给模型自动命名（sessions.title_auto）
     title: str = Field(default="", max_length=LIMITS["title"])
@@ -119,7 +119,7 @@ class SessionPatch(BaseModel):
 
 
 class MessageEdit(BaseModel):
-    # 允许空正文：角色情境里模型可能只写了情境没写台词，那条消息的正文就是空的，
+    # 允许空正文：沉浸模式里模型可能只写了情境没写台词，那条消息的正文就是空的，
     # 用户编辑情境时不该被迫补一句台词。真正的约束在路由里（正文与情境不能同时为空）
     content: str = Field(default="", max_length=LIMITS["message"])
     scenario: str | None = Field(default=None, max_length=LIMITS["scenario"])

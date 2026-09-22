@@ -48,7 +48,7 @@ from app import generation  # noqa: E402
 
 con = database.connect()
 con.execute("INSERT INTO sessions(mode, title, gen_settings, created_at, updated_at) "
-            "VALUES('free_scenario','t','{}','2026-01-01','2026-01-01')")
+            "VALUES('director','t','{}','2026-01-01','2026-01-01')")
 con.commit()
 try:
     generation.prepare_generation(con, 1)

@@ -145,8 +145,8 @@ _store_methods = r"""Object.assign(store, {
       return !!max && (value || "").length >= max * 0.9;
     },
 
-    // 消息上方那一行显示的"说话人"：角色两模式下模型消息用角色名、用户消息用"我的设定"
-    // 里的名字；自由情境模式两边都没有名字（那一行只剩时间）
+    // 消息上方那一行显示的"说话人"：聊天与沉浸两种模式下模型消息用角色名、用户消息用"我的设定"
+    // 里的名字；导演模式两边都没有名字（那一行只剩时间）
     msgName(m) {
       if (!store.activeChar) return "";
       return m.role === "assistant" ? store.activeChar.name : store.profile.name || "";
@@ -164,7 +164,7 @@ _store_methods = r"""Object.assign(store, {
       return s ? s.replace("T", " ") : "";
     },
 
-    // 标签页兜底：切到没有该标签的会话或模式（自由情境没有角色设定、未选会话没有记忆）
+    // 标签页兜底：切到没有该标签的会话或模式（导演模式没有角色设定、未选会话没有记忆）
     // 时回到"生成要求"，否则面板会是一片空白
     fixPanelTab() {
       const hasChar = !!(store.activeSession && store.activeSession.character);
@@ -340,7 +340,7 @@ _store_methods = r"""Object.assign(store, {
     },
 
     async refreshSessions() {
-      // 只拉当前模式的会话：角色对话与角色情境的会话列表相互隔离，互不可见
+      // 只拉当前模式的会话：聊天模式与沉浸模式的会话列表相互隔离，互不可见
       store.sessions = await store.api(`/api/sessions?mode=${store.mode}`);
     },
 
@@ -539,7 +539,7 @@ _store_methods = r"""Object.assign(store, {
         store.activeSessionId = id;
         store.activeByMode[session.mode] = id;
         store.messages = await store.api(`/api/sessions/${id}/messages`);
-        // 背景图单独取（只有角色两模式有）
+        // 背景图单独取（只有聊天与沉浸两种模式有）
         if (session.character_id) await store.loadBackgrounds(session.character_id);
         else store.resetBackgrounds();
         if (session.character_id) {
@@ -553,11 +553,11 @@ _store_methods = r"""Object.assign(store, {
     },
 
     async newSession() {
-      if (store.mode === "free_scenario") {
+      if (store.mode === "director") {
         try {
           const s = await store.api(
             "/api/sessions",
-            store.jsonOpts("POST", { mode: "free_scenario" })
+            store.jsonOpts("POST", { mode: "director" })
           );
           await store.refreshSessions();
           await store.openSession(s.id);
@@ -1355,7 +1355,7 @@ _store_methods = r"""Object.assign(store, {
       await store.runSend(text);
     },
 
-    // 自由情境的"继续"：等价于自动发一条"继续"，让模型接着上一条回复往下写。
+    // 导演模式的"继续"：等价于自动发一条"继续"，让模型接着上一条回复往下写。
     // 不动输入框——里面可能是用户正在写的草稿，不能被这个按钮吞掉。
     async continueGeneration() {
       if (!store.canContinue) return;
@@ -1448,8 +1448,8 @@ _store_methods = r"""Object.assign(store, {
       store.editingId = m.id;
       const mode = store.activeSession.mode;
       const isMulti = m.scenario === "MULTI";
-      // 角色情境模式：无论当前有没有情境都给出情境输入框，方便手动补上
-      const hasScenario = mode === "character_scenario";
+      // 沉浸模式：无论当前有没有情境都给出情境输入框，方便手动补上
+      const hasScenario = mode === "immersive";
       store.editForm = {
         content: m.content,
         scenario: m.scenario && !isMulti ? m.scenario : "",
@@ -1458,7 +1458,7 @@ _store_methods = r"""Object.assign(store, {
         contentLabel: hasScenario ? "话语内容" : "消息内容",
         contentPlaceholder: hasScenario ? "这一幕里该角色说出的话" : "消息正文",
         contentHint: isMulti
-          ? "自由情境的消息用 [SCENARIO] 标记情境说明、[DIALOG] 标记对话，保留这两个标记即可继续分段显示。"
+          ? "导演模式的消息用 [SCENARIO] 标记情境说明、[DIALOG] 标记对话，保留这两个标记即可继续分段显示。"
           : "",
       };
       // 打开后按内容把输入框撑到实际高度，长消息不会被塞进一个小框里
@@ -1737,7 +1737,7 @@ check("宽度规则不作用于右侧面板",
 
 # ---- 右侧面板改成标签页 ----
 check("有标签栏", html.count('class="panel-tabs"'), 1)
-check("标签按钮（模板里五个，自由情境少两个）", html.count('class="panel-tab"'), 5)
+check("标签按钮（模板里五个，导演模式少两个）", html.count('class="panel-tab"'), 5)
 check("内容面板（模板里五个）", html.count("panel-tab-pane"), 5)
 check("旧的折叠结构已清除",
       [w for w in ("panel-section", "panelFold", "togglePanelFold") if (w in html or w in js)], [])
@@ -1860,7 +1860,7 @@ check("启动时加载我的设定", 'await this.api("/api/profile")' in js, Tru
 # ---- 世界设定（全局一份，三种模式都用得上） ----
 check("有世界设定标签", ">世界设定<span" in html, True)
 check("世界设定面板在", "panelTab === 'world'" in html, True)
-check("世界设定标签不判模式（自由情境也显示）",
+check("世界设定标签不判模式（导演模式也显示）",
       "v-if" not in re.search(r"<button([^>]*)panelTab = 'world'", html).group(1), True)
 check("世界设定有独立的脏标记与还原", "worldDirty" in js and 'section === "world"' in js, True)
 check("保存派发包含世界设定", 'if (this.panelTab === "world") return this.saveWorld();' in js, True)
@@ -1880,7 +1880,7 @@ tab_css = re.search(r"\.panel-tab \{[^}]*\}", css)
 check("标签基准宽度能排下三个（30%）", bool(tab_css) and "flex: 1 1 30%;" in tab_css.group(0), True)
 check("消息按模式取名字", "msgName(m)" in js and "msgName(m)" in html, True)
 check("用户头像列有显示条件", "showUserSide" in js and "showUserSide" in html, True)
-check("自由情境不显示用户头像列", "return !!this.activeChar && !!(this.profile.avatar || this.profile.name);" in js, True)
+check("导演模式不显示用户头像列", "return !!this.activeChar && !!(this.profile.avatar || this.profile.name);" in js, True)
 check("用户头像列排在气泡之后（渲染到右侧）",
       html.rindex('class="msg-side"') > html.index('class="bubble-wrap"'), True)
 check("那一行排在气泡之前（显示在上方）",

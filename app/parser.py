@@ -15,7 +15,7 @@ SEGMENT = re.compile(
     re.S | re.I,
 )
 
-MULTI = "MULTI"  # free_scenario 落库标记：content 存带标记全文，前端分段渲染
+MULTI = "MULTI"  # director 落库标记：content 存带标记全文，前端分段渲染
 
 
 def _is_scenario(tag: str) -> bool:
@@ -48,16 +48,16 @@ def _pieces(text: str) -> list[tuple[str, str]]:
 def parse_output(mode: str, raw: str) -> tuple[str | None, str]:
     """把模型原始输出解析为 (scenario, content)。
 
-    角色对话模式原样返回；完全认不出标记时整体降级为话语文本，不丢内容。
-    角色情境模式下允许"只有情境、没有台词"：此时 content 为空串、scenario 有值，
+    聊天模式原样返回；完全认不出标记时整体降级为话语文本，不丢内容。
+    沉浸模式下允许"只有情境、没有台词"：此时 content 为空串、scenario 有值，
     由调用方决定是否落库（见 generation.persist_message）。
     """
     text = (raw or "").strip()
-    if mode == "character_chat":
+    if mode == "chat":
         return None, text
 
     # 必须区分"有没有出现标记"和"切出了什么段落"：无标记时 _pieces 也会把整段
-    # 当成话语返回，若用它来判断就会把纯文本误标成 MULTI（free_scenario 的降级路径）
+    # 当成话语返回，若用它来判断就会把纯文本误标成 MULTI（director 的降级路径）
     found = SEGMENT.search(text)
     pieces = _pieces(text)
     if not pieces:
@@ -65,13 +65,13 @@ def parse_output(mode: str, raw: str) -> tuple[str | None, str]:
         # 否则会把裸标记当正文显示给用户
         return (None, "") if found else (None, text)
 
-    if mode == "character_scenario":
+    if mode == "immersive":
         # 情境可能被拆成多段，合并保留——只取第一段会静默丢掉后面的内容
         scenario = "\n".join(t for kind, t in pieces if kind == "scenario").strip()
         dialog = "\n".join(t for kind, t in pieces if kind == "dialog").strip()
         return (scenario or None), dialog
 
-    # free_scenario：只在真的出现标记时才走分段渲染，否则与角色情境一样降级
+    # director：只在真的出现标记时才走分段渲染，否则与沉浸模式一样降级
     return (MULTI if found else None), text
 
 

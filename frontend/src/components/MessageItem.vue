@@ -9,7 +9,7 @@
               </span>
             </div>
             <div class="bubble-wrap">
-              <!-- 气泡上方那一行：说话人名字 + 发送时间。自由情境模式两边都没有名字，
+              <!-- 气泡上方那一行：说话人名字 + 发送时间。导演模式两边都没有名字，
                    这一行就只剩时间 -->
               <div v-if="msgName(m) || timeOf(m)" class="msg-head">
                 <span v-if="msgName(m)" class="msg-name">{{ msgName(m) }}</span>
@@ -39,7 +39,7 @@
                 <button @click="removeMessage(m, true)">删除这里之后</button>
               </div>
             </div>
-            <!-- 用户自己的头像在气泡右侧（角色两模式才有；自由情境模式不显示用户的
+            <!-- 用户自己的头像在气泡右侧（聊天与沉浸两种模式才有；导演模式不显示用户的
                  头像与名字，见 10.35）。还没设名字也没传头像时整列不渲染 -->
             <div v-if="m.role === 'user' && showUserSide" class="msg-side">
               <span class="avatar lg">

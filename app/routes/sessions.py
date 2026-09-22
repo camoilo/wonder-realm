@@ -8,8 +8,8 @@ from ..schemas import SessionIn, SessionPatch
 
 router = APIRouter(prefix="/api")
 
-MODES = ("character_chat", "character_scenario", "free_scenario")
-CHARACTER_MODES = ("character_chat", "character_scenario")
+MODES = ("chat", "immersive", "director")
+CHARACTER_MODES = ("chat", "immersive")
 
 
 def _dump(settings: dict) -> str:
@@ -120,8 +120,8 @@ def update_session(sid: int, body: SessionPatch, db=Depends(get_db)):
 @router.delete("/sessions/{sid}")
 def delete_session(sid: int, db=Depends(get_db)):
     session = _get_session(db, sid)
-    # 消息由外键级联删除；free_scenario 会话的记忆一并删除
-    if session["mode"] == "free_scenario":
+    # 消息由外键级联删除；director 会话的记忆一并删除
+    if session["mode"] == "director":
         db.execute("DELETE FROM memories WHERE scope_type='session' AND scope_id=?", (sid,))
     db.execute("DELETE FROM sessions WHERE id=?", (sid,))
     db.commit()

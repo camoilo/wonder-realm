@@ -27,7 +27,7 @@ def spawn(coro) -> None:
 
 
 def load_generation_context(con, sid: int):
-    """读取会话并校验可生成性：会话存在，角色模式的绑定角色仍在。
+    """读取会话并校验可生成性：会话存在，聊天与沉浸两种模式的绑定角色仍在。
 
     单独抽出来是为了让调用方能在**改动数据之前**先校验——例如重新生成要先删消息，
     若把校验留在删之后，角色已删除时就会白删一截历史。
@@ -36,7 +36,7 @@ def load_generation_context(con, sid: int):
     if not session:
         raise HTTPException(404, "会话不存在")
     character = None
-    if session["mode"] in ("character_chat", "character_scenario"):
+    if session["mode"] in ("chat", "immersive"):
         cid = session["character_id"]
         if cid is not None:
             character = con.execute(
@@ -68,7 +68,7 @@ def prepare_generation(con, sid: int):
         # 没选模型时说人话。含糊地把空模型名发给 Ollama 只会换回一句看不懂的报错
         raise HTTPException(400, "还没有选择模型，请先在顶栏选择一个已安装的模型")
     # "我的设定"是全局单行，"世界设定"同样是全局一份，跟着一起组装；
-    # 自由情境模式在 prompts 里会忽略前者、但仍会用后者
+    # 导演模式在 prompts 里会忽略前者、但仍会用后者
     msgs = build_messages(
         session, character, memory_content, rows, read_profile(), read_world()
     )

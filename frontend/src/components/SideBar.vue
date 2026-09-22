@@ -8,7 +8,7 @@
       </nav>
 
       <div class="side-list">
-        <template v-if="isCharacterMode">
+        <template v-if="usesCharacter">
           <div v-if="characters.length === 0" class="side-empty">
             <p>还没有角色</p>
             <button class="ghost-btn full" @click="openCharacterModal()">创建第一个角色</button>
@@ -44,8 +44,8 @@
           </div>
         </template>
         <template v-else>
-          <div v-if="freeSessions.length === 0" class="side-empty"><p>还没有会话</p></div>
-          <div v-for="s in freeSessions" :key="s.id" class="session-row"
+          <div v-if="directorSessions.length === 0" class="side-empty"><p>还没有会话</p></div>
+          <div v-for="s in directorSessions" :key="s.id" class="session-row"
                :class="{active: activeSessionId === s.id}" @click="openSession(s.id)">
             <span class="session-title">{{ s.title }}</span>
             <button class="icon-btn danger" title="删除会话" @click.stop="removeSession(s)">✕</button>
@@ -54,7 +54,7 @@
       </div>
 
       <div class="side-footer">
-        <button v-if="isCharacterMode" class="ghost-btn full" @click="openCharacterModal()">新建角色</button>
+        <button v-if="usesCharacter" class="ghost-btn full" @click="openCharacterModal()">新建角色</button>
         <button class="primary-btn full" @click="newSession">新建会话</button>
       </div>
     </div>
@@ -70,8 +70,8 @@ const {
   activeSessionId,
   characters,
   expandedChars,
-  freeSessions,
-  isCharacterMode,
+  directorSessions,
+  usesCharacter,
   mode,
   orphanSessions,
   sideCollapsed,

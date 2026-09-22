@@ -1,9 +1,9 @@
 // 模块级常量与纯函数：模式表、空的表单工厂、图片编解码等（不碰 store、不碰 Vue）。
 // 这里的东西被 state.js 与各领域模块 import，所以顶层声明统一 export。
 export const MODES = {
-  character_chat: { label: "角色对话", character: true },
-  character_scenario: { label: "角色情境", character: true },
-  free_scenario: { label: "自由情境", character: false },
+  chat: { label: "聊天模式", character: true },
+  immersive: { label: "沉浸模式", character: true },
+  director: { label: "导演模式", character: false },
 };
 
 // 与后端 parser.py 保持同一套标记识别（理由见那里的注释）：宽容认标记，
@@ -21,7 +21,7 @@ export const isScenarioTag = (tag) => SCENARIO_TAGS.includes(String(tag).toUpper
 // "还原"键的解除武装计时器。放模块级而不是 data 里：定时器句柄不需要响应式
 export const revertTimers = {};
 
-// 自由情境"继续"按钮发出的内容：等同于用户手打一条"继续"
+// 导演模式"继续"按钮发出的内容：等同于用户手打一条"继续"
 export const CONTINUE_PROMPT = "继续";
 
 // 自定义头像：浏览器内先校验，再让用户拖动裁剪成正方形，最后缩到 256px 重编码为 JPEG 上传。

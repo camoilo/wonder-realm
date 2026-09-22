@@ -9,7 +9,7 @@
       <div class="panel-tabs">
         <button class="panel-tab" :class="{on: panelTab === 'gen'}"
                 @click="panelTab = 'gen'">生成要求<span v-if="genDirty" class="tab-dot"></span></button>
-        <!-- 世界设定是全局的，三种模式都用得上（自由情境也发生在某个世界里），所以不判模式 -->
+        <!-- 世界设定是全局的，三种模式都用得上（导演模式也发生在某个世界里），所以不判模式 -->
         <button class="panel-tab" :class="{on: panelTab === 'world'}"
                 @click="panelTab = 'world'">世界设定<span v-if="worldDirty" class="tab-dot"></span></button>
         <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'char'}"
@@ -32,8 +32,8 @@
              v-show="panelTab === 'char'">
         <CharPane />
       </div>
-        <!-- 我的设定：用户本人。姓名与身份会进角色两模式的提示词，头像与名字显示在
-             自己消息的气泡旁；自由情境模式用不到它，所以那个模式下不出现这个标签 -->
+        <!-- 我的设定：用户本人。姓名与身份会进聊天与沉浸两种模式的提示词，头像与名字显示在
+             自己消息的气泡旁；导演模式用不到它，所以那个模式下不出现这个标签 -->
         <div v-if="activeSession.character" class="panel-tab-pane" v-show="panelTab === 'profile'">
         <ProfilePane />
       </div>

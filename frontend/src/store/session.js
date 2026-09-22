@@ -11,7 +11,7 @@ Object.assign(store, {
     store.characters = await store.api("/api/characters");
   },
   async refreshSessions() {
-    // 只拉当前模式的会话：角色对话与角色情境的会话列表相互隔离，互不可见
+    // 只拉当前模式的会话：聊天模式与沉浸模式的会话列表相互隔离，互不可见
     store.sessions = await store.api(`/api/sessions?mode=${store.mode}`);
   },
   async switchMode(key) {
@@ -64,7 +64,7 @@ Object.assign(store, {
       store.activeSessionId = id;
       store.activeByMode[session.mode] = id;
       store.messages = await store.api(`/api/sessions/${id}/messages`);
-      // 背景图单独取（只有角色两模式有）
+      // 背景图单独取（只有聊天与沉浸两种模式有）
       if (session.character_id) await store.loadBackgrounds(session.character_id);
       else store.resetBackgrounds();
       if (session.character_id) {
@@ -77,11 +77,11 @@ Object.assign(store, {
     }
   },
   async newSession() {
-    if (store.mode === "free_scenario") {
+    if (store.mode === "director") {
       try {
         const s = await store.api(
           "/api/sessions",
-          store.jsonOpts("POST", { mode: "free_scenario" })
+          store.jsonOpts("POST", { mode: "director" })
         );
         await store.refreshSessions();
         await store.openSession(s.id);
@@ -190,7 +190,7 @@ Object.assign(store, {
   },
 });
 
-store.isCharacterMode = computed(() => {
+store.usesCharacter = computed(() => {
       return MODES[store.mode].character;
 });
 
@@ -198,22 +198,22 @@ store.activeChar = computed(() => {
       return (store.activeSession && store.activeSession.character) || null;
 });
 
-store.isFreeScenario = computed(() => {
-      return !!store.activeSession && store.activeSession.mode === "free_scenario";
+store.isDirectorMode = computed(() => {
+      return !!store.activeSession && store.activeSession.mode === "director";
 });
 
-store.freeSessions = computed(() => {
-      return store.sessions.filter((s) => s.mode === "free_scenario");
+store.directorSessions = computed(() => {
+      return store.sessions.filter((s) => s.mode === "director");
 });
 
 store.orphanSessions = computed(() => {
-      return store.sessions.filter((s) => s.mode !== "free_scenario" && !s.character_id);
+      return store.sessions.filter((s) => s.mode !== "director" && !s.character_id);
 });
 
 store.orphanActive = computed(() => {
       return (
         !!store.activeSession &&
-        store.activeSession.mode !== "free_scenario" &&
+        store.activeSession.mode !== "director" &&
         !store.activeSession.character
       );
 });

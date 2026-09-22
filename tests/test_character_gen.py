@@ -136,7 +136,7 @@ check("列表里未锁定角色有隐藏字段", "personality" in lst[oc["id"]],
 check("单查锁定角色无隐藏字段",
       [k for k in HIDDEN if k in client.get(f"/api/characters/{cid}").json()], [])
 
-s = client.post("/api/sessions", json={"mode": "character_chat", "character_id": cid,
+s = client.post("/api/sessions", json={"mode": "chat", "character_id": cid,
                                        "title": "测试"}).json()
 check("会话详情内嵌角色无隐藏字段", [k for k in HIDDEN if k in s["character"]], [])
 sd = client.get(f"/api/sessions/{s['id']}").json()

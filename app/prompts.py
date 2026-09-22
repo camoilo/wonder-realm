@@ -57,20 +57,20 @@ TEMPERATURE_OPTIONS = [
 ]
 
 DEFAULT_SETTINGS = {
-    "character_chat": {
+    "chat": {
         "reply_length": "medium",
         "proactive": "medium",
         "temperature": "standard",
         "extra": "",
     },
-    "character_scenario": {
+    "immersive": {
         "scenario_length": "medium",
         "pace": "medium",
         "temperature": "standard",
         "director_notes": "",
         "extra": "",
     },
-    "free_scenario": {
+    "director": {
         "genre": "",
         "style": "",
         "length": "medium",
@@ -91,7 +91,7 @@ TEMPERATURE_FIELD = {
 # 自由文本字段带 "max"：前端据此设 maxlength 并显示右下角计数，数字来自 limits.LIMITS，
 # 不在前端另写一份
 FIELDS = {
-    "character_chat": [
+    "chat": [
         {"key": "reply_length", "label": "回复长度", "type": "radio",
          "options": [("short", "简短"), ("medium", "适中"), ("long", "详细")]},
         {"key": "proactive", "label": "主动性", "type": "radio",
@@ -100,7 +100,7 @@ FIELDS = {
         {"key": "extra", "label": "附加要求", "type": "textarea", "max": LIMITS["extra"],
          "placeholder": "任意补充要求，原样注入提示词"},
     ],
-    "character_scenario": [
+    "immersive": [
         {"key": "scenario_length", "label": "情境篇幅", "type": "radio",
          "options": [("short", "简短"), ("medium", "适中"), ("long", "详细")]},
         {"key": "pace", "label": "推进速度", "type": "radio",
@@ -110,7 +110,7 @@ FIELDS = {
          "hint": "只影响情境走向，不进入对话", "placeholder": "如：让两人的关系逐渐缓和"},
         {"key": "extra", "label": "附加要求", "type": "textarea", "max": LIMITS["extra"]},
     ],
-    "free_scenario": [
+    "director": [
         {"key": "genre", "label": "题材", "type": "text", "max": LIMITS["genre"],
          "placeholder": "如：都市奇幻、武侠"},
         {"key": "style", "label": "文风", "type": "text", "max": LIMITS["genre"],
@@ -154,7 +154,7 @@ def chat_options(session) -> dict:
     return opts
 
 
-def render_character_chat_settings(s: dict) -> str:
+def render_chat_settings(s: dict) -> str:
     parts = [
         f"回复长度：{REPLY_LENGTH_DESC.get(s.get('reply_length'), REPLY_LENGTH_DESC['medium'])}",
     ]
@@ -164,7 +164,7 @@ def render_character_chat_settings(s: dict) -> str:
     return _join(parts)
 
 
-def render_character_scenario_settings(s: dict) -> str:
+def render_immersive_settings(s: dict) -> str:
     parts = [
         f"情境篇幅：{SCENARIO_LENGTH_DESC.get(s.get('scenario_length'), SCENARIO_LENGTH_DESC['medium'])}"
     ]
@@ -174,7 +174,7 @@ def render_character_scenario_settings(s: dict) -> str:
     return _join(parts)
 
 
-def render_free_scenario_settings(s: dict) -> str:
+def render_director_settings(s: dict) -> str:
     parts = []
     if s.get("genre"):
         parts.append(f"题材：{s['genre']}")
@@ -191,9 +191,9 @@ def render_free_scenario_settings(s: dict) -> str:
 
 
 RENDERERS = {
-    "character_chat": render_character_chat_settings,
-    "character_scenario": render_character_scenario_settings,
-    "free_scenario": render_free_scenario_settings,
+    "chat": render_chat_settings,
+    "immersive": render_immersive_settings,
+    "director": render_director_settings,
 }
 
 
@@ -255,7 +255,7 @@ def _world_block(world) -> str:
 def _user_block(profile) -> str:
     """用户本人的设定。三项都没填就整块不出现——不要给模型一段空标签。
 
-    只给角色两模式用：自由情境模式是"写故事"，没有"我是谁"这回事（见 10.35）。
+    只给聊天与沉浸两种模式用：导演模式是"写故事"，没有"我是谁"这回事（见 10.35）。
     """
     p = profile or {}
     name = (p.get("name") or "").strip()
@@ -278,7 +278,7 @@ def _user_block(profile) -> str:
     )
 
 
-def build_character_chat_system(
+def build_chat_system(
     character, memory_content: str, settings: dict, profile=None, world=None
 ) -> str:
     name = character["name"]
@@ -289,14 +289,14 @@ def build_character_chat_system(
         + _user_block(profile)
         + _memory_block(memory_content)
         + "# 回复要求\n"
-        f"{render_character_chat_settings(settings)}\n\n"
+        f"{render_chat_settings(settings)}\n\n"
         "# 输出规则\n"
         f"只输出{name}说出的话。不要输出旁白、动作描写、心理描写、括号注释或舞台说明。\n"
         "不要在开头重复角色名。"
     )
 
 
-def build_character_scenario_system(
+def build_immersive_system(
     character, memory_content: str, settings: dict, profile=None, world=None
 ) -> str:
     return (
@@ -306,7 +306,7 @@ def build_character_scenario_system(
         + _user_block(profile)
         + _memory_block(memory_content)
         + "# 生成要求\n"
-        f"{render_character_scenario_settings(settings)}\n\n"
+        f"{render_immersive_settings(settings)}\n\n"
         "# 导演指令\n"
         f"{settings.get('director_notes') or '（无）'}\n"
         "导演指令只决定情境与剧情的走向，不属于对话内容，角色不得提及或回应“收到指令”。\n\n"
@@ -319,7 +319,7 @@ def build_character_scenario_system(
     )
 
 
-def build_free_scenario_system(memory_content: str, settings: dict, world=None) -> str:
+def build_director_system(memory_content: str, settings: dict, world=None) -> str:
     # 这个模式没有独立的"导演指令"字段：用户在对话里发的内容本身就是对下一步的指令，
     # 再单设一个字段属于重复，且会让"当前指令"分散在两处。
     return (
@@ -328,7 +328,7 @@ def build_free_scenario_system(memory_content: str, settings: dict, world=None) 
         + "# 本会话此前的剧情\n"
         f"{memory_content.strip() or '（暂无，这是新的故事）'}\n\n"
         "# 生成要求\n"
-        f"{render_free_scenario_settings(settings)}\n\n"
+        f"{render_director_settings(settings)}\n\n"
         "# 输出规则\n"
         "每次生成都用下面的标记分段输出，每个段落以标记开头，段落数量与先后顺序不限：\n"
         "[SCENARIO]场景、氛围、事件等情境说明\n"
@@ -344,25 +344,25 @@ def build_system_prompt(
 ) -> str:
     mode = session["mode"]
     settings = get_gen_settings(session)
-    if mode == "character_chat" and character is not None:
-        return build_character_chat_system(
+    if mode == "chat" and character is not None:
+        return build_chat_system(
             character, memory_content, settings, profile, world
         )
-    if mode == "character_scenario" and character is not None:
-        return build_character_scenario_system(
+    if mode == "immersive" and character is not None:
+        return build_immersive_system(
             character, memory_content, settings, profile, world
         )
-    if mode == "free_scenario":
-        # 自由情境不注入"我的设定"：那里没有"我是谁"，写故事的人不是故事里的角色。
+    if mode == "director":
+        # 导演模式不注入"我的设定"：那里没有"我是谁"，写故事的人不是故事里的角色。
         # 但世界设定要注入：故事就发生在那个世界里
-        return build_free_scenario_system(memory_content, settings, world)
+        return build_director_system(memory_content, settings, world)
     return "你是一个友好的中文对话助手，回答简洁自然。"
 
 
 def _restore_history(mode: str, row) -> str:
     """情境模式的历史 assistant 消息按原始标记格式回填，提升格式遵循率。"""
     content = row["content"]
-    if mode == "character_scenario":
+    if mode == "immersive":
         scenario = row["scenario"] if "scenario" in row.keys() else None
         if scenario:
             # 只有情境、没有台词时不要再补一个空的 [DIALOG]，那会教模型输出空标记
@@ -380,7 +380,7 @@ def build_messages(
     limit = get_config()["chat"]["history_max_messages"]
     msgs = [{"role": "system", "content": system}]
     for r in history_rows[-limit:]:
-        if r["role"] == "assistant" and mode != "character_chat":
+        if r["role"] == "assistant" and mode != "chat":
             msgs.append({"role": "assistant", "content": _restore_history(mode, r)})
         else:
             msgs.append({"role": r["role"], "content": r["content"]})
