@@ -1,21 +1,18 @@
 /**
- * 会话内搜索的纯逻辑测试（Node 直接跑，不需要浏览器）。
+ * 会话内搜索的纯逻辑测试（Node 直接跑：不需要浏览器，也不需要装任何依赖）。
  *
- * app.js 是给浏览器写的脚本（顶层就 Vue.createApp）。这里用最小 Vue 桩把它加载进来，
- * 取出 options 里的 data / computed / methods，然后按需拼出一个"假实例"来调用——
- * 这样标记、计数、环形跳转这些逻辑就能像普通函数一样断言，不必真开浏览器。
+ * app.js 现在是一个普通的 ES 模块，导出选项对象 appOptions（不再在顶层调用 Vue.createApp）。
+ * 这里把它的 data / computed / methods 拼成一个"假实例"来调用——
+ * 标记、计数、环形跳转这些逻辑就能像普通函数一样断言，不必真开浏览器。
  *
- * 跑法：node tests/test_search.js
+ * 跑法：node tests/test_search.mjs
  */
-const fs = require("fs");
-const path = require("path");
+import { appOptions } from "../frontend/src/app.js";
 
-let options = null;
-global.Vue = { createApp: (opts) => { options = opts; return { mount() {} }; } };
-global.document = { querySelector: () => null, querySelectorAll: () => [] };
-global.window = global;
-
-require(path.join(__dirname, "..", "app", "static", "app.js"));
+// scrollToHit 之类的方法会摸 document / window：给最小替身即可（这些赋值在调用前生效就行，
+// 不必像以前的 CJS 版本那样在 require 之前——app.js 的模块作用域不再碰浏览器 API）
+globalThis.document = { querySelector: () => null, querySelectorAll: () => [] };
+globalThis.window = globalThis;
 
 const FAILED = [];
 function check(name, got, want) {
@@ -26,16 +23,16 @@ function check(name, got, want) {
 }
 
 // 拼一个够用的假实例：data 里的初值 + computed + 绑定了 this 的 methods
-const data = options.data();
+const data = appOptions.data();
 const ctx = { ...data, $nextTick: (fn) => fn() };
-for (const [k, fn] of Object.entries(options.computed || {})) {
+for (const [k, fn] of Object.entries(appOptions.computed || {})) {
   Object.defineProperty(ctx, k, { get: () => fn.call(ctx) });
 }
-for (const [k, fn] of Object.entries(options.methods || {})) {
+for (const [k, fn] of Object.entries(appOptions.methods || {})) {
   ctx[k] = (...a) => fn.apply(ctx, a);
 }
 // 监听器也挂上：测试要能直接触发它们（如"命中数变少时把序号夹回范围"）
-ctx.watch = options.watch || {};
+ctx.watch = appOptions.watch || {};
 
 // ---- 文本切块：渲染与搜索共用同一种切法 ----
 const multi = { id: 1, content: "[SCENARIO]雨夜\n[DIALOG]你好", scenario: "MULTI" };

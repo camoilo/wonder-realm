@@ -33,6 +33,12 @@ backups/
 # 测试在工作区里临时建的库（正常跑完会自己删掉，中途失败时别把工作区弄脏）
 .test_*_tmp/
 
+# ---------- 前端 ----------
+# npm 依赖与缓存：依赖由 frontend/package.json + package-lock.json 锁定，装出来不入库。
+# 注意 app/static/ 下的构建产物**要提交**（见 DEVELOPMENT 10.47）：没装 Node 也能直接跑。
+frontend/node_modules/
+.npm-cache/
+
 # ---------- 配置与密钥 ----------
 # 本地覆盖用的配置与密钥不入库；config.yaml 本身是仓库的一部分，保留
 .env

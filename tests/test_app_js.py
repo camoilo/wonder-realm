@@ -12,9 +12,12 @@ sys.path.insert(0, str(ROOT))
 
 from app.character_gen import HIDDEN_FIELDS  # noqa: E402
 
-js = (ROOT / "app/static/app.js").read_text(encoding="utf-8")
-html = (ROOT / "app/static/index.html").read_text(encoding="utf-8")
-css = (ROOT / "app/static/style.css").read_text(encoding="utf-8")
+frontend = ROOT / "frontend"
+js = (frontend / "src/app.js").read_text(encoding="utf-8")
+html = (frontend / "index.html").read_text(encoding="utf-8")
+css = (frontend / "src/style.css").read_text(encoding="utf-8")
+main_js = (frontend / "src/main.js").read_text(encoding="utf-8")
+vite_cfg = (frontend / "vite.config.js").read_text(encoding="utf-8")
 # 判断"某条样式是否已清除"时要先去掉注释：注释里解释"这里原来有个 XXX"是正常的，
 # 不该被当成样式还在（反过来也避免有人把规则注释掉却骗过检查）
 css_code = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
@@ -59,6 +62,24 @@ def top_keys(text, indent):
         if m:
             out.add(m.group(1).strip('"'))
     return out
+
+
+# ---- 构建方式：Vue 3 + Vite（不再走 CDN） ----
+check("index.html 不再引用 CDN", "cdn.jsdelivr" in html, False)
+check("入口改成 ES 模块", '<script type="module" src="/src/main.js"></script>' in html, True)
+check("样式改由入口 import（HTML 里不再有 link）", 'rel="stylesheet"' in html, False)
+check("app.js 不在顶层创建应用", "Vue.createApp" in js, False)
+check("app.js 导出选项对象", "export const appOptions = {" in js, True)
+check("入口负责 createApp 并挂载", 'createApp(appOptions).mount("#app")' in main_js, True)
+check("入口引入样式", 'import "./style.css";' in main_js, True)
+check("Vite 把产物写进后端静态目录", '"../app/static"' in vite_cfg, True)
+# 产物守卫：改了源码忘了构建、或产物被删，都在这里拦下（产物是提交进仓库的）
+built_html = (ROOT / "app/static/index.html").read_text(encoding="utf-8")
+assets = re.findall(r'(?:src|href)="(/assets/[^"]+)"', built_html)
+check("构建产物被引用（一个 js + 一个 css）", len(assets), 2)
+check("引用的产物文件都在",
+      all((ROOT / "app/static" / a.lstrip("/")).is_file() for a in assets), True)
+check("构建产物里没有 CDN 残留", "cdn.jsdelivr" in built_html, False)
 
 
 # ---- HTML 标签配对 ----

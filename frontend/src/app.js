@@ -176,7 +176,7 @@ const emptyCharModal = () => ({
   saveError: "",
 });
 
-const app = Vue.createApp({
+export const appOptions = {
   data() {
     return {
       MODES,
@@ -2038,5 +2038,4 @@ const app = Vue.createApp({
       }
     },
   },
-});
-app.mount("#app");
+};

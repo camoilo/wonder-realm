@@ -20,7 +20,7 @@
 | 操作系统 | Windows 11（不做跨系统适配承诺） |
 | 模型服务 | 本机 Ollama（默认 `http://localhost:11434`） |
 | 后端 | Python 3.13（uv 管理环境与依赖）/ FastAPI / SQLite（文件数据库，路径在配置中直接指定） |
-| 前端 | Vue 3（CDN 引入，无构建流程）+ 原生 CSS |
+| 前端 | Vue 3 + Vite 构建（`frontend/` 是源码，`app/static/` 是产物）/ 原生 CSS |
 | 使用场景 | 单用户本地使用，无鉴权、无多用户并发设计 |
 
 对话模型不与启动配置绑定：首次启动取 `config.yaml` 的默认值，之后在界面随时切换，思考型与非思考型模型均兼容（见 5.2、6.6 与 10.6）。
@@ -29,7 +29,7 @@
 
 - **FastAPI**：原生支持 async 与 `StreamingResponse`，SSE 流式输出实现简单；自动生成 OpenAPI 文档方便调试。
 - **SQLite + WAL 模式**：单文件、零部署，单用户场景下无并发瓶颈；数据全在本地，符合"本地记忆"的定位。
-- **Vue 3 CDN 模式**：省去 node/npm 构建链，前端就是三个静态文件，由 FastAPI 直接托管；界面状态较多（三模式、角色/会话两级列表、右侧面板、流式生成与停止、行内编辑），纯原生 JS 会比模板语法更难维护。
+- **Vue 3 + Vite 构建**：前端源码在 `frontend/`（`index.html` + `src/`），构建产物落到 `app/static/` 由 FastAPI 直接托管。这样依赖版本锁在 `node_modules` 里、不依赖外网 CDN（离线也能用），并且可以用模块化的方式组织代码。**代价**：多一个 Node 工具链、改前端要多一步构建（产物提交进仓库，所以**没装 Node 也能直接跑**；`start.bat` 在检测到 Node 时会顺手重建）。早期的取舍是"CDN 免构建"，2026-09-22 按用户要求改为构建，理由与细节见 10.47。
 - **SSE 而非 WebSocket**：通信是单向流（请求 → 生成流），SSE 足够且实现和调试都更简单。
 
 ## 2. 需求定义
@@ -606,7 +606,7 @@ def parse_output(mode: str, raw: str) -> tuple[str | None, str]:
 
 容错原则：认不出标记时不丢弃内容，整体降级为话语文本；解析成功后落库的 `content`/`scenario` 是干净文本，`free_scenario` 例外（存原始全文，渲染时再分段）。**角色情境允许"只有情境、没有台词"**（`content` 为空串、`scenario` 有值）：那正是模型输出的内容，不该丢；`persist_message` 因此把"有情境"也算作有效内容。相应地，编辑这类消息时正文可以留空（见 5.5）。
 
-分段渲染发生在前端：`free_scenario` 的 `content` 是带标记全文，`app.js` 用同一个正则（`SEGMENT_RE`，带 `g` 标志）在 `segmentsOf()` 里按原文顺序切成情境段与话语段渲染——段落数量与顺序完全由模型输出决定，前端不假设两者交替出现，只有 `[SCENARIO]` 时就是一个情境块。后端不在 SSE 响应里附带分段结果——同一份数据只在一处解析，避免两个来源不一致。`parser.py` 里另有一个等价实现 `split_segments()`，目前只被单测引用，作为这条正则的参考实现与回归用例。
+分段渲染发生在前端：`free_scenario` 的 `content` 是带标记全文，前端（`frontend/src/app.js`）用同一个正则（`SEGMENT_RE`，带 `g` 标志）在 `segmentsOf()` 里按原文顺序切成情境段与话语段渲染——段落数量与顺序完全由模型输出决定，前端不假设两者交替出现，只有 `[SCENARIO]` 时就是一个情境块。后端不在 SSE 响应里附带分段结果——同一份数据只在一处解析，避免两个来源不一致。`parser.py` 里另有一个等价实现 `split_segments()`，目前只被单测引用，作为这条正则的参考实现与回归用例。
 
 **流式渲染与解析的关系**：思考内容在到达前端之前已被上述两层处理拦下——前端只会收到 `status` 事件的"思考中"占位与正文增量，正文增量直接显示在"生成中"的原始块里；收到 `done` 事件（携带解析后的 `content`/`scenario`）后用解析结果替换渲染。这样避免流中途解析产生的抖动，实现也最简单。
 
@@ -887,7 +887,10 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 
 ### 7.3 前端技术约定
 
-- Vue 3 全局构建（CDN `<script>`），单 `app.js` + `style.css`，无路由库（Tab 切换用组件状态即可）
+- **Vue 3 + Vite 构建**：源码在 `frontend/`（`index.html` 是入口、`src/` 放脚本与样式），`npm run build` 产物落到 `app/static/`（`index.html` + `assets/` 带哈希文件名），由 FastAPI 直接托管。**产物提交进仓库**，所以运行应用不需要 Node；`start.bat` 检测到 `frontend/node_modules` 与 Node 时会先顺手重建一次。
+- **样式仍是全局一份**（`frontend/src/style.css`，在 `main.js` 里 import）：这个项目的 CSS 依赖源码顺序与跨上下文优先级（见 10.32），拆成 `<style scoped>` 会改变匹配范围、把那些修好的坑重新踩一遍。
+- **Vite 侧两处必须记住的配置**（`frontend/vite.config.js`）：`build.outDir` 指到 `../app/static` 并显式 `emptyOutDir`；`resolve.alias` 把 `vue` 指向 `vue/dist/vue.esm-bundler.js`（DOM 内模板需要运行时编译器，用默认的运行时版会渲染成空注释节点、页面全白——见 10.47）。模板拆进 `.vue` 单文件组件后这条 alias 可以去掉。
+- 无路由库（Tab 切换用组件状态即可）
 - SSE 用原生 `EventSource` 不支持 POST，改用 `fetch` + `ReadableStream` 手动解析 `text/event-stream`（封装一个约 30 行的 `ssePost()` 工具函数）
 - 状态结构：`{ mode, characters, sessions, activeSession, activeByMode, messages, streaming }`，全部收在一个 reactive store 对象里；`sessions` 只装当前模式的会话。另有三个面板快照 `genSaved` / `charSaved` / `memorySaved`，用于"未保存"判定（见 10.17）
 
@@ -926,10 +929,17 @@ ollama_agent/
 │   │   ├── profile.py      # 我的设定：当前设定 + 预设库（10.39）
 │   │   ├── world.py        # 世界设定：全局一份，整体读写（10.44）
 │   │   └── settings.py     # 模型设置、模型列表、生成要求表单定义
-│   └── static/
-│       ├── index.html      # 单页结构（三栏）
-│       ├── app.js          # Vue 应用：状态、SSE 客户端、各交互方法
-│       └── style.css
+│   └── static/             # **构建产物**（Vite 输出到这里，提交进仓库；不要手改这里）
+│       ├── index.html      #   单页结构（三栏）
+│       └── assets/         #   打包后的 js / css，文件名带哈希
+├── frontend/               # 前端源码（Vue 3 + Vite）
+│   ├── index.html          #   Vite 入口（单页模板），只留一个模块入口引用
+│   ├── package.json        #   vue 依赖 + vite 开发依赖 + dev/build 脚本
+│   ├── vite.config.js      #   产物落到 ../app/static；dev 时 /api 代理到 17800
+│   └── src/
+│       ├── main.js         #   入口：createApp(appOptions).mount("#app")，并 import 样式
+│       ├── app.js          #   Vue 选项对象（data / computed / watch / methods）
+│       └── style.css       #   全局样式（不拆 scoped，理由见 7.3）
 ├── tests/
 │   ├── test_thinkfilter.py    # ThinkFilter 状态机单测（uv run python tests/test_thinkfilter.py）
 │   ├── test_parser.py         # 输出解析与分段单测（uv run python tests/test_parser.py）
@@ -939,11 +949,13 @@ ollama_agent/
 │   ├── test_profile.py        # 我的设定的预设（复用 user_profile）+ 未选模型时的行为
 │   ├── test_context.py        # 记忆阈值与 num_ctx 的配套关系（改一个忘一个会静默截断）
 │   ├── test_world.py          # 世界设定：名称不进提示词、其余三项进三种模式、空词条丢弃
-│   ├── test_app_js.py         # 前端结构、模板方法引用、标签配对、data/computed/methods 重名检查
-│   └── test_search.js         # 会话内搜索的标记/计数/跳转（Node 跑，用 Vue 桩加载 app.js）
+│   ├── test_app_js.py         # 前端结构、模板方法引用、标签配对、重名检查、构建产物守卫
+│   └── test_search.mjs        # 会话内搜索的标记/计数/跳转（Node 跑，直接 import appOptions）
 └── data/
     └── chatbot.db          # SQLite 数据库（路径由 config.yaml 指定，不入版本库）
 ```
+
+`frontend/node_modules/` 与 npm 缓存不入库；`app/static/` 下的**产物要提交**（没装 Node 也能直接跑），源码改了忘记构建时 `tests/test_app_js.py` 会拦下来。
 
 `backups/` 与 `data/` 一样是运行时目录、都在 `.gitignore` 里，见 5.7。
 
@@ -1078,6 +1090,12 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 **阶段 22：世界设定**
 右侧面板加第 5 个标签"世界设定"：世界名称（**只给自己辨认、不进提示词**）、描述、规则、词库（专有名词 + 解释，一条一行、可增删、最多 30 条），四项全可选、随时可改。**全局一份**（单行表 `world`，开新表所以旧库自动建出来），描述 / 规则 / 词库注入**三种模式**的提示词、位置在角色设定之前；名称不进提示词。标签栏为此改成可换行（角色模式下 5 个标签排成 3+2，不裁字）。
 验证：新库默认全空且只有一行；PUT/GET 往返、词库保持顺序、解释可留空；全空合法、只填部分合法、文本两端空白被去掉；名词为空的行被丢弃；名称 / 描述 / 规则 / 名词 / 解释 / 条数六个上限各自 422、边界值放行；三种模式的 system prompt 都含描述 / 规则 / 词库，**都不含世界名称**，世界块排在 `# 角色设定` 之前；只填了名称时整块不出现（名字也不出现）；没有世界设定时不报错；`build_messages` 的 system 消息同样带着；库里词库 JSON 被写坏时退回空列表而不影响其它字段；前端断言：标签不判模式（自由情境也显示）、脏标记与还原、保存派发到 `saveWorld`、启动加载、词条增删方法、到上限后添加键置灰、名称注明"不发给模型"、标签栏 `flex-wrap` 与 30% 基准宽度；浏览器实测 5 标签排成 3+2 且无一被截断、3 标签仍是一行、词条卡片的删除键与计数都不压输入框。
+
+**阶段 23：前端改用 Vue 3 + Vite 构建**
+按用户要求把前端从"CDN 取 Vue + 三个静态文件"改成"npm 依赖 + Vite 构建"：源码搬到 `frontend/`（`index.html` 入口 + `src/main.js` + `src/app.js` + `src/style.css`），`npm run build` 把产物写进 `app/static/`（`index.html` + 带哈希的 `assets/`）并由 FastAPI 照旧托管，**产物提交进仓库**，所以没装 Node 也能直接跑；`start.bat` 在检测到 Node 与 `node_modules` 时先顺手重建一次。
+验证：`style.css` 与迁移前**逐字节相同**、`app.js` 只改首尾两处（`Vue.createApp({...})` → `export const appOptions = {...}`）、`index.html` 只改 head 与入口两处——三处 diff 都打印出来核对过；构建成功（产物 1 个 js + 1 个 css，文件名带哈希）；**用真实浏览器打开线上页面，DOM 里出现 `模式选择`/`未选择会话`、没有 `{{ }}` 与 `v-cloak` 残留**（这条在迁移前做不到：CDN 在本环境不可达，页面是全白的）；`tests/test_app_js.py` 增加 10 条构建相关断言（不再有 CDN、入口是 ES 模块、样式由入口 import、`app.js` 不在顶层创建应用、产物被引用且文件都在）；`tests/test_search.js` 改成 `tests/test_search.mjs`（直接 import `appOptions`，删掉 Vue 桩，仍然零依赖可跑）；9 个 Python 测试 + Node 测试全绿。
+
+**阶段 24（同轮继续）：拆成 `.vue` 单文件组件**——见 10.47。
 
 ## 10. 设计决策记录
 
@@ -1543,6 +1561,20 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 **③ 左右两侧统一分隔线**：`:root` 新增 `--divider: 2px solid #d7dae1`，左侧"模式选择"标题下、模式按钮下、以及右侧面板标签栏下沿三处都用它。之前左侧标题那条是 1px 的 `--border`（10.41 留下的），右侧标签栏那条是 2px，同一个界面里两种线既不一致也不够清楚。抽成变量之后"同款"是被代码保证的，不是靠两处各写一遍。
 
 测试：`tests/test_app_js.py` 的断言随三版一起改（开关没有 `v-if`、无会话时禁用、**在 `.toolbar` 内且位于 `.work` 之上**、文案只换箭头、`.ghost-btn:disabled` 有样式、`.work` / `.work-main` 样式都在、三处 `border-bottom: var(--divider)`）；断言名里刻意不写 ‹ › 两个字符——控制台是 GBK，打不出来会把测试自己搞崩。`tests/test_naming.py` 改成断言 `app_prefs` **不存在**、`app_settings` 有 `disable_thinking` 列；`tests/test_character_gen.py` 用新的 `write_disable_thinking()` 并加了两条"偏好与设置同表"的往返断言。
+
+### 10.47 前端从 CDN 改成 Vue 3 + Vite 构建
+
+**为什么改**（用户要求）。早期选"CDN 引入 Vue、无构建流程"的理由是"少一个工具链、前端就是三个静态文件"（原 §1.3）。改掉的收益：① **不再依赖外网**——CDN 不可达时页面直接全白（本环境实测就是如此：迁移前那个页面在无头浏览器里根本渲染不出来，迁移后同一环境正常渲染），离线同理；② 依赖版本锁在 `package-lock.json` 里，不受 CDN 版本漂移影响；③ 可以用模块组织代码，才有后面拆 `.vue` 的余地；④ 产物带哈希文件名，手工的 `?v=9` 版本号可以退休。**代价**：多一个 Node 工具链、改前端多一步构建、仓库里同时有源码与产物。
+
+**产物提交进仓库**（用户选的方案）：`app/static/` 从此是**纯产物**、不要手改；FastAPI 的托管方式一行未改（`main.py` 没动），所以**没装 Node 也能直接跑**。`start.bat` 在检测到 `frontend/node_modules` 与 Node 时先顺手 `npm run build` 一次（约 1 秒），这样也不会出现"改了源码忘了构建"。开发时 `cd frontend && npm run dev` 起 5173，`/api` 代理到 17800，改前端热更新。
+
+**踩到的两个坑，都记下来**：
+- **运行时版 Vue 不含模板编译器**：模板还写在 `index.html` 里（DOM 内模板），Vite 默认把 `vue` 解析到运行时版，于是 `createApp().mount("#app")` 之后只渲染一个空注释节点、**页面全白**（实测 DOM 只有 `<div id="app" data-v-app=""><!----></div>`）。修法：`vite.config.js` 里 alias 到 `vue/dist/vue.esm-bundler.js`，并显式 define `__VUE_OPTIONS_API__` 等特性开关。等模板拆进 `.vue` 单文件组件（构建期预编译）后这条 alias 可以去掉、省下约 30KB。
+- **沙箱里 npm 的默认缓存目录在工作区之外**，`npm install` 会被拒写（EPERM）；加 `--cache .npm-cache` 即解决。只影响在沙箱里开发，用户自己终端里跑 npm 不受影响。
+
+**等价性怎么保证的**：迁移只做三处文本改动，并逐行 diff 核对：`style.css` **零改动**；`app.js` 只改首尾两处（`const app = Vue.createApp({…}); app.mount("#app")` → `export const appOptions = {…}`）；`index.html` 只改 head（去掉 CDN 与 style 引用）与入口（`app.js?v=9` → `<script type="module" src="/src/main.js">`）。也就是说这次迁移**不改任何行为**，可与旧版逐行对照。
+
+**守卫**：`tests/test_app_js.py` 增加 10 条断言（不再有 CDN、入口是 ES 模块、样式由入口 import、`app.js` 不在顶层创建应用、产物被引用且文件都在、产物里没有 CDN 残留……）——"改了源码忘了构建"或"产物被删"都会被拦下。`tests/test_search.js` 改名 `tests/test_search.mjs`：`app.js` 不再依赖 Vue 全局，测试直接 `import { appOptions }`，Vue 桩整个删掉，依然零依赖可跑。
 
 ## 11. 开放问题
 
