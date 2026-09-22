@@ -1,5 +1,7 @@
 <template>
-<div v-for="m in displayMessages" :key="m.id" class="msg" :class="[m.role, {archived: m.archived}]">
+<!-- 只渲染一条消息（外层 v-for 在 ChatArea 里）。这里如果自己再遍历一次
+     displayMessages，就会变成 n 个组件 × 每个 n 条 = n² 条气泡（见 10.50） -->
+<div class="msg" :class="[m.role, {archived: m.archived}]">
             <div v-if="m.role === 'assistant' && activeChar" class="msg-side">
               <span class="avatar lg">
                 <img v-if="activeChar.avatar" :src="activeChar.avatar" :alt="activeChar.name">
@@ -52,13 +54,12 @@
 import { toRefs } from "vue";
 import { store } from "../store.js";
 
-const props = defineProps({ m: { type: Object, required: true } });
+defineProps({ m: { type: Object, required: true } });
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
   activeChar,
   deleteMenuId,
-  displayMessages,
   orphanActive,
   profile,
   searchIndex,

@@ -1647,6 +1647,24 @@ for _rel, _src in zip(VUE_ORDER, vue_sources):
     check(f"{_rel} 模板用到的 store 成员都已声明", _missing, [])
 
 
+# ---- 消息列表只能在一处遍历（10.50） ----
+# MessageItem 是"一条消息"的组件（ChatArea 里 `v-for … :m="m"` 传进去）。它的模板里
+# 如果还留着外层 v-for="m in displayMessages"，就变成 n 个组件 × 每个渲染 n 条 = n² 条
+# 气泡——两条消息看着"双倍"，四条就是"8 组"。这类结构错误静态检查一点都看不见：prop
+# 传了、绑定也都声明齐了，模板标识符守卫照样全绿。所以专门钉住"谁负责遍历这个列表"。
+_LIST_LOOPS = [rel for rel, src in zip(VUE_ORDER, vue_sources)
+               if re.search(r'v-for="[^"]*\bin\s+displayMessages\b', src)]
+check("消息列表只由一个组件遍历", _LIST_LOOPS, ["components/ChatArea.vue"])
+# 收单条消息的组件（定义了 m 这个 prop）不许再自己遍历整份列表
+_ITEM_LOOPS = [rel for rel, src in zip(VUE_ORDER, vue_sources)
+               if "defineProps" in src and re.search(r'v-for="[^"]*\bin\s+displayMessages\b', src)]
+check("只收一条消息的组件不再遍历列表", _ITEM_LOOPS, [])
+# 而且它必须真的用 prop（模板里读 m.xxx），否则分组渲染就成了空壳
+_MI = dict(zip(VUE_ORDER, vue_sources))["components/MessageItem.vue"]
+check("MessageItem 渲染的是传进来的那条消息",
+      bool(re.search(r"\{\{\s*m\.|\bm\.role\b", _MI)), True)
+
+
 # ---- HTML 标签配对 ----
 # 先剥掉注释：注释里可以出现 <mark> 这类字面标签（说明文字里就会写），
 # 浏览器会忽略注释内容，解析器也必须照做，否则会数出多余的"开标签"
