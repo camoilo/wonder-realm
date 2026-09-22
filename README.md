@@ -257,7 +257,7 @@ data_dir: ./data                  # 数据库目录
 2. 从 `backups/` 里挑一份，复制成 `data/chatbot.db`，并删掉旁边的 `data/chatbot.db-wal` 与 `data/chatbot.db-shm`（如果存在）
 3. 重新启动应用
 
-**彻底重置**：删掉 `data/chatbot.db`，下次启动会自动重建空库；**应用正在运行时删掉整个 `data/` 目录也不用重启**——下一个请求会把空库建回来（见 DEVELOPMENT 10.49）。`backups/` 里的历史备份不受影响，所以即使误删也还能从备份捞回来。
+**彻底重置**：删掉 `data/chatbot.db`，下次启动会自动重建空库；**应用正在运行时删掉整个 `data/` 目录也不用重启**——下一个请求会把空库建回来（见 DEVELOPMENT.md 第 9 章「开发约定与强调」）。`backups/` 里的历史备份不受影响，所以即使误删也还能从备份捞回来。
 
 ## 测试
 
@@ -282,7 +282,7 @@ node tests/test_init.mjs                   # 初始化容错：某个接口 500 
 
 ```
 ollama_agent/
-├── DEVELOPMENT.md          # 开发文档：需求、数据模型、核心机制、设计决策
+├── DEVELOPMENT.md          # 开发文档：需求、技术选型、数据模型、核心机制、开发约定
 ├── README.md               # 本文件
 ├── config.yaml             # 运行配置
 ├── pyproject.toml          # 依赖声明（uv.lock 锁定版本）
