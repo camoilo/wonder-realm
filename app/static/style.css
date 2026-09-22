@@ -232,31 +232,12 @@ html, body {
 .topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
-
-/* 标题 + 工具栏这一块：宽度 = 顶栏宽度减去右侧给"配置"键留的那一格，
-   于是搜索/模型/思考始终落在对话区右边缘，不会悬在面板上方（见 10.46） */
-.topbar-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* 只放"配置"键的那一格。面板展开时它与面板等宽——开关的右边缘正好是窗口右边缘，
-   面板开合都不会移动；面板收起时它收成按钮宽度，工具栏贴到它左边（与改动前观感一致） */
-.topbar-side {
-  flex: none;
-  display: flex;
-  justify-content: flex-end;
-}
-.topbar.with-panel .topbar-side { width: var(--panel-w); }
 
 .title-area {
   display: flex;
