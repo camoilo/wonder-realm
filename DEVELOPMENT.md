@@ -888,11 +888,15 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 ### 7.3 前端技术约定
 
 - **Vue 3 + Vite 构建**：源码在 `frontend/`（`index.html` 是入口、`src/` 放脚本与样式），`npm run build` 产物落到 `app/static/`（`index.html` + `assets/` 带哈希文件名），由 FastAPI 直接托管。**产物提交进仓库**，所以运行应用不需要 Node；`start.bat` 检测到 `frontend/node_modules` 与 Node 时会先顺手重建一次。
+- **拆成单文件组件后的文件布局**：`src/store.js` 是**全部状态与逻辑**（从原来的 Vue 选项对象机械搬来：data→`reactive(store)`、computed→`store.X = computed(...)`、methods→`Object.assign(store, {...})`、watch→`watchDefs` + `registerWatchers()`、mounted/beforeUnmount→`initApp()`/`disposeApp()`）；`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（面板内 5 个标签页暂留其中，第二批再拆）/ `modals/` 下的 5 个弹窗。
+- **组件怎么拿状态**：每个组件 `<script setup>` 里 `import { store } from "../store.js"`，用 `const { … } = toRefs(store)` 把**自己模板用到**的成员暴露成 setup 绑定，方法再用 `const { … } = store` 解构（函数不是响应式的）。这样**模板里的表达式与原文件逐字一致**——不需要给几百个引用加 `store.` 前缀，拆分因此可以逐行对照；同时依赖仍是显式的：看组件开头就知道它用了哪些状态。漏声明的后果是模板拿到 `undefined`（列表为空、按钮点了没反应），所以 `tests/test_app_js.py` 有一条守卫逐个组件比对"模板引用到的 store 成员 ⊆ 该文件声明过的绑定"。
+- **不使用 Pinia**：单一 store 对象 + 组合式 API 足够这个体量，省一个依赖。
+- **对话滚动容器**：原来是 `this.$refs.chatBox`，现在由 `ChatArea.vue` 在挂载时调 `setChatBox(el)` 交给 store（`scrollBottom` / `jumpToBottom` 在那边用）。
 - **样式仍是全局一份**（`frontend/src/style.css`，在 `main.js` 里 import）：这个项目的 CSS 依赖源码顺序与跨上下文优先级（见 10.32），拆成 `<style scoped>` 会改变匹配范围、把那些修好的坑重新踩一遍。
-- **Vite 侧两处必须记住的配置**（`frontend/vite.config.js`）：`build.outDir` 指到 `../app/static` 并显式 `emptyOutDir`；`resolve.alias` 把 `vue` 指向 `vue/dist/vue.esm-bundler.js`（DOM 内模板需要运行时编译器，用默认的运行时版会渲染成空注释节点、页面全白——见 10.47）。模板拆进 `.vue` 单文件组件后这条 alias 可以去掉。
+- **Vite 侧要记住的配置**（`frontend/vite.config.js`）：`build.outDir` 指到 `../app/static` 并显式 `emptyOutDir`；`plugins: [vue()]`；显式 define `__VUE_OPTIONS_API__` 等特性开关。**不需要**再 alias 到带编译器的 `vue.esm-bundler`——模板都在 `.vue` 里、构建期就编译好了（DOM 内模板时代那条 alias 见 10.47）。
 - 无路由库（Tab 切换用组件状态即可）
 - SSE 用原生 `EventSource` 不支持 POST，改用 `fetch` + `ReadableStream` 手动解析 `text/event-stream`（封装一个约 30 行的 `ssePost()` 工具函数）
-- 状态结构：`{ mode, characters, sessions, activeSession, activeByMode, messages, streaming }`，全部收在一个 reactive store 对象里；`sessions` 只装当前模式的会话。另有三个面板快照 `genSaved` / `charSaved` / `memorySaved`，用于"未保存"判定（见 10.17）
+- 状态结构：`{ mode, characters, sessions, activeSession, activeByMode, messages, streaming }`，全部收在同一个 store 里；`sessions` 只装当前模式的会话。另有三个面板快照 `genSaved` / `charSaved` / `memorySaved`，用于"未保存"判定（见 10.17）
 
 ## 8. 目录结构与配置
 
@@ -933,13 +937,19 @@ ollama_agent/
 │       ├── index.html      #   单页结构（三栏）
 │       └── assets/         #   打包后的 js / css，文件名带哈希
 ├── frontend/               # 前端源码（Vue 3 + Vite）
-│   ├── index.html          #   Vite 入口（单页模板），只留一个模块入口引用
-│   ├── package.json        #   vue 依赖 + vite 开发依赖 + dev/build 脚本
+│   ├── index.html          #   Vite 入口：只剩一个挂载点 + 模块入口引用
+│   ├── package.json        #   vue 依赖 / vite + @vitejs/plugin-vue 开发依赖 / dev·build 脚本
 │   ├── vite.config.js      #   产物落到 ../app/static；dev 时 /api 代理到 17800
 │   └── src/
-│       ├── main.js         #   入口：createApp(appOptions).mount("#app")，并 import 样式
-│       ├── app.js          #   Vue 选项对象（data / computed / watch / methods）
-│       └── style.css       #   全局样式（不拆 scoped，理由见 7.3）
+│       ├── main.js         #   入口：createApp(App).mount("#app")，并 import 全局样式
+│       ├── store.js        #   全部状态与逻辑（原选项对象机械搬来，见 7.3）
+│       ├── style.css       #   全局样式（不拆 scoped，理由见 7.3）
+│       ├── App.vue         #   布局骨架（.main / .work / .work-main）+ 生命周期
+│       └── components/
+│           ├── SideBar.vue     TopBar.vue      ChatArea.vue
+│           ├── MessageItem.vue InputBar.vue    Panel.vue
+│           └── modals/         CharacterModal · NewSessionModal · ConfirmModal
+│                               EditMessageModal · CropModal
 ├── tests/
 │   ├── test_thinkfilter.py    # ThinkFilter 状态机单测（uv run python tests/test_thinkfilter.py）
 │   ├── test_parser.py         # 输出解析与分段单测（uv run python tests/test_parser.py）
@@ -949,8 +959,8 @@ ollama_agent/
 │   ├── test_profile.py        # 我的设定的预设（复用 user_profile）+ 未选模型时的行为
 │   ├── test_context.py        # 记忆阈值与 num_ctx 的配套关系（改一个忘一个会静默截断）
 │   ├── test_world.py          # 世界设定：名称不进提示词、其余三项进三种模式、空词条丢弃
-│   ├── test_app_js.py         # 前端结构、模板方法引用、标签配对、重名检查、构建产物守卫
-│   └── test_search.mjs        # 会话内搜索的标记/计数/跳转（Node 跑，直接 import appOptions）
+│   ├── test_app_js.py         # 前端结构、绑定守卫、标签配对、重名检查、构建产物守卫
+│   └── test_search.mjs        # 会话内搜索的标记/计数/跳转（Node 跑，直接 import store）
 └── data/
     └── chatbot.db          # SQLite 数据库（路径由 config.yaml 指定，不入版本库）
 ```
@@ -1095,7 +1105,7 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 按用户要求把前端从"CDN 取 Vue + 三个静态文件"改成"npm 依赖 + Vite 构建"：源码搬到 `frontend/`（`index.html` 入口 + `src/main.js` + `src/app.js` + `src/style.css`），`npm run build` 把产物写进 `app/static/`（`index.html` + 带哈希的 `assets/`）并由 FastAPI 照旧托管，**产物提交进仓库**，所以没装 Node 也能直接跑；`start.bat` 在检测到 Node 与 `node_modules` 时先顺手重建一次。
 验证：`style.css` 与迁移前**逐字节相同**、`app.js` 只改首尾两处（`Vue.createApp({...})` → `export const appOptions = {...}`）、`index.html` 只改 head 与入口两处——三处 diff 都打印出来核对过；构建成功（产物 1 个 js + 1 个 css，文件名带哈希）；**用真实浏览器打开线上页面，DOM 里出现 `模式选择`/`未选择会话`、没有 `{{ }}` 与 `v-cloak` 残留**（这条在迁移前做不到：CDN 在本环境不可达，页面是全白的）；`tests/test_app_js.py` 增加 10 条构建相关断言（不再有 CDN、入口是 ES 模块、样式由入口 import、`app.js` 不在顶层创建应用、产物被引用且文件都在）；`tests/test_search.js` 改成 `tests/test_search.mjs`（直接 import `appOptions`，删掉 Vue 桩，仍然零依赖可跑）；9 个 Python 测试 + Node 测试全绿。
 
-**阶段 24（同轮继续）：拆成 `.vue` 单文件组件**——见 10.47。
+**阶段 24（同轮继续）：拆成 `.vue` 单文件组件**——`src/store.js` 收全部状态与逻辑，`App.vue` 只留布局骨架，`components/` 下按界面区域拆出 11 个组件（面板内 5 个标签页下一批再拆）。验证：dev 与生产构建在真实浏览器里都零警告、点开会话后 5 个标签齐全、按钮位置不变量仍成立、`test_app_js.py` 194 条断言全绿（含"组件绑定必须声明"的新守卫）。细节与踩坑见 10.47。
 
 ## 10. 设计决策记录
 
@@ -1574,7 +1584,17 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 
 **等价性怎么保证的**：迁移只做三处文本改动，并逐行 diff 核对：`style.css` **零改动**；`app.js` 只改首尾两处（`const app = Vue.createApp({…}); app.mount("#app")` → `export const appOptions = {…}`）；`index.html` 只改 head（去掉 CDN 与 style 引用）与入口（`app.js?v=9` → `<script type="module" src="/src/main.js">`）。也就是说这次迁移**不改任何行为**，可与旧版逐行对照。
 
-**守卫**：`tests/test_app_js.py` 增加 10 条断言（不再有 CDN、入口是 ES 模块、样式由入口 import、`app.js` 不在顶层创建应用、产物被引用且文件都在、产物里没有 CDN 残留……）——"改了源码忘了构建"或"产物被删"都会被拦下。`tests/test_search.js` 改名 `tests/test_search.mjs`：`app.js` 不再依赖 Vue 全局，测试直接 `import { appOptions }`，Vue 桩整个删掉，依然零依赖可跑。
+**守卫**：`tests/test_app_js.py` 增加 10 条断言（不再有 CDN、入口是 ES 模块、样式由入口 import、`app.js` 不在顶层创建应用、产物被引用且文件都在、产物里没有 CDN 残留……）——"改了源码忘了构建"或"产物被删"都会被拦下。`tests/test_search.js` 改名 `tests/test_search.mjs`：`app.js` 不再依赖 Vue 全局，测试直接 import 选项对象（**拆组件后改为 import `store.js`**，因此这一个测试需要先 `cd frontend && npm install`——其余测试仍零依赖）。
+
+**第二批（同轮）：拆成单文件组件。**按用户选的节奏，先拆"大块"：`App` + `SideBar` / `TopBar` / `ChatArea`（含 `MessageItem`）/ `InputBar` / `Panel` + 5 个弹窗，面板内部的 5 个标签页先留在 `Panel.vue` 里（下一批再拆）。做法与验证：
+
+- **逻辑用脚本机械搬运**：`app.js` 的选项对象按行切成 helpers / data / computed / watch / mounted / beforeUnmount / methods 七块，只做四处替换（`this.` → `store.`、`this.$nextTick(` → `nextTick(`、`this.$refs.chatBox` → 由 `setChatBox` 注入、computed 的简写方法 → `store.X = computed(...)`），**函数体一字未改**；同时检测 data / computed / methods 三者重名（合并成一个 reactive 对象后重名会静默覆盖，比选项对象时代更隐蔽）——结果是 64 / 28 / 72，无重名。
+- **模板一个字都不改**：组件用 `const { … } = toRefs(store)` 暴露自己用到的成员，所以原有表达式照旧。为此写了一小段"从模板表达式里抠标识符"的分析（跳过字符串、不取属性访问的后半截），用于①生成每个组件的绑定列表②核对"出现了但不属于 store、也不是局部量/内建"的名字——结果只剩 `:class` / `:style` 里的对象键（`on` / `off` / `near` / `width` …），说明没有漏配。
+- **`tests/test_app_js.py` 只改了三处**：源码读取改成"入口 HTML + 12 个 .vue 拼一坨"和"store.js + main.js + 各组件 script 拼一坨"；再补一行把 `store.` 视图换回 `this.`（因为 store.js 就是那样机械换出来的），原先针对选项对象写的 ~15 条断言一条都不用改。**新增守卫**：逐组件比对"模板引用到的 store 成员 ⊆ 该文件声明过的绑定"——漏声明时 Vue 只在开发构建里 warning，生产构建下就是"看起来正常但点了没反应"，必须用测试盯住。断言总数 194 条。
+- **实测**（真实浏览器 + 真实后端，探针用 MutationObserver 等挂载而不是定时器）：dev 模式（`npm run dev`，Vue 警告是开着的）与生产产物都通过——挂载成功、**点开一条会话后面板渲染出 5 个标签**、控制台**零 warning/零 error**；产物的按钮在面板开/关两态都是 `[1276,12,65,37]`（10.46 那条不变量在拆分后依然成立）。
+- **构建产物**：141–142 kB（gzip 49 kB）。去掉运行时编译器的 alias 后比"DOM 内模板 + 完整版 Vue"的 210 kB 小了约 70 kB。入口 HTML 只剩 0.39 kB（挂载点）。
+
+**踩到的坑（都记下来）**：① 弹窗在 `components/modals/` 下，store 的相对路径要多一层（`../../store.js`）——dev server 直接把这类错误报出来了，生产构建也会失败，属于响亮失败；② 往 dev server 的监听目录里写探针文件会让它的 watcher 崩（`EBUSY`），所以探针文件要在启动前写好；③ `--virtual-time-budget` 下定时器会抢在模块下载前跑完，探针必须用 `MutationObserver` 等真实挂载；④ dev server 在本沙箱里同样会被 `spawn EPERM` 拦（与 `vite build` 同一个边界，属于环境限制）。
 
 ## 11. 开放问题
 

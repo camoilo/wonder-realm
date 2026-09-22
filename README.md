@@ -261,7 +261,7 @@ data_dir: ./data                  # 数据库目录
 
 ## 测试
 
-八个纯 Python 测试 + 一个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py` 会临时建库，不碰 `data/`）：
+八个纯 Python 测试 + 一个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py` 会临时建库，不碰 `data/`）。**只有最下面那个 Node 测试需要先装一次前端依赖**（它直接 import `frontend/src/store.js`，那份逻辑依赖 Vue）：
 
 ```powershell
 uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
@@ -274,7 +274,7 @@ uv run python tests/test_profile.py        # 我的设定的预设 + 未选模�
 uv run python tests/test_context.py        # 记忆阈值必须留在 num_ctx 窗口内
 uv run python tests/test_world.py          # 世界设定：名称不进提示词，其余三项进三种模式
 
-node tests/test_search.mjs                 # 会话内搜索的标记/计数/跳转（用 Node 跑，无需装依赖）
+node tests/test_search.mjs                 # 会话内搜索的标记/计数/跳转（需先 cd frontend && npm install）
 ```
 
 ## 目录结构
@@ -301,7 +301,7 @@ ollama_agent/
 │   ├── generation.py       # 生成主流程
 │   ├── routes/             # 各资源的 HTTP 路由
 │   └── static/             # **构建产物**（Vite 输出，提交进仓库；不要手改）
-├── frontend/               # 前端源码：Vue 3 + Vite（index.html + src/）
+├── frontend/               # 前端源码：Vue 3 + Vite（index.html + src/，组件在 src/components/）
 ├── tests/                  # 纯 Python 测试 + 一个 Node 测试，直接跑，不碰 data/
 ├── data/chatbot.db         # 运行时生成
 └── backups/                # 运行时生成：每次启动的备份，保留最近 14 天

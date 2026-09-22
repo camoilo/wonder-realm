@@ -1,19 +1,15 @@
 import { fileURLToPath } from "node:url";
+import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
 // 构建产物直接落进后端的静态目录（app/static）：main.py 一行都不用改，
 // run.py / start.bat 也不需要 Node——没装 Node 就用仓库里已提交的产物。
 export default defineConfig({
-  resolve: {
-    alias: {
-      // 模板现在还写在 index.html 里（DOM 内模板），必须用**带编译器的完整版**：
-      // 默认的运行时版挂载后只渲染一个空注释节点、页面全白（实测过，见 DEVELOPMENT 10.47）。
-      // 等模板拆进 .vue 单文件组件后由构建期预编译，就能改回运行时版、省下这 30KB 左右
-      vue: "vue/dist/vue.esm-bundler.js",
-    },
-  },
+  plugins: [vue()],
+  // 模板都在 .vue 单文件组件里，构建期就编译好了，所以**不需要**再 alias 到带编译器的
+  // vue.esm-bundler：用默认的运行时版即可（省下约 30KB）。DOM 内模板时代那条 alias 见 10.47。
   define: {
-    // 本项目大量使用 Options API，且不需要 devtools：显式声明，免得 Vue 在控制台抱怨未定义
+    // 本项目大量使用 Options API 风格的选项对象（收在 store.js 里），且不需要 devtools
     __VUE_OPTIONS_API__: "true",
     __VUE_PROD_DEVTOOLS__: "false",
     __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: "false",

@@ -1,4 +1,13 @@
-const MODES = {
+// 前端的全部状态与逻辑。
+//
+// 这一层是从原来的 Vue 选项对象机械搬过来的：data → reactive(store)、methods → store 上的函数、
+// computed → computed() 后挂到 store 上（reactive 对象访问 ref 会自动解包）。**函数体一字未改**，
+// 只把成员访问从组件实例改成了 store，这样拆组件时不必重写逻辑、也能和迁移前逐行对照。
+//
+// 组件一律 `import { store } from "../store.js"` 然后在模板里写 store.xxx：显式、无隐式注入。
+import { computed, nextTick, reactive, watch } from "vue";
+
+export const MODES = {
   character_chat: { label: "角色对话", character: true },
   character_scenario: { label: "角色情境", character: true },
   free_scenario: { label: "自由情境", character: false },
@@ -176,9 +185,16 @@ const emptyCharModal = () => ({
   saveError: "",
 });
 
-export const appOptions = {
-  data() {
-    return {
+
+// 对话滚动容器：ChatArea.vue 挂载后写进来（原来走组件实例的 refs.chatBox）
+let chatBoxEl = null;
+
+export function setChatBox(el) {
+  chatBoxEl = el;
+}
+
+// ---- 状态（原 data()）----
+export const store = reactive({
       MODES,
       mode: "character_chat",
       models: [],
@@ -291,260 +307,10 @@ export const appOptions = {
         dragging: false,
       },
       tagDraft: {},
-    };
-  },
-  computed: {
-    isCharacterMode() {
-      return MODES[this.mode].character;
-    },
-    // 当前会话绑定的角色（自由情境没有）。消息区的头像与名字都用它，省得模板里重复长条件
-    activeChar() {
-      return (this.activeSession && this.activeSession.character) || null;
-    },
-    // 顶栏"思考模式"开关：只有思考型模型才让它可点
-    currentModelInfo() {
-      return this.models.find((m) => m.name === this.currentModel) || null;
-    },
-    currentModelSupportsThinking() {
-      if (!this.currentModel) return false; // 还没选模型：开关没有对象，置灰
-      const info = this.currentModelInfo;
-      return info ? !!info.thinking : true; // 模型列表还没到手时不置灰，免得闪一下
-    },
-    thinkToggleTitle() {
-      if (!this.currentModel) return "还没有选择模型，先在左边选一个";
-      if (!this.currentModelSupportsThinking) return "当前模型不支持思考模式，这个开关对它没有作用";
-      return this.disableThinking
-        ? "思考模式已关闭，点击开启"
-        : "思考模式已开启，点击关闭（能明显加快回复）";
-    },
-    // 对话区背景：只有角色两模式、且该角色有背景图时才有；自由情境、未选会话、
-    // 角色已删除都回落到空白背景。被"关闭背景"临时关掉时同样回落到空白
-    chatBgUrl() {
-      if (!this.activeChar || !this.bgImages.length || this.bgHidden) return "";
-      const i = Math.min(Math.max(this.bgIndex, 0), this.bgImages.length - 1);
-      return this.bgImages[i] || "";
-    },
-    // 背景条：只要该角色有图就出现。**不能**跟着背景是否显示来决定——否则一关掉，
-    // 连"重新显示"的按钮都没了，只能靠切会话或刷新恢复
-    showBgBar() {
-      return !!this.activeChar && this.bgImages.length > 0;
-    },
-    // 裁剪弹窗里那张图的位移与缩放。transform 里 translate 在前、scale 在后，
-    // 所以 (x, y) 就是"缩放后图片左上角"在取景框坐标系里的位置
-    cropImageStyle() {
-      const c = this.crop;
-      const s = c.natW && c.natH ? coverScale(c.natW, c.natH, c.view) * c.zoom : 1;
-      return {
-        width: c.natW + "px",
-        height: c.natH + "px",
-        transform: `translate(${c.x}px, ${c.y}px) scale(${s})`,
-        transformOrigin: "0 0",
-      };
-    },
-    // 当前取景框落在原图上的实际像素边长。放大后它可能小于输出边长，
-    // 那就意味着要放大（画面变糊）——只在小于输出尺寸时提示，平时不打扰
-    cropSamplePx() {
-      const c = this.crop;
-      if (!c.natW || !c.natH) return 0;
-      const { side } = cropSourceRect(c.natW, c.natH, c.view, c.zoom, c.x, c.y);
-      return Math.round(side);
-    },
-    isFreeScenario() {
-      return !!this.activeSession && this.activeSession.mode === "free_scenario";
-    },
-    // "继续"要有上一条回复可接才可用；生成中、角色已删时也不给用
-    canContinue() {
-      return (
-        this.isFreeScenario &&
-        !this.streaming &&
-        !this.orphanActive &&
-        this.messages.some((m) => m.role === "assistant")
-      );
-    },
-    freeSessions() {
-      return this.sessions.filter((s) => s.mode === "free_scenario");
-    },
-    orphanSessions() {
-      return this.sessions.filter((s) => s.mode !== "free_scenario" && !s.character_id);
-    },
-    orphanActive() {
-      return (
-        !!this.activeSession &&
-        this.activeSession.mode !== "free_scenario" &&
-        !this.activeSession.character
-      );
-    },
-    memoryScope() {
-      if (!this.activeSession) return null;
-      if (this.activeSession.mode === "free_scenario") {
-        return { type: "session", id: this.activeSession.id, label: "会话记忆" };
-      }
-      if (this.activeSession.character) {
-        return {
-          type: "character",
-          id: this.activeSession.character.id,
-          label: "角色记忆",
-        };
-      }
-      return null;
-    },
-    archivedCount() {
-      return this.messages.filter((m) => m.archived).length;
-    },
-    // 面板三块的"未保存"判定：各自与保存时的快照比对，改回原样就自动消失
-    genDirty() {
-      return !this.sameSnapshot(this.genForm, this.genSaved);
-    },
-    charDirty() {
-      return !this.sameSnapshot(this.charForm, this.charSaved);
-    },
-    memoryDirty() {
-      return this.memoryText !== this.memorySaved;
-    },
-    profileDirty() {
-      return !this.sameSnapshot(this.profileForm, this.profile);
-    },
-    worldDirty() {
-      return !this.sameSnapshot(this.worldForm, this.world);
-    },
-    anyDirty() {
-      return (
-        this.genDirty || this.charDirty || this.profileDirty ||
-        this.memoryDirty || this.worldDirty
-      );
-    },
-    // 当前标签是否有未保存改动：面板底部那一行"未保存 / 还原"按它显示。
-    // 键名与 armRevert / revertArm 的取值一致（gen / world / char / profile / memory）
-    activeTabDirty() {
-      if (this.panelTab === "world") return this.worldDirty;
-      if (this.panelTab === "char") return this.charDirty;
-      if (this.panelTab === "profile") return this.profileDirty;
-      if (this.panelTab === "memory") return this.memoryDirty;
-      return this.genDirty;
-    },
-    // 面板底部的保存键几个标签共用：只有角色设定要求姓名非空（后端也要求）；
-    // 世界设定与"我的设定"一样可以全空保存
-    saveDisabled() {
-      return this.panelTab === "char" && !this.charForm.name.trim();
-    },
-    // 用户消息要不要显示头像那一列：只在角色两模式（有 activeChar）、
-    // 且用户至少设了名字或头像时才渲染，否则会留一个空白列
-    showUserSide() {
-      return !!this.activeChar && !!(this.profile.avatar || this.profile.name);
-    },
-    displayMessages() {
-      return this.showArchived
-        ? this.messages
-        : this.messages.filter((m) => !m.archived);
-    },
-    // 会话内搜索的计划：把每条消息按"渲染块"切开，标出每块里命中的片段以及它们的
-    // 全局序号。一次算完，模板按 id 取用——渲染时不必再关心"这是第几个命中"。
-    // 只搜当前显示出来的消息（已归档且未展开的不参与），与用户看到的一致
-    searchPlan() {
-      const plan = { parts: {}, total: 0 };
-      if (!this.searchQuery.trim()) return plan;
-      // 转义后按正则搜：这样大小写不敏感，且命中位置直接是原串下标
-      // （先用 toLowerCase 再 indexOf 在少数 Unicode 上会因长度变化而错位）
-      const re = new RegExp(this.escapeRegExp(this.searchQuery.trim()), "gi");
-      let n = 0;
-      for (const m of this.displayMessages) {
-        const parts = [];
-        for (const p of this.textParts(m)) {
-          const pieces = [];
-          let last = 0;
-          let hit;
-          re.lastIndex = 0;
-          while ((hit = re.exec(p.text)) !== null) {
-            if (hit[0] === "") break; // 空匹配会死循环，理论上不会发生
-            if (hit.index > last) pieces.push({ text: p.text.slice(last, hit.index), hit: false });
-            pieces.push({ text: hit[0], hit: true, index: n++ });
-            last = hit.index + hit[0].length;
-          }
-          pieces.push({ text: p.text.slice(last), hit: false });
-          parts.push({ kind: p.kind, pieces });
-        }
-        plan.parts[m.id] = parts;
-      }
-      plan.total = n;
-      return plan;
-    },
-    searchTotal() {
-      return this.searchPlan.total;
-    },
-  },
-  watch: {
-    activeSessionId() {
-      // 切换会话时右侧面板保持展开，只把内容刷新成新会话的
-      this.showArchived = false;
-      this.loadMemory();
-      this.initGenForm();
-    },
-    activeSession(s) {
-      if (s && s.character) {
-        const c = s.character;
-        this.charForm = {
-          name: c.name,
-          appearance: c.appearance,
-          // 锁定的角色拿不到这三项（接口就不下发），留空即可：保存时后端也会忽略它们
-          personality: c.personality || "",
-          speech_style: c.speech_style || "",
-          backstory: c.backstory || "",
-          // 必须带上：面板是整体提交的，漏了它就会在保存角色设定时把头像一个不剩地清掉
-          avatar: c.avatar || "",
-          // 背景图不随角色下发，由 loadBackgrounds() 填充
-          backgrounds: [],
-        };
-        this.charLocked = !!c.locked;
-      } else {
-        this.charForm = emptyCharForm();
-        this.charLocked = false;
-      }
-      this.charSaved = this.snapshot(this.charForm); // 重新载入即视为已保存
-      this.fixPanelTab();
-    },
-    // 生成前换了模式，之前那份结果就不适用了：探索模式的结果前端压根没拿到隐藏字段，
-    // 开放模式的结果也不该直接变成"锁定"。清掉草稿，请用户重新生成
-    "charModal.gen.mode"() {
-      if (this.charModal.gen.draftId) this.resetGeneratedDraft();
-    },
-    panelCollapsed(collapsed) {      // 展开面板时重新拉一次记忆，避免收起期间的数据过期；
-      // 但用户手上有未保存的编辑时不能覆盖掉
-      if (!collapsed && !this.memoryDirty) this.loadMemory();
-    },
-    // 改动被撤销（标识消失）时顺手解除还原键的武装，免得下次单击就误回退
-    genDirty(v) {
-      if (!v) this.disarmRevert("gen");
-    },
-    charDirty(v) {
-      if (!v) this.disarmRevert("char");
-    },
-    profileDirty(v) {
-      if (!v) this.disarmRevert("profile");
-    },
-    // 换了关键词就从头开始数，并直接把第一处命中滚到眼前
-    searchQuery() {
-      this.searchIndex = 0;
-      this.scrollToHit();
-    },
-    // 命中数变少（消息被编辑/删除、归档折叠）时把序号夹回范围内
-    searchTotal(v) {
-      if (this.searchIndex >= v) this.searchIndex = 0;
-    },
-    memoryDirty(v) {
-      if (!v) this.disarmRevert("memory");
-    },
-  },
-  mounted() {
-    this.init();
-    // 点空白处 / 按 Esc 关掉消息删除菜单与编辑弹窗，避免它们只能靠再次点按钮关闭
-    document.addEventListener("click", this.onDocumentClick);
-    document.addEventListener("keydown", this.onDocumentKeydown);
-  },
-  beforeUnmount() {
-    document.removeEventListener("click", this.onDocumentClick);
-    document.removeEventListener("keydown", this.onDocumentKeydown);
-  },
-  methods: {
+});
+
+// ---- 方法（原 methods）----
+Object.assign(store, {
     // 把失败响应统一转成 Error，并带上状态码：
     // 调用方据此区分“服务端明确拒绝（如角色已删除）”与“连接中断”，提示才不会误导
     async httpError(resp) {
@@ -560,7 +326,7 @@ export const appOptions = {
 
     async api(path, opts = {}) {
       const resp = await fetch(path, opts);
-      if (!resp.ok) throw await this.httpError(resp);
+      if (!resp.ok) throw await store.httpError(resp);
       return resp.json();
     },
 
@@ -585,8 +351,8 @@ export const appOptions = {
     // 消息上方那一行显示的"说话人"：角色两模式下模型消息用角色名、用户消息用"我的设定"
     // 里的名字；自由情境模式两边都没有名字（那一行只剩时间）
     msgName(m) {
-      if (!this.activeChar) return "";
-      return m.role === "assistant" ? this.activeChar.name : this.profile.name || "";
+      if (!store.activeChar) return "";
+      return m.role === "assistant" ? store.activeChar.name : store.profile.name || "";
     },
 
     // 消息的时间。created_at 存的就是本地时间、格式固定为 "2026-09-21T12:34:45"
@@ -604,9 +370,9 @@ export const appOptions = {
     // 标签页兜底：切到没有该标签的会话或模式（自由情境没有角色设定、未选会话没有记忆）
     // 时回到"生成要求"，否则面板会是一片空白
     fixPanelTab() {
-      const hasChar = !!(this.activeSession && this.activeSession.character);
-      if (this.panelTab === "char" && !hasChar) this.panelTab = "gen";
-      if (this.panelTab === "memory" && !this.memoryScope) this.panelTab = "gen";
+      const hasChar = !!(store.activeSession && store.activeSession.character);
+      if (store.panelTab === "char" && !hasChar) store.panelTab = "gen";
+      if (store.panelTab === "memory" && !store.memoryScope) store.panelTab = "gen";
     },
 
     // 键顺序无关的快照比对：重建表单后键序可能不同，直接 JSON.stringify 会误判为已修改
@@ -628,68 +394,68 @@ export const appOptions = {
     disarmRevert(section) {
       clearTimeout(revertTimers[section]);
       delete revertTimers[section];
-      this.revertArm[section] = false;
+      store.revertArm[section] = false;
     },
 
     // 还原键：第一次点击只"武装"（按钮变成确认字样），再点一次才真的回退，避免误触丢改动
     armRevert(section) {
-      if (this.revertArm[section]) {
-        this.revertSection(section);
+      if (store.revertArm[section]) {
+        store.revertSection(section);
         return;
       }
-      this.revertArm[section] = true;
+      store.revertArm[section] = true;
       clearTimeout(revertTimers[section]);
       // 几秒内没有第二次点击就自动解除，免得一直停在"待确认"状态
-      revertTimers[section] = setTimeout(() => this.disarmRevert(section), 5000);
+      revertTimers[section] = setTimeout(() => store.disarmRevert(section), 5000);
     },
 
     // 回退到最近一次保存（或载入）时的快照；没保存过的会话即回到默认值
     revertSection(section) {
-      this.disarmRevert(section);
-      if (section === "gen") this.genForm = this.snapshot(this.genSaved);
-      else if (section === "char") this.charForm = this.snapshot(this.charSaved);
-      else if (section === "profile") this.profileForm = this.snapshot(this.profile);
-      else if (section === "world") this.worldForm = this.snapshot(this.world);
-      else if (section === "memory") this.memoryText = this.memorySaved;
+      store.disarmRevert(section);
+      if (section === "gen") store.genForm = store.snapshot(store.genSaved);
+      else if (section === "char") store.charForm = store.snapshot(store.charSaved);
+      else if (section === "profile") store.profileForm = store.snapshot(store.profile);
+      else if (section === "world") store.worldForm = store.snapshot(store.world);
+      else if (section === "memory") store.memoryText = store.memorySaved;
     },
 
     onDocumentClick() {
       // 删除菜单与触发它的按钮都做了 stopPropagation，能走到这里就说明点的是别处
-      this.deleteMenuId = null;
+      store.deleteMenuId = null;
     },
 
     onDocumentKeydown(e) {
       if (e.key !== "Escape") return;
       // 裁剪弹窗叠在最上层，Esc 先关它
-      if (this.crop.visible) {
-        this.cancelCrop();
+      if (store.crop.visible) {
+        store.cancelCrop();
         return;
       }
-      this.deleteMenuId = null;
-      if (this.editingId !== null) this.cancelEdit();
+      store.deleteMenuId = null;
+      if (store.editingId !== null) store.cancelEdit();
     },
 
     cancelEdit() {
-      this.editingId = null;
+      store.editingId = null;
     },
 
     ask(text) {
       return new Promise((resolve) => {
-        this.confirmBox = { visible: true, text, resolve };
+        store.confirmBox = { visible: true, text, resolve };
       });
     },
 
     answerConfirm(val) {
-      this.confirmBox.visible = false;
-      if (this.confirmBox.resolve) this.confirmBox.resolve(val);
+      store.confirmBox.visible = false;
+      if (store.confirmBox.resolve) store.confirmBox.resolve(val);
     },
 
     // SSE 用 POST，EventSource 不支持，改用 fetch + ReadableStream 手动解析
     async ssePost(url, body, handlers, signal) {
-      const opts = this.jsonOpts("POST", body);
+      const opts = store.jsonOpts("POST", body);
       if (signal) opts.signal = signal;
       const resp = await fetch(url, opts);
-      if (!resp.ok) throw await this.httpError(resp);
+      if (!resp.ok) throw await store.httpError(resp);
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
@@ -716,160 +482,160 @@ export const appOptions = {
       let ollamaOk = true;
       // 字数上限以后端为准；拿不到就沿用 data 里的兜底值，不影响使用
       try {
-        this.limits = await this.api("/api/limits");
+        store.limits = await store.api("/api/limits");
       } catch (e) {
         /* 用兜底值 */
       }
       // "我的设定"是全局的，只在启动时取一次；保存后由 saveProfile 刷新
       try {
-        const p = await this.api("/api/profile");
-        this.profile = p;
-        this.profileForm = this.snapshot(p);
-        await this.loadPresets();
+        const p = await store.api("/api/profile");
+        store.profile = p;
+        store.profileForm = store.snapshot(p);
+        await store.loadPresets();
       } catch (e) {
         /* 拿不到就用空值，面板里照样能填 */
       }
       // "世界设定"同样是全局的，也只在启动时取一次；保存后由 saveWorld 刷新
       try {
-        const w = await this.api("/api/world");
-        this.world = w;
-        this.worldForm = this.snapshot(w);
+        const w = await store.api("/api/world");
+        store.world = w;
+        store.worldForm = store.snapshot(w);
       } catch (e) {
         /* 拿不到就用空值 */
       }
       try {
-        this.models = await this.api("/api/models");
+        store.models = await store.api("/api/models");
       } catch (e) {
         ollamaOk = false;
-        this.modelWarning = "无法连接 Ollama，请确认服务已启动";
+        store.modelWarning = "无法连接 Ollama，请确认服务已启动";
       }
       try {
-        const s = await this.api("/api/settings");
-        this.currentModel = s.model;
-        this.disableThinking = !!s.disable_thinking;
+        const s = await store.api("/api/settings");
+        store.currentModel = s.model;
+        store.disableThinking = !!s.disable_thinking;
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
         return;
       }
       if (ollamaOk) {
-        if (this.models.length === 0) {
-          this.modelWarning = "Ollama 中还没有可用模型，请先拉取一个";
-        } else if (!this.currentModel) {
+        if (store.models.length === 0) {
+          store.modelWarning = "Ollama 中还没有可用模型，请先拉取一个";
+        } else if (!store.currentModel) {
           // 首次使用不预选模型：给一句提示，但不拦着用户浏览界面
-          this.modelWarning = "还没有选择模型，生成前请先在左边选一个";
-        } else if (!this.models.some((m) => m.name === this.currentModel)) {
-          this.modelWarning = `所选模型 ${this.currentModel} 未安装，请在右侧重新选择`;
+          store.modelWarning = "还没有选择模型，生成前请先在左边选一个";
+        } else if (!store.models.some((m) => m.name === store.currentModel)) {
+          store.modelWarning = `所选模型 ${store.currentModel} 未安装，请在右侧重新选择`;
         }
       }
-      await this.refreshCharacters();
-      await this.refreshSessions();
+      await store.refreshCharacters();
+      await store.refreshSessions();
       try {
-        const form = await this.api("/api/gen-settings");
-        this.genFields = form.fields;
-        this.genDefaults = form.defaults;
+        const form = await store.api("/api/gen-settings");
+        store.genFields = form.fields;
+        store.genDefaults = form.defaults;
       } catch (e) {
         /* 表单定义拉取失败时生成要求区留空 */
       }
     },
 
     async refreshCharacters() {
-      this.characters = await this.api("/api/characters");
+      store.characters = await store.api("/api/characters");
     },
 
     async refreshSessions() {
       // 只拉当前模式的会话：角色对话与角色情境的会话列表相互隔离，互不可见
-      this.sessions = await this.api(`/api/sessions?mode=${this.mode}`);
+      store.sessions = await store.api(`/api/sessions?mode=${store.mode}`);
     },
 
     async switchMode(key) {
-      if (key === this.mode) return;
-      if (this.streaming) {
-        this.error = "正在生成中，请等待完成后再切换模式";
+      if (key === store.mode) return;
+      if (store.streaming) {
+        store.error = "正在生成中，请等待完成后再切换模式";
         return;
       }
-      this.activeByMode[this.mode] = this.activeSessionId; // 记住本模式正看哪条
-      this.mode = key;
-      this.error = "";
+      store.activeByMode[store.mode] = store.activeSessionId; // 记住本模式正看哪条
+      store.mode = key;
+      store.error = "";
       try {
-        await this.refreshSessions();
+        await store.refreshSessions();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
         return;
       }
-      const remembered = this.activeByMode[key];
-      if (remembered && this.sessions.some((s) => s.id === remembered)) {
-        await this.openSession(remembered); // 切回来仍停在原来那条会话
+      const remembered = store.activeByMode[key];
+      if (remembered && store.sessions.some((s) => s.id === remembered)) {
+        await store.openSession(remembered); // 切回来仍停在原来那条会话
         return;
       }
       // 该模式没有可恢复的会话：清空对话区，另一模式的会话不残留
-      this.activeSessionId = null;
-      this.activeSession = null;
-      this.messages = [];
-      this.showArchived = false;
-      this.resetBackgrounds();
-      this.initGenForm();
+      store.activeSessionId = null;
+      store.activeSession = null;
+      store.messages = [];
+      store.showArchived = false;
+      store.resetBackgrounds();
+      store.initGenForm();
     },
 
     fieldsOf(mode) {
-      return this.genFields[mode] || [];
+      return store.genFields[mode] || [];
     },
 
     initGenForm() {
-      const mode = this.activeSession ? this.activeSession.mode : this.mode;
-      const merged = { ...(this.genDefaults[mode] || {}) };
-      const stored = (this.activeSession && this.activeSession.gen_settings) || {};
+      const mode = store.activeSession ? store.activeSession.mode : store.mode;
+      const merged = { ...(store.genDefaults[mode] || {}) };
+      const stored = (store.activeSession && store.activeSession.gen_settings) || {};
       for (const k of Object.keys(stored)) {
         if (stored[k] !== null && stored[k] !== "") merged[k] = stored[k];
       }
-      for (const f of this.fieldsOf(mode)) {
+      for (const f of store.fieldsOf(mode)) {
         if (f.type === "tags" && !Array.isArray(merged[f.key])) merged[f.key] = [];
         if (f.type === "radio" && !merged[f.key]) {
           merged[f.key] = (f.options && f.options[0] && f.options[0][0]) || "";
         }
       }
-      this.genForm = merged;
-      this.genSaved = this.snapshot(merged);
+      store.genForm = merged;
+      store.genSaved = store.snapshot(merged);
     },
 
     toggleTag(key, tag) {
-      const list = this.genForm[key] || [];
+      const list = store.genForm[key] || [];
       const i = list.indexOf(tag);
       if (i >= 0) list.splice(i, 1);
       else list.push(tag);
-      this.genForm[key] = [...list];
+      store.genForm[key] = [...list];
     },
 
     addTag(key) {
-      const draft = (this.tagDraft[key] || "").trim();
-      if (draft && !(this.genForm[key] || []).includes(draft)) {
-        this.genForm[key] = [...(this.genForm[key] || []), draft];
+      const draft = (store.tagDraft[key] || "").trim();
+      if (draft && !(store.genForm[key] || []).includes(draft)) {
+        store.genForm[key] = [...(store.genForm[key] || []), draft];
       }
-      this.tagDraft[key] = "";
+      store.tagDraft[key] = "";
     },
 
     removeTag(key, tag) {
-      this.genForm[key] = (this.genForm[key] || []).filter((t) => t !== tag);
+      store.genForm[key] = (store.genForm[key] || []).filter((t) => t !== tag);
     },
 
     customTags(field) {
-      return (this.genForm[field.key] || []).filter(
+      return (store.genForm[field.key] || []).filter(
         (t) => !(field.presets || []).includes(t)
       );
     },
 
     async saveGenSettings() {
       const payload = {};
-      for (const f of this.fieldsOf(this.activeSession.mode)) {
-        payload[f.key] = this.genForm[f.key];
+      for (const f of store.fieldsOf(store.activeSession.mode)) {
+        payload[f.key] = store.genForm[f.key];
       }
       try {
-        this.activeSession = await this.api(
-          `/api/sessions/${this.activeSessionId}`,
-          this.jsonOpts("PATCH", { gen_settings: payload })
+        store.activeSession = await store.api(
+          `/api/sessions/${store.activeSessionId}`,
+          store.jsonOpts("PATCH", { gen_settings: payload })
         );
-        this.initGenForm();
+        store.initGenForm();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
@@ -903,7 +669,7 @@ export const appOptions = {
     // 渲染与搜索共用它，两边的切法才不会不一致（否则命中数会对不上看到的字）
     textParts(m) {
       if (m.scenario === "MULTI") {
-        return this.segmentsOf(m).map((s) => ({ kind: s.type, text: s.text }));
+        return store.segmentsOf(m).map((s) => ({ kind: s.type, text: s.text }));
       }
       const out = [];
       if (m.scenario) out.push({ kind: "scenario", text: m.scenario });
@@ -913,9 +679,9 @@ export const appOptions = {
 
     // 模板用的分块：有搜索计划就取它（带命中标记），否则退回纯文本块
     partsOf(m) {
-      const planned = this.searchPlan.parts[m.id];
+      const planned = store.searchPlan.parts[m.id];
       if (planned) return planned;
-      return this.textParts(m).map((p) => ({
+      return store.textParts(m).map((p) => ({
         kind: p.kind,
         pieces: [{ text: p.text, hit: false }],
       }));
@@ -928,140 +694,140 @@ export const appOptions = {
 
     // ---- 会话内搜索 ----
     searchNext() {
-      this.searchStep(1);
+      store.searchStep(1);
     },
     searchPrev() {
-      this.searchStep(-1);
+      store.searchStep(-1);
     },
     searchStep(step) {
-      const total = this.searchTotal;
+      const total = store.searchTotal;
       if (!total) return;
       // 环形移动：走到头再点就绕回另一端
-      this.searchIndex = ((this.searchIndex + step) % total + total) % total;
-      this.scrollToHit();
+      store.searchIndex = ((store.searchIndex + step) % total + total) % total;
+      store.scrollToHit();
     },
     clearSearch() {
-      this.searchQuery = "";
-      this.searchIndex = 0;
+      store.searchQuery = "";
+      store.searchIndex = 0;
     },
     // 把当前命中滚到视野中间。等 Vue 把 .current 类挂上去之后再找元素
     scrollToHit() {
-      this.$nextTick(() => {
+      nextTick(() => {
         const el = document.querySelector(".search-hit.current");
         if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
       });
     },
 
     toggleChar(id) {
-      this.expandedChars[id] = !this.expandedChars[id];
+      store.expandedChars[id] = !store.expandedChars[id];
     },
 
     sessionsOf(cid) {
-      return this.sessions.filter((s) => s.character_id === cid);
+      return store.sessions.filter((s) => s.character_id === cid);
     },
 
     async openSession(id) {
-      if (this.streaming) {
-        this.error = "正在生成中，请等待完成后再切换会话";
+      if (store.streaming) {
+        store.error = "正在生成中，请等待完成后再切换会话";
         return;
       }
       try {
-        const session = await this.api(`/api/sessions/${id}`);
-        if (session.mode !== this.mode) {
+        const session = await store.api(`/api/sessions/${id}`);
+        if (session.mode !== store.mode) {
           // 列表已按模式过滤，正常点不到这里；防御性拦截，避免跨模式查看
-          this.error = `该会话属于「${MODES[session.mode].label}」模式，请切换模式后再打开`;
+          store.error = `该会话属于「${MODES[session.mode].label}」模式，请切换模式后再打开`;
           return;
         }
-        this.activeSession = session;
-        this.activeSessionId = id;
-        this.activeByMode[session.mode] = id;
-        this.messages = await this.api(`/api/sessions/${id}/messages`);
+        store.activeSession = session;
+        store.activeSessionId = id;
+        store.activeByMode[session.mode] = id;
+        store.messages = await store.api(`/api/sessions/${id}/messages`);
         // 背景图单独取（只有角色两模式有）
-        if (session.character_id) await this.loadBackgrounds(session.character_id);
-        else this.resetBackgrounds();
+        if (session.character_id) await store.loadBackgrounds(session.character_id);
+        else store.resetBackgrounds();
         if (session.character_id) {
-          this.expandedChars[session.character_id] = true;
+          store.expandedChars[session.character_id] = true;
         }
-        this.error = "";
-        this.scrollBottom();
+        store.error = "";
+        store.scrollBottom();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async newSession() {
-      if (this.mode === "free_scenario") {
+      if (store.mode === "free_scenario") {
         try {
-          const s = await this.api(
+          const s = await store.api(
             "/api/sessions",
-            this.jsonOpts("POST", { mode: "free_scenario" })
+            store.jsonOpts("POST", { mode: "free_scenario" })
           );
-          await this.refreshSessions();
-          await this.openSession(s.id);
+          await store.refreshSessions();
+          await store.openSession(s.id);
         } catch (e) {
-          this.error = e.message;
+          store.error = e.message;
         }
         return;
       }
-      if (this.characters.length === 0) {
-        this.openCharacterModal();
+      if (store.characters.length === 0) {
+        store.openCharacterModal();
         return;
       }
-      this.newSessionModal = {
+      store.newSessionModal = {
         visible: true,
-        characterId: this.characters[0].id,
+        characterId: store.characters[0].id,
         title: "",
       };
     },
 
     async confirmNewSession() {
       try {
-        const s = await this.api(
+        const s = await store.api(
           "/api/sessions",
-          this.jsonOpts("POST", {
-            mode: this.mode,
-            character_id: this.newSessionModal.characterId,
-            title: this.newSessionModal.title,
+          store.jsonOpts("POST", {
+            mode: store.mode,
+            character_id: store.newSessionModal.characterId,
+            title: store.newSessionModal.title,
           })
         );
-        this.newSessionModal.visible = false;
-        await this.refreshSessions();
-        await this.openSession(s.id);
+        store.newSessionModal.visible = false;
+        await store.refreshSessions();
+        await store.openSession(s.id);
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async createSessionForCharacter(cid) {
       try {
-        const s = await this.api(
+        const s = await store.api(
           "/api/sessions",
-          this.jsonOpts("POST", { mode: this.mode, character_id: cid })
+          store.jsonOpts("POST", { mode: store.mode, character_id: cid })
         );
-        await this.refreshSessions();
-        await this.openSession(s.id);
+        await store.refreshSessions();
+        await store.openSession(s.id);
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async removeSession(s) {
-      if (this.streaming) {
-        this.error = "正在生成中，请等待完成后再删除会话";
+      if (store.streaming) {
+        store.error = "正在生成中，请等待完成后再删除会话";
         return;
       }
-      if (!(await this.ask(`删除会话「${s.title}」？其全部消息将一并删除。`))) return;
+      if (!(await store.ask(`删除会话「${s.title}」？其全部消息将一并删除。`))) return;
       try {
-        await this.api(`/api/sessions/${s.id}`, { method: "DELETE" });
-        if (this.activeSessionId === s.id) {
-          this.activeSessionId = null;
-          this.activeSession = null;
-          this.messages = [];
-          this.resetBackgrounds();
+        await store.api(`/api/sessions/${s.id}`, { method: "DELETE" });
+        if (store.activeSessionId === s.id) {
+          store.activeSessionId = null;
+          store.activeSession = null;
+          store.messages = [];
+          store.resetBackgrounds();
         }
-        await this.refreshSessions();
+        await store.refreshSessions();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
@@ -1072,36 +838,36 @@ export const appOptions = {
       const file = e.target.files && e.target.files[0];
       e.target.value = ""; // 清掉，才能连续两次选同一个文件
       if (!file) return;
-      this.avatarError = "";
+      store.avatarError = "";
       const early = avatarFileError(file.type, file.size);
       if (early) {
-        this.avatarError = early;
+        store.avatarError = early;
         return;
       }
       let src;
       try {
         src = await readAsDataURL(file);
       } catch (err) {
-        this.avatarError = "读取文件失败，请重试";
+        store.avatarError = "读取文件失败，请重试";
         return;
       }
       let img;
       try {
         img = await loadImage(src);
       } catch (err) {
-        this.avatarError = "这个文件不是能识别的图片";
+        store.avatarError = "这个文件不是能识别的图片";
         return;
       }
       const later = avatarImageError(img.naturalWidth, img.naturalHeight);
       if (later) {
-        this.avatarError = later;
+        store.avatarError = later;
         return;
       }
       cropImage = img;
       const natW = img.naturalWidth;
       const natH = img.naturalHeight;
       const s = coverScale(natW, natH, CROP_VIEW_PX);
-      this.crop = {
+      store.crop = {
         visible: true,
         target,
         src,
@@ -1119,31 +885,31 @@ export const appOptions = {
 
     // 拖动：记录按下时的指针位置与图片偏移，移动时按位移换算新偏移并夹住边界
     cropDown(e) {
-      const c = this.crop;
+      const c = store.crop;
       if (!c.visible) return;
       c.dragging = true;
-      this._drag = { px: e.clientX, py: e.clientY, x0: c.x, y0: c.y };
+      store._drag = { px: e.clientX, py: e.clientY, x0: c.x, y0: c.y };
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
 
     cropMove(e) {
-      const c = this.crop;
-      if (!c.dragging || !this._drag) return;
-      const d = this._drag;
+      const c = store.crop;
+      if (!c.dragging || !store._drag) return;
+      const d = store._drag;
       const s = coverScale(c.natW, c.natH, c.view) * c.zoom;
       c.x = clampOffset(d.x0 + (e.clientX - d.px), c.natW * s, c.view);
       c.y = clampOffset(d.y0 + (e.clientY - d.py), c.natH * s, c.view);
     },
 
     cropUp(e) {
-      this.crop.dragging = false;
-      this._drag = null;
+      store.crop.dragging = false;
+      store._drag = null;
       e.currentTarget.releasePointerCapture?.(e.pointerId);
     },
 
     // 缩放时以取景框中心为锚点，图片不会突然跳走
     setCropZoom(z) {
-      const c = this.crop;
+      const c = store.crop;
       if (!c.visible) return;
       const to = Math.min(c.maxZoom, Math.max(1, Number(z) || 1));
       const next = zoomAroundCenter(c.natW, c.natH, c.view, c.zoom, to, c.x, c.y);
@@ -1153,14 +919,14 @@ export const appOptions = {
     },
 
     cancelCrop() {
-      this.crop.visible = false;
+      store.crop.visible = false;
       cropImage = null;
     },
 
     confirmCrop() {
-      const c = this.crop;
+      const c = store.crop;
       if (!cropImage) {
-        this.cancelCrop();
+        store.cancelCrop();
         return;
       }
       const { sx, sy, side } = cropSourceRect(c.natW, c.natH, c.view, c.zoom, c.x, c.y);
@@ -1174,62 +940,62 @@ export const appOptions = {
       try {
         ctx.drawImage(cropImage, sx, sy, side, side, 0, 0, AVATAR_OUT_PX, AVATAR_OUT_PX);
         const dataUrl = canvas.toDataURL("image/jpeg", AVATAR_QUALITY);
-        this.avatarForm(c.target).avatar = dataUrl;
-        this.avatarError = "";
-        this.cancelCrop();
+        store.avatarForm(c.target).avatar = dataUrl;
+        store.avatarError = "";
+        store.cancelCrop();
       } catch (err) {
         // 引用了外部资源（或跨域）的图片会污染画布，toDataURL 会抛 SecurityError
-        this.avatarError = "这张图片无法处理（可能引用了外部资源），请换一张";
+        store.avatarError = "这张图片无法处理（可能引用了外部资源），请换一张";
       }
     },
 
     // 头像归属的表单对象：角色弹窗 / 右侧面板角色设定 / 我的设定（用户资料）。
     // 裁剪与移除都通过它写回，不必在每处再写一遍 target 判断
     avatarForm(target) {
-      if (target === "profile") return this.profileForm;
-      return target === "modal" ? this.charModal.form : this.charForm;
+      if (target === "profile") return store.profileForm;
+      return target === "modal" ? store.charModal.form : store.charForm;
     },
 
     clearAvatar(target) {
-      this.avatarError = "";
-      this.avatarForm(target).avatar = "";
+      store.avatarError = "";
+      store.avatarForm(target).avatar = "";
     },
 
     // ---------- 对话区背景图 ----------
     resetBackgrounds() {
-      this.bgImages = [];
-      this.bgIndex = 0;
+      store.bgImages = [];
+      store.bgIndex = 0;
       // "关闭背景"是临时的：换会话/角色就恢复显示
-      this.bgHidden = false;
-      this.bgError = "";
+      store.bgHidden = false;
+      store.bgError = "";
     },
 
     // 载入当前会话角色的背景图。syncForm=true 时同步写进右侧面板的 charForm——
     // 否则在面板里一按保存就会把这组图整体提交成空。
     async loadBackgrounds(cid, syncForm = true) {
       try {
-        const resp = await this.api(`/api/characters/${cid}/backgrounds`);
-        this.bgImages = resp.images || [];
-        this.bgMax = resp.max || BG_MAX_COUNT;
-        if (this.bgIndex >= this.bgImages.length) this.bgIndex = 0;
-        if (syncForm && this.activeChar && this.activeChar.id === cid) {
-          this.charForm.backgrounds = [...this.bgImages];
+        const resp = await store.api(`/api/characters/${cid}/backgrounds`);
+        store.bgImages = resp.images || [];
+        store.bgMax = resp.max || BG_MAX_COUNT;
+        if (store.bgIndex >= store.bgImages.length) store.bgIndex = 0;
+        if (syncForm && store.activeChar && store.activeChar.id === cid) {
+          store.charForm.backgrounds = [...store.bgImages];
           // 只同步基线里的 backgrounds，不要整体重拍快照：
           // 那会把面板里其它尚未保存的改动一并标记成"已保存"
-          if (this.charSaved) this.charSaved.backgrounds = [...this.bgImages];
+          if (store.charSaved) store.charSaved.backgrounds = [...store.bgImages];
         }
       } catch (e) {
-        this.bgImages = [];
+        store.bgImages = [];
       }
     },
 
     // 角色弹窗里可能要编辑的不是当前会话的角色，所以单独取
     async loadModalBackgrounds(cid) {
       try {
-        const resp = await this.api(`/api/characters/${cid}/backgrounds`);
-        if (this.charModal.editingId === cid) {
-          this.charModal.form.backgrounds = resp.images || [];
-          this.bgMax = resp.max || BG_MAX_COUNT;
+        const resp = await store.api(`/api/characters/${cid}/backgrounds`);
+        if (store.charModal.editingId === cid) {
+          store.charModal.form.backgrounds = resp.images || [];
+          store.bgMax = resp.max || BG_MAX_COUNT;
         }
       } catch (e) {
         /* 取不到就按空处理，保存时以表单为准 */
@@ -1237,22 +1003,22 @@ export const appOptions = {
     },
 
     prevBg() {
-      const n = this.bgImages.length;
-      if (n > 1) this.bgIndex = (this.bgIndex - 1 + n) % n;
+      const n = store.bgImages.length;
+      if (n > 1) store.bgIndex = (store.bgIndex - 1 + n) % n;
     },
 
     nextBg() {
-      const n = this.bgImages.length;
-      if (n > 1) this.bgIndex = (this.bgIndex + 1) % n;
+      const n = store.bgImages.length;
+      if (n > 1) store.bgIndex = (store.bgIndex + 1) % n;
     },
 
     bgList(target) {
-      return (target === "modal" ? this.charModal.form.backgrounds : this.charForm.backgrounds) || [];
+      return (target === "modal" ? store.charModal.form.backgrounds : store.charForm.backgrounds) || [];
     },
 
     setBgList(target, list) {
-      if (target === "modal") this.charModal.form.backgrounds = list;
-      else this.charForm.backgrounds = list;
+      if (target === "modal") store.charModal.form.backgrounds = list;
+      else store.charForm.backgrounds = list;
     },
 
     // target: "modal"（角色弹窗）或 "panel"（右侧面板角色设定）
@@ -1260,16 +1026,16 @@ export const appOptions = {
       const files = Array.from(e.target.files || []);
       e.target.value = ""; // 清掉，才能连续两次选同一个文件
       if (!files.length) return;
-      const list = this.bgList(target);
-      const room = this.bgMax - list.length;
-      this.bgError = "";
+      const list = store.bgList(target);
+      const room = store.bgMax - list.length;
+      store.bgError = "";
       if (room <= 0) {
-        this.bgError = `最多只能放 ${this.bgMax} 张背景图`;
+        store.bgError = `最多只能放 ${store.bgMax} 张背景图`;
         return;
       }
       // 一次性可能选好几张大图，逐张缩放编码会占用一段时间，
       // 期间给个"处理中"状态并把按钮禁掉，避免重复点击
-      this.bgBusy = true;
+      store.bgBusy = true;
       const added = [];
       let problem = "";
       try {
@@ -1300,34 +1066,34 @@ export const appOptions = {
           await new Promise((r) => setTimeout(r, 0)); // 让出主线程，界面不至于卡住
         }
       } finally {
-        this.bgBusy = false;
+        store.bgBusy = false;
       }
-      if (added.length) this.setBgList(target, [...list, ...added]);
-      if (files.length > room) problem = `最多 ${this.bgMax} 张，多选的已忽略`;
-      this.bgError = problem;
+      if (added.length) store.setBgList(target, [...list, ...added]);
+      if (files.length > room) problem = `最多 ${store.bgMax} 张，多选的已忽略`;
+      store.bgError = problem;
     },
 
     removeBackground(target, i) {
-      const list = [...this.bgList(target)];
+      const list = [...store.bgList(target)];
       list.splice(i, 1);
-      this.setBgList(target, list);
-      this.bgError = "";
+      store.setBgList(target, list);
+      store.bgError = "";
     },
 
     // 背景排序：把第 from 张移到第 to 张的位置。顺序就是对话里上一张/下一张的顺序，
     // 第一张是打开会话时默认显示的那张
     moveBackground(target, from, to) {
-      const list = [...this.bgList(target)];
+      const list = [...store.bgList(target)];
       if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return;
       const [item] = list.splice(from, 1);
       list.splice(to, 0, item);
-      this.setBgList(target, list);
-      this.bgError = "";
+      store.setBgList(target, list);
+      store.bgError = "";
     },
 
     bgDragStart(e, target, i) {
-      this.bgDrag = { target, index: i };
-      this.bgHover = { target: null, index: null };
+      store.bgDrag = { target, index: i };
+      store.bgHover = { target: null, index: null };
       if (e.dataTransfer) {
         e.dataTransfer.effectAllowed = "move";
         // Firefox 不设数据就不启动拖拽
@@ -1340,36 +1106,36 @@ export const appOptions = {
     },
 
     bgDragOver(e, target, i) {
-      if (this.bgDrag.index === null || this.bgDrag.target !== target) return;
-      this.bgHover = { target, index: i };
+      if (store.bgDrag.index === null || store.bgDrag.target !== target) return;
+      store.bgHover = { target, index: i };
     },
 
     bgDrop(e, target, i) {
       // 先把状态取出来再清空：moveBackground 里要用
-      const drag = this.bgDrag;
-      this.bgDragEnd();
+      const drag = store.bgDrag;
+      store.bgDragEnd();
       if (!drag.target || drag.target !== target || drag.index === null) return;
-      this.moveBackground(target, drag.index, i);
+      store.moveBackground(target, drag.index, i);
     },
 
     bgDragEnd() {
-      this.bgDrag = { target: null, index: null };
-      this.bgHover = { target: null, index: null };
+      store.bgDrag = { target: null, index: null };
+      store.bgHover = { target: null, index: null };
     },
 
     bgDragging(target, i) {
-      return this.bgDrag.target === target && this.bgDrag.index === i;
+      return store.bgDrag.target === target && store.bgDrag.index === i;
     },
 
     bgDropTarget(target, i) {
-      return this.bgHover.target === target && this.bgHover.index === i;
+      return store.bgHover.target === target && store.bgHover.index === i;
     },
 
     openCharacterModal(c = null) {
-      this.avatarError = ""; // 换一个角色就清掉上一次的提示
-      this.bgError = "";
+      store.avatarError = ""; // 换一个角色就清掉上一次的提示
+      store.bgError = "";
       if (c) {
-        this.charModal = {
+        store.charModal = {
           ...emptyCharModal(),
           visible: true,
           editingId: c.id,
@@ -1384,31 +1150,31 @@ export const appOptions = {
           },
           locked: !!c.locked,
         };
-        this.loadModalBackgrounds(c.id);
+        store.loadModalBackgrounds(c.id);
       } else {
-        this.charModal = { ...emptyCharModal(), visible: true };
+        store.charModal = { ...emptyCharModal(), visible: true };
       }
     },
 
     // 让模型生成一份角色设定。开放模式把结果填进表单；探索模式只有姓名与外观，
     // 另外三项留在服务端草稿里（前端拿不到），保存时以草稿为准
     async generateCharacter() {
-      const gen = this.charModal.gen;
+      const gen = store.charModal.gen;
       if (gen.busy) return;
       gen.busy = true;
       gen.error = "";
       try {
-        const r = await this.api(
+        const r = await store.api(
           "/api/characters/generate",
-          this.jsonOpts("POST", { hint: gen.hint, mode: gen.mode })
+          store.jsonOpts("POST", { hint: gen.hint, mode: gen.mode })
         );
-        this.avatarError = "";
-        this.charModal.form.name = r.name || "";
-        this.charModal.form.appearance = r.appearance || "";
+        store.avatarError = "";
+        store.charModal.form.name = r.name || "";
+        store.charModal.form.appearance = r.appearance || "";
         for (const k of LOCKED_FIELDS) {
-          this.charModal.form[k] = r[k] || "";
+          store.charModal.form[k] = r[k] || "";
         }
-        this.charModal.locked = !!r.locked;
+        store.charModal.locked = !!r.locked;
         gen.draftId = r.draft_id;
       } catch (e) {
         gen.error = e.message;
@@ -1419,118 +1185,118 @@ export const appOptions = {
 
     // 换一个 / 换模式：清掉草稿与那三个字段，回到"重新生成"的状态
     resetGeneratedDraft() {
-      const gen = this.charModal.gen;
+      const gen = store.charModal.gen;
       gen.draftId = null;
       gen.error = "";
-      this.charModal.locked = false;
-      for (const k of LOCKED_FIELDS) this.charModal.form[k] = "";
+      store.charModal.locked = false;
+      for (const k of LOCKED_FIELDS) store.charModal.form[k] = "";
     },
 
     // 公开角色设定：单向、永久。确认后本地同步这三个字段，避免出现假的"未保存"
     async unlockCharacter(target) {
       const cid = target === "panel"
-        ? (this.activeChar && this.activeChar.id)
-        : this.charModal.editingId;
+        ? (store.activeChar && store.activeChar.id)
+        : store.charModal.editingId;
       if (!cid) return;
-      const ok = await this.ask(
+      const ok = await store.ask(
         "公开后将永久取消锁定，性格 / 语言风格 / 背景故事会显示出来并可以修改，且无法再锁回去。确定要公开吗？"
       );
       if (!ok) return;
       try {
-        const c = await this.api(`/api/characters/${cid}/unlock`, { method: "POST" });
-        const i = this.characters.findIndex((x) => x.id === cid);
-        if (i >= 0) this.characters[i] = { ...this.characters[i], ...c };
+        const c = await store.api(`/api/characters/${cid}/unlock`, { method: "POST" });
+        const i = store.characters.findIndex((x) => x.id === cid);
+        if (i >= 0) store.characters[i] = { ...store.characters[i], ...c };
         if (target === "panel") {
           for (const k of LOCKED_FIELDS) {
-            this.charForm[k] = c[k] || "";
+            store.charForm[k] = c[k] || "";
             // 快照一起写：这两处都是刚拿到的原值，不该被判成"未保存"
-            this.charSaved[k] = c[k] || "";
+            store.charSaved[k] = c[k] || "";
           }
-          this.charLocked = false;
-          if (this.activeSession && this.activeSession.character) {
-            Object.assign(this.activeSession.character, c);
+          store.charLocked = false;
+          if (store.activeSession && store.activeSession.character) {
+            Object.assign(store.activeSession.character, c);
           }
         } else {
-          for (const k of LOCKED_FIELDS) this.charModal.form[k] = c[k] || "";
-          this.charModal.locked = false;
+          for (const k of LOCKED_FIELDS) store.charModal.form[k] = c[k] || "";
+          store.charModal.locked = false;
         }
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async saveCharacterModal() {
       // 背景图不属于角色接口的字段，单独整体提交，所以先从角色载荷里摘出去
-      const { backgrounds, ...charPayload } = this.charModal.form;
-      this.charModal.saveError = "";
-      if (this.charModal.gen.draftId) charPayload.draft_id = this.charModal.gen.draftId;
+      const { backgrounds, ...charPayload } = store.charModal.form;
+      store.charModal.saveError = "";
+      if (store.charModal.gen.draftId) charPayload.draft_id = store.charModal.gen.draftId;
       try {
-        let cid = this.charModal.editingId;
+        let cid = store.charModal.editingId;
         if (cid) {
           delete charPayload.draft_id; // 编辑已有角色时不该带草稿
-          await this.api(`/api/characters/${cid}`, this.jsonOpts("PUT", charPayload));
+          await store.api(`/api/characters/${cid}`, store.jsonOpts("PUT", charPayload));
         } else {
-          const c = await this.api("/api/characters", this.jsonOpts("POST", charPayload));
+          const c = await store.api("/api/characters", store.jsonOpts("POST", charPayload));
           cid = c.id;
-          this.expandedChars[c.id] = true;
+          store.expandedChars[c.id] = true;
         }
-        await this.api(
+        await store.api(
           `/api/characters/${cid}/backgrounds`,
-          this.jsonOpts("PUT", { images: backgrounds || [] })
+          store.jsonOpts("PUT", { images: backgrounds || [] })
         );
-        this.charModal.visible = false;
-        await this.afterCharacterChange();
+        store.charModal.visible = false;
+        await store.afterCharacterChange();
       } catch (e) {
         // 弹窗里就地提示：例如应用重启导致探索模式的草稿失效，用户需要知道要重新生成
-        this.charModal.saveError = e.message;
-        this.error = e.message;
+        store.charModal.saveError = e.message;
+        store.error = e.message;
       }
     },
 
     async saveCharacterDrawer() {
-      const { backgrounds, ...charPayload } = this.charForm;
+      const { backgrounds, ...charPayload } = store.charForm;
       try {
-        const cid = this.activeSession.character.id;
-        await this.api(`/api/characters/${cid}`, this.jsonOpts("PUT", charPayload));
-        await this.api(
+        const cid = store.activeSession.character.id;
+        await store.api(`/api/characters/${cid}`, store.jsonOpts("PUT", charPayload));
+        await store.api(
           `/api/characters/${cid}/backgrounds`,
-          this.jsonOpts("PUT", { images: backgrounds || [] })
+          store.jsonOpts("PUT", { images: backgrounds || [] })
         );
-        await this.afterCharacterChange();
+        await store.afterCharacterChange();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     // 面板底部那个"保存当前配置"：几个标签各管各的数据，按钮只按当前标签转发。
     // 这样底部只要一个常驻按钮，不必在每个标签内容里各放一个
     saveCurrentTab() {
-      if (this.panelTab === "world") return this.saveWorld();
-      if (this.panelTab === "char") return this.saveCharacterDrawer();
-      if (this.panelTab === "profile") return this.saveProfile();
-      if (this.panelTab === "memory") return this.saveMemory();
-      return this.saveGenSettings();
+      if (store.panelTab === "world") return store.saveWorld();
+      if (store.panelTab === "char") return store.saveCharacterDrawer();
+      if (store.panelTab === "profile") return store.saveProfile();
+      if (store.panelTab === "memory") return store.saveMemory();
+      return store.saveGenSettings();
     },
 
     // ---- 世界设定（全局一份，三种模式都注入） ----
     // 加一条空词条：界面上先出现输入框，名词留空的行保存时由后端丢弃
     addTerm() {
-      if (this.worldForm.terms.length >= this.limits.world_terms_max) return;
-      this.worldForm.terms.push({ term: "", meaning: "" });
+      if (store.worldForm.terms.length >= store.limits.world_terms_max) return;
+      store.worldForm.terms.push({ term: "", meaning: "" });
     },
 
     removeTerm(index) {
-      this.worldForm.terms.splice(index, 1);
+      store.worldForm.terms.splice(index, 1);
     },
 
     // 我的设定：整体覆盖式保存；成功后以服务端返回为准刷新基线与显示用的 profile
     async saveProfile() {
       try {
-        const p = await this.api("/api/profile", this.jsonOpts("PUT", this.profileForm));
-        this.profile = p;
-        this.profileForm = this.snapshot(p);
+        const p = await store.api("/api/profile", store.jsonOpts("PUT", store.profileForm));
+        store.profile = p;
+        store.profileForm = store.snapshot(p);
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
@@ -1538,35 +1304,35 @@ export const appOptions = {
     // 所以用返回结果刷新表单——用户会看到那行空词条自己消失了
     async saveWorld() {
       try {
-        const w = await this.api("/api/world", this.jsonOpts("PUT", this.worldForm));
-        this.world = w;
-        this.worldForm = this.snapshot(w);
+        const w = await store.api("/api/world", store.jsonOpts("PUT", store.worldForm));
+        store.world = w;
+        store.worldForm = store.snapshot(w);
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     // ---- 我的设定的预设库 ----
     async loadPresets() {
       try {
-        this.profilePresets = await this.api("/api/profile/presets");
+        store.profilePresets = await store.api("/api/profile/presets");
         // 选中的那条可能已被删掉（比如另开一个标签页删的），清掉选择
-        if (this.presetPick && !this.profilePresets.some((p) => p.id === this.presetPick)) {
-          this.presetPick = "";
+        if (store.presetPick && !store.profilePresets.some((p) => p.id === store.presetPick)) {
+          store.presetPick = "";
         }
       } catch (e) {
-        this.presetError = e.message;
+        store.presetError = e.message;
       }
     },
 
     // 载入预设：只把这四项填进表单。用户确认无误后再点底部保存——
     // 直接覆盖当前设定会让"选错了"变成不可撤销
     loadPreset() {
-      this.presetError = "";
-      if (!this.presetPick) return;
-      const p = this.profilePresets.find((x) => x.id === this.presetPick);
+      store.presetError = "";
+      if (!store.presetPick) return;
+      const p = store.profilePresets.find((x) => x.id === store.presetPick);
       if (!p) return;
-      this.profileForm = {
+      store.profileForm = {
         name: p.name || "",
         identity: p.identity || "",
         appearance: p.appearance || "",
@@ -1575,103 +1341,103 @@ export const appOptions = {
     },
 
     async savePreset() {
-      this.presetError = "";
+      store.presetError = "";
       try {
-        const p = await this.api(
+        const p = await store.api(
           "/api/profile/presets",
-          this.jsonOpts("POST", this.profileForm)
+          store.jsonOpts("POST", store.profileForm)
         );
-        await this.loadPresets();
-        this.presetPick = p.id; // 存完直接选中它，方便继续改或删
+        await store.loadPresets();
+        store.presetPick = p.id; // 存完直接选中它，方便继续改或删
       } catch (e) {
-        this.presetError = e.message;
+        store.presetError = e.message;
       }
     },
 
     async removePreset() {
-      const p = this.profilePresets.find((x) => x.id === this.presetPick);
+      const p = store.profilePresets.find((x) => x.id === store.presetPick);
       if (!p) return;
-      if (!(await this.ask(`删除预设「${p.name}」？当前使用的设定不受影响。`))) return;
-      this.presetError = "";
+      if (!(await store.ask(`删除预设「${p.name}」？当前使用的设定不受影响。`))) return;
+      store.presetError = "";
       try {
-        await this.api(`/api/profile/presets/${p.id}`, { method: "DELETE" });
-        this.presetPick = "";
-        await this.loadPresets();
+        await store.api(`/api/profile/presets/${p.id}`, { method: "DELETE" });
+        store.presetPick = "";
+        await store.loadPresets();
       } catch (e) {
-        this.presetError = e.message;
+        store.presetError = e.message;
       }
     },
 
     async removeCharacterFromModal() {
-      const id = this.charModal.editingId;
-      const c = this.characters.find((x) => x.id === id);
+      const id = store.charModal.editingId;
+      const c = store.characters.find((x) => x.id === id);
       if (!c) return;
-      if (!(await this.ask(`删除角色「${c.name}」？其记忆将删除，已有会话保留但无法继续生成。`))) return;
-      this.charModal.visible = false;
-      await this.deleteCharacter(id);
+      if (!(await store.ask(`删除角色「${c.name}」？其记忆将删除，已有会话保留但无法继续生成。`))) return;
+      store.charModal.visible = false;
+      await store.deleteCharacter(id);
     },
 
     async deleteCharacter(id) {
       try {
-        await this.api(`/api/characters/${id}`, { method: "DELETE" });
-        await this.afterCharacterChange();
+        await store.api(`/api/characters/${id}`, { method: "DELETE" });
+        await store.afterCharacterChange();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async afterCharacterChange() {
-      await this.refreshCharacters();
-      await this.refreshSessions();
-      if (this.activeSessionId) {
-        this.activeSession = await this.api(`/api/sessions/${this.activeSessionId}`);
+      await store.refreshCharacters();
+      await store.refreshSessions();
+      if (store.activeSessionId) {
+        store.activeSession = await store.api(`/api/sessions/${store.activeSessionId}`);
       }
       // 角色可能刚被保存或删除，背景图跟着刷新（没有角色就清空）
-      if (this.activeChar) await this.loadBackgrounds(this.activeChar.id);
-      else this.resetBackgrounds();
+      if (store.activeChar) await store.loadBackgrounds(store.activeChar.id);
+      else store.resetBackgrounds();
     },
 
     startRename() {
-      if (!this.activeSession || this.renaming) return;
-      this.renameText = this.activeSession.title;
-      this.renaming = true;
-      this.$nextTick(() => {
+      if (!store.activeSession || store.renaming) return;
+      store.renameText = store.activeSession.title;
+      store.renaming = true;
+      nextTick(() => {
         const el = document.querySelector(".title-input");
         if (el) el.focus();
       });
     },
 
     async saveRename() {
-      if (!this.renaming) return;
-      this.renaming = false;
-      const title = this.renameText.trim();
-      if (!title || title === this.activeSession.title) return;
+      if (!store.renaming) return;
+      store.renaming = false;
+      const title = store.renameText.trim();
+      if (!title || title === store.activeSession.title) return;
       try {
-        this.activeSession = await this.api(
-          `/api/sessions/${this.activeSessionId}`,
-          this.jsonOpts("PATCH", { title })
+        store.activeSession = await store.api(
+          `/api/sessions/${store.activeSessionId}`,
+          store.jsonOpts("PATCH", { title })
         );
-        await this.refreshSessions();
+        await store.refreshSessions();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async switchModel() {
-      if (!this.currentModel) return;
+      if (!store.currentModel) return;
       try {
-        const s = await this.api(
+        const s = await store.api(
           "/api/settings",
-          this.jsonOpts("PUT", { model: this.currentModel })
+          store.jsonOpts("PUT", { model: store.currentModel })
         );
-        this.currentModel = s.model;
-        this.modelWarning = "";
+        store.currentModel = s.model;
+        store.modelWarning = "";
       } catch (e) {
         // 顶栏直接提示并回退：底部错误条只在打开会话时才渲染，不能依赖它
-        this.modelWarning = e.message;
+        store.modelWarning = e.message;
         try {
-          const s = await this.api("/api/settings");
-          this.currentModel = s.model;
+          const s = await store.api("/api/settings");
+          store.currentModel = s.model;
         } catch (_) {
           /* 读取失败就保持原选择 */
         }
@@ -1681,17 +1447,17 @@ export const appOptions = {
     // 顶栏的思考模式开关。失败时同样在顶栏提示并回退，理由同 switchModel
     async toggleThinking() {
       try {
-        const s = await this.api(
+        const s = await store.api(
           "/api/settings",
-          this.jsonOpts("PUT", { disable_thinking: !this.disableThinking })
+          store.jsonOpts("PUT", { disable_thinking: !store.disableThinking })
         );
-        this.disableThinking = !!s.disable_thinking;
-        this.modelWarning = "";
+        store.disableThinking = !!s.disable_thinking;
+        store.modelWarning = "";
       } catch (e) {
-        this.modelWarning = e.message;
+        store.modelWarning = e.message;
         try {
-          const s = await this.api("/api/settings");
-          this.disableThinking = !!s.disable_thinking;
+          const s = await store.api("/api/settings");
+          store.disableThinking = !!s.disable_thinking;
         } catch (_) {
           /* 保持原状态 */
         }
@@ -1699,36 +1465,36 @@ export const appOptions = {
     },
 
     async loadMemory() {
-      if (!this.memoryScope) return;
-      const { type, id } = this.memoryScope;
+      if (!store.memoryScope) return;
+      const { type, id } = store.memoryScope;
       try {
-        this.memoryData = await this.api(`/api/memories/${type}/${id}`);
-        this.memoryText = this.memoryData.content;
-        this.memorySaved = this.memoryText;
+        store.memoryData = await store.api(`/api/memories/${type}/${id}`);
+        store.memoryText = store.memoryData.content;
+        store.memorySaved = store.memoryText;
       } catch (e) {
         /* scope 不存在等场景：面板留空 */
       }
     },
 
     async saveMemory() {
-      const { type, id } = this.memoryScope;
+      const { type, id } = store.memoryScope;
       try {
-        this.memoryData = await this.api(
+        store.memoryData = await store.api(
           `/api/memories/${type}/${id}`,
-          this.jsonOpts("PUT", { content: this.memoryText })
+          store.jsonOpts("PUT", { content: store.memoryText })
         );
-        this.memoryText = this.memoryData.content;
-        this.memorySaved = this.memoryText; // 保存成功后"未保存"标识随之消失
+        store.memoryText = store.memoryData.content;
+        store.memorySaved = store.memoryText; // 保存成功后"未保存"标识随之消失
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async refreshMessages() {
-      if (!this.activeSessionId || this.streaming) return;
+      if (!store.activeSessionId || store.streaming) return;
       try {
-        this.messages = await this.api(
-          `/api/sessions/${this.activeSessionId}/messages`
+        store.messages = await store.api(
+          `/api/sessions/${store.activeSessionId}/messages`
         );
       } catch (e) {
         /* 会话已删等场景：静默 */
@@ -1737,97 +1503,97 @@ export const appOptions = {
 
     scheduleMemoryRefresh() {
       // 压缩是后台任务，done 后延迟拉取一次归档状态与记忆
-      const sid = this.activeSessionId;
+      const sid = store.activeSessionId;
       setTimeout(async () => {
-        if (this.activeSessionId !== sid) return;
-        await this.refreshMessages();
-        if (this.memoryScope) await this.loadMemory();
+        if (store.activeSessionId !== sid) return;
+        await store.refreshMessages();
+        if (store.memoryScope) await store.loadMemory();
       }, 12000);
     },
 
     beginStream() {
-      this.stopped = false;
-      this.abortCtrl = new AbortController();
-      this.streaming = true;
-      this.streamText = "";
-      this.thinkPhase = false;
+      store.stopped = false;
+      store.abortCtrl = new AbortController();
+      store.streaming = true;
+      store.streamText = "";
+      store.thinkPhase = false;
     },
 
     // 收尾流式状态；返回本次是否被用户主动停止
     endStream() {
-      const stopped = this.stopped;
-      this.streaming = false;
-      this.streamText = "";
-      this.thinkPhase = false;
-      this.abortCtrl = null;
-      this.stopped = false;
-      this.scheduleMemoryRefresh();
+      const stopped = store.stopped;
+      store.streaming = false;
+      store.streamText = "";
+      store.thinkPhase = false;
+      store.abortCtrl = null;
+      store.stopped = false;
+      store.scheduleMemoryRefresh();
       return stopped;
     },
 
     stop() {
-      if (!this.streaming || !this.abortCtrl) return;
-      this.stopped = true;
-      this.abortCtrl.abort();
+      if (!store.streaming || !store.abortCtrl) return;
+      store.stopped = true;
+      store.abortCtrl.abort();
     },
 
     // 服务端在连接断开后才会把已生成的部分落库，轮询几次等它写进去
     async syncAfterStop() {
-      const before = this.messages.length;
+      const before = store.messages.length;
       for (let i = 0; i < 8; i++) {
         await new Promise((r) => setTimeout(r, 250));
-        await this.refreshMessages();
-        if (this.messages.length > before) return;
+        await store.refreshMessages();
+        if (store.messages.length > before) return;
       }
     },
 
     canSendText(text) {
-      return !!text && !this.streaming && !!this.activeSession && !this.orphanActive;
+      return !!text && !store.streaming && !!store.activeSession && !store.orphanActive;
     },
 
     async send() {
-      const text = this.input.trim();
-      if (!this.canSendText(text)) return;
-      this.input = ""; // 通过校验后才清空，发不出去时不会把草稿弄丢
-      await this.runSend(text);
+      const text = store.input.trim();
+      if (!store.canSendText(text)) return;
+      store.input = ""; // 通过校验后才清空，发不出去时不会把草稿弄丢
+      await store.runSend(text);
     },
 
     // 自由情境的"继续"：等价于自动发一条"继续"，让模型接着上一条回复往下写。
     // 不动输入框——里面可能是用户正在写的草稿，不能被这个按钮吞掉。
     async continueGeneration() {
-      if (!this.canContinue) return;
-      await this.runSend(CONTINUE_PROMPT);
+      if (!store.canContinue) return;
+      await store.runSend(CONTINUE_PROMPT);
     },
 
     // 发消息与"继续"共用的发送路径，避免两处各写一遍流式处理而走偏
     async runSend(text) {
-      this.error = "";
-      this.lastFailedUser = null;
-      this.beginStream();
-      this.messages.push({ id: "tmp-user", role: "user", content: text });
-      this.scrollBottom();
+      store.error = "";
+      store.lastFailedUser = null;
+      store.beginStream();
+      store.messages.push({ id: "tmp-user", role: "user", content: text });
+      store.scrollBottom();
       let userId = null;
       let failed = false;
       try {
-        await this.ssePost(
-          `/api/sessions/${this.activeSessionId}/chat`,
+        await store.ssePost(
+          `/api/sessions/${store.activeSessionId}/chat`,
           { message: text },
           {
             meta: (d) => {
               userId = d.message_id;
-              const m = this.messages.find((x) => x.id === "tmp-user");
+              const m = store.messages.find((x) => x.id === "tmp-user");
               if (m) m.id = d.message_id;
             },
             status: (d) => {
-              this.thinkPhase = d.phase === "thinking";
+              store.thinkPhase = d.phase === "thinking";
             },
             delta: (d) => {
-              this.thinkPhase = false;
-              this.streamText += d.text;
-              this.scrollBottom();
+              store.thinkPhase = false;
+              store.streamText += d.text;
+              store.scrollBottom();
             },
             done: (d) => {
-              this.messages.push({
+              store.messages.push({
                 id: d.message_id,
                 role: "assistant",
                 content: d.content,
@@ -1835,59 +1601,59 @@ export const appOptions = {
               });
             },
             error: (d) => {
-              this.error = d.message;
-              if (userId) this.lastFailedUser = { id: userId, text };
+              store.error = d.message;
+              if (userId) store.lastFailedUser = { id: userId, text };
             },
           },
-          this.abortCtrl.signal
+          store.abortCtrl.signal
         );
       } catch (e) {
         // 用户点「停止」导致的中断不算错误：部分内容已由服务端落库
-        if (!this.stopped) {
-          this.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
-          if (userId) this.lastFailedUser = { id: userId, text };
+        if (!store.stopped) {
+          store.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
+          if (userId) store.lastFailedUser = { id: userId, text };
           // user 消息压根没落库（如角色已删除被拒），界面上那条是乐观渲染的，需要撤掉
           else failed = true;
         }
       }
-      const stopped = this.endStream();
-      if (stopped) await this.syncAfterStop();
-      else if (failed) await this.refreshMessages();
-      await this.refreshSessions();
-      this.scrollBottom();
+      const stopped = store.endStream();
+      if (stopped) await store.syncAfterStop();
+      else if (failed) await store.refreshMessages();
+      await store.refreshSessions();
+      store.scrollBottom();
     },
 
     async retryFailed() {
-      const { id, text } = this.lastFailedUser;
-      this.lastFailedUser = null;
-      this.error = "";
+      const { id, text } = store.lastFailedUser;
+      store.lastFailedUser = null;
+      store.error = "";
       try {
-        await this.api(`/api/messages/${id}`, { method: "DELETE" });
-        this.messages = this.messages.filter((m) => m.id !== id);
+        await store.api(`/api/messages/${id}`, { method: "DELETE" });
+        store.messages = store.messages.filter((m) => m.id !== id);
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
         return;
       }
-      this.input = text;
-      await this.send();
+      store.input = text;
+      await store.send();
     },
 
     async copyText(m) {
       try {
         await navigator.clipboard.writeText(m.content);
       } catch (e) {
-        this.error = "复制失败，请手动选择复制";
+        store.error = "复制失败，请手动选择复制";
       }
     },
 
     startEdit(m) {
-      this.deleteMenuId = null;
-      this.editingId = m.id;
-      const mode = this.activeSession.mode;
+      store.deleteMenuId = null;
+      store.editingId = m.id;
+      const mode = store.activeSession.mode;
       const isMulti = m.scenario === "MULTI";
       // 角色情境模式：无论当前有没有情境都给出情境输入框，方便手动补上
       const hasScenario = mode === "character_scenario";
-      this.editForm = {
+      store.editForm = {
         content: m.content,
         scenario: m.scenario && !isMulti ? m.scenario : "",
         hasScenario,
@@ -1899,15 +1665,15 @@ export const appOptions = {
           : "",
       };
       // 打开后按内容把输入框撑到实际高度，长消息不会被塞进一个小框里
-      this.$nextTick(() => {
+      nextTick(() => {
         document
           .querySelectorAll(".edit-modal textarea")
-          .forEach((el) => this.autoGrowEl(el));
+          .forEach((el) => store.autoGrowEl(el));
       });
     },
 
     autoGrow(e) {
-      this.autoGrowEl(e.target);
+      store.autoGrowEl(e.target);
     },
 
     autoGrowEl(el) {
@@ -1918,54 +1684,54 @@ export const appOptions = {
 
     async saveEdit() {
       // 编辑弹窗在消息列表之外，靠 editingId 找回目标消息
-      const m = this.messages.find((x) => x.id === this.editingId);
+      const m = store.messages.find((x) => x.id === store.editingId);
       if (!m) {
-        this.editingId = null;
+        store.editingId = null;
         return;
       }
-      const payload = { content: this.editForm.content.trim() };
-      if (this.editForm.hasScenario) {
-        payload.scenario = this.editForm.scenario.trim() || null; // 清空即不再显示情境块
+      const payload = { content: store.editForm.content.trim() };
+      if (store.editForm.hasScenario) {
+        payload.scenario = store.editForm.scenario.trim() || null; // 清空即不再显示情境块
       } else {
-        payload.scenario = this.editForm.keepScenario || null;
+        payload.scenario = store.editForm.keepScenario || null;
       }
       try {
-        const updated = await this.api(
+        const updated = await store.api(
           `/api/messages/${m.id}`,
-          this.jsonOpts("PUT", payload)
+          store.jsonOpts("PUT", payload)
         );
-        const idx = this.messages.findIndex((x) => x.id === m.id);
-        if (idx >= 0) this.messages.splice(idx, 1, updated);
-        this.editingId = null;
-        await this.refreshSessions();
+        const idx = store.messages.findIndex((x) => x.id === m.id);
+        if (idx >= 0) store.messages.splice(idx, 1, updated);
+        store.editingId = null;
+        await store.refreshSessions();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async removeMessage(m, cascade) {
-      this.deleteMenuId = null;
+      store.deleteMenuId = null;
       const tip = cascade
         ? "将删除该消息及其之后的所有消息，继续？"
         : "确认删除这条消息？";
-      if (!(await this.ask(tip))) return;
+      if (!(await store.ask(tip))) return;
       try {
-        await this.api(`/api/messages/${m.id}?cascade=${cascade}`, { method: "DELETE" });
+        await store.api(`/api/messages/${m.id}?cascade=${cascade}`, { method: "DELETE" });
         if (cascade) {
-          const idx = this.messages.findIndex((x) => x.id === m.id);
-          this.messages = this.messages.slice(0, idx);
+          const idx = store.messages.findIndex((x) => x.id === m.id);
+          store.messages = store.messages.slice(0, idx);
         } else {
-          this.messages = this.messages.filter((x) => x.id !== m.id);
+          store.messages = store.messages.filter((x) => x.id !== m.id);
         }
-        await this.refreshSessions();
+        await store.refreshSessions();
       } catch (e) {
-        this.error = e.message;
+        store.error = e.message;
       }
     },
 
     async regenerate(m) {
-      if (this.streaming) {
-        this.error = "正在生成中，请稍候";
+      if (store.streaming) {
+        store.error = "正在生成中，请稍候";
         return;
       }
       // 用户消息本身是这一轮的输入，必须保留，只删它之后的；assistant 消息则连它一起替换
@@ -1973,27 +1739,27 @@ export const appOptions = {
       const tip = isUser
         ? "将为这条消息重新生成回复，其后的消息会被删除，继续？"
         : "重新生成将删除该消息及其之后的所有消息，继续？";
-      if (!(await this.ask(tip))) return;
-      this.deleteMenuId = null;
-      this.error = "";
-      this.lastFailedUser = null;
-      const idx = this.messages.findIndex((x) => x.id === m.id);
-      this.messages = this.messages.slice(0, isUser ? idx + 1 : idx);
-      this.beginStream();
-      this.scrollBottom();
+      if (!(await store.ask(tip))) return;
+      store.deleteMenuId = null;
+      store.error = "";
+      store.lastFailedUser = null;
+      const idx = store.messages.findIndex((x) => x.id === m.id);
+      store.messages = store.messages.slice(0, isUser ? idx + 1 : idx);
+      store.beginStream();
+      store.scrollBottom();
       let failed = false;
       try {
-        await this.ssePost(`/api/messages/${m.id}/regenerate`, {}, {
+        await store.ssePost(`/api/messages/${m.id}/regenerate`, {}, {
           status: (d) => {
-            this.thinkPhase = d.phase === "thinking";
+            store.thinkPhase = d.phase === "thinking";
           },
           delta: (d) => {
-            this.thinkPhase = false;
-            this.streamText += d.text;
-            this.scrollBottom();
+            store.thinkPhase = false;
+            store.streamText += d.text;
+            store.scrollBottom();
           },
           done: (d) => {
-            this.messages.push({
+            store.messages.push({
               id: d.message_id,
               role: "assistant",
               content: d.content,
@@ -2001,26 +1767,26 @@ export const appOptions = {
             });
           },
           error: (d) => {
-            this.error = d.message;
+            store.error = d.message;
           },
-        }, this.abortCtrl.signal);
+        }, store.abortCtrl.signal);
       } catch (e) {
-        if (!this.stopped) {
+        if (!store.stopped) {
           failed = true;
-          this.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
+          store.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
         }
       }
-      const stopped = this.endStream();
-      if (stopped) await this.syncAfterStop();
+      const stopped = store.endStream();
+      if (stopped) await store.syncAfterStop();
       // 服务端校验不过时不会删消息，这里拉一次把上面乐观截断的界面还原回来
-      else if (failed) await this.refreshMessages();
-      await this.refreshSessions();
-      this.scrollBottom();
+      else if (failed) await store.refreshMessages();
+      await store.refreshSessions();
+      store.scrollBottom();
     },
 
     scrollBottom() {
-      this.$nextTick(() => {
-        const el = this.$refs.chatBox;
+      nextTick(() => {
+        const el = chatBoxEl;
         if (el) el.scrollTop = el.scrollHeight;
       });
     },
@@ -2029,7 +1795,7 @@ export const appOptions = {
     // 那个是流式输出时"跟着新内容即时贴底"，每来一小段就调用一次，必须瞬时、
     // 不能有动画，否则会一直追着一段没走完的平滑滚动跑。
     jumpToBottom() {
-      const el = this.$refs.chatBox;
+      const el = chatBoxEl;
       if (!el) return;
       if (typeof el.scrollTo === "function") {
         el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -2037,5 +1803,296 @@ export const appOptions = {
         el.scrollTop = el.scrollHeight; // 兜底：极老的浏览器不支持带 options 的 scrollTo
       }
     },
-  },
+});
+
+// ---- 计算属性（原 computed）----
+store.isCharacterMode = computed(() => {
+      return MODES[store.mode].character;
+});
+
+    // 当前会话绑定的角色（自由情境没有）。消息区的头像与名字都用它，省得模板里重复长条件
+store.activeChar = computed(() => {
+      return (store.activeSession && store.activeSession.character) || null;
+});
+
+    // 顶栏"思考模式"开关：只有思考型模型才让它可点
+store.currentModelInfo = computed(() => {
+      return store.models.find((m) => m.name === store.currentModel) || null;
+});
+
+store.currentModelSupportsThinking = computed(() => {
+      if (!store.currentModel) return false; // 还没选模型：开关没有对象，置灰
+      const info = store.currentModelInfo;
+      return info ? !!info.thinking : true; // 模型列表还没到手时不置灰，免得闪一下
+});
+
+store.thinkToggleTitle = computed(() => {
+      if (!store.currentModel) return "还没有选择模型，先在左边选一个";
+      if (!store.currentModelSupportsThinking) return "当前模型不支持思考模式，这个开关对它没有作用";
+      return store.disableThinking
+        ? "思考模式已关闭，点击开启"
+        : "思考模式已开启，点击关闭（能明显加快回复）";
+});
+
+    // 对话区背景：只有角色两模式、且该角色有背景图时才有；自由情境、未选会话、
+    // 角色已删除都回落到空白背景。被"关闭背景"临时关掉时同样回落到空白
+store.chatBgUrl = computed(() => {
+      if (!store.activeChar || !store.bgImages.length || store.bgHidden) return "";
+      const i = Math.min(Math.max(store.bgIndex, 0), store.bgImages.length - 1);
+      return store.bgImages[i] || "";
+});
+
+    // 背景条：只要该角色有图就出现。**不能**跟着背景是否显示来决定——否则一关掉，
+    // 连"重新显示"的按钮都没了，只能靠切会话或刷新恢复
+store.showBgBar = computed(() => {
+      return !!store.activeChar && store.bgImages.length > 0;
+});
+
+    // 裁剪弹窗里那张图的位移与缩放。transform 里 translate 在前、scale 在后，
+    // 所以 (x, y) 就是"缩放后图片左上角"在取景框坐标系里的位置
+store.cropImageStyle = computed(() => {
+      const c = store.crop;
+      const s = c.natW && c.natH ? coverScale(c.natW, c.natH, c.view) * c.zoom : 1;
+      return {
+        width: c.natW + "px",
+        height: c.natH + "px",
+        transform: `translate(${c.x}px, ${c.y}px) scale(${s})`,
+        transformOrigin: "0 0",
+      };
+});
+
+    // 当前取景框落在原图上的实际像素边长。放大后它可能小于输出边长，
+    // 那就意味着要放大（画面变糊）——只在小于输出尺寸时提示，平时不打扰
+store.cropSamplePx = computed(() => {
+      const c = store.crop;
+      if (!c.natW || !c.natH) return 0;
+      const { side } = cropSourceRect(c.natW, c.natH, c.view, c.zoom, c.x, c.y);
+      return Math.round(side);
+});
+
+store.isFreeScenario = computed(() => {
+      return !!store.activeSession && store.activeSession.mode === "free_scenario";
+});
+
+    // "继续"要有上一条回复可接才可用；生成中、角色已删时也不给用
+store.canContinue = computed(() => {
+      return (
+        store.isFreeScenario &&
+        !store.streaming &&
+        !store.orphanActive &&
+        store.messages.some((m) => m.role === "assistant")
+      );
+});
+
+store.freeSessions = computed(() => {
+      return store.sessions.filter((s) => s.mode === "free_scenario");
+});
+
+store.orphanSessions = computed(() => {
+      return store.sessions.filter((s) => s.mode !== "free_scenario" && !s.character_id);
+});
+
+store.orphanActive = computed(() => {
+      return (
+        !!store.activeSession &&
+        store.activeSession.mode !== "free_scenario" &&
+        !store.activeSession.character
+      );
+});
+
+store.memoryScope = computed(() => {
+      if (!store.activeSession) return null;
+      if (store.activeSession.mode === "free_scenario") {
+        return { type: "session", id: store.activeSession.id, label: "会话记忆" };
+      }
+      if (store.activeSession.character) {
+        return {
+          type: "character",
+          id: store.activeSession.character.id,
+          label: "角色记忆",
+        };
+      }
+      return null;
+});
+
+store.archivedCount = computed(() => {
+      return store.messages.filter((m) => m.archived).length;
+});
+
+    // 面板三块的"未保存"判定：各自与保存时的快照比对，改回原样就自动消失
+store.genDirty = computed(() => {
+      return !store.sameSnapshot(store.genForm, store.genSaved);
+});
+
+store.charDirty = computed(() => {
+      return !store.sameSnapshot(store.charForm, store.charSaved);
+});
+
+store.memoryDirty = computed(() => {
+      return store.memoryText !== store.memorySaved;
+});
+
+store.profileDirty = computed(() => {
+      return !store.sameSnapshot(store.profileForm, store.profile);
+});
+
+store.worldDirty = computed(() => {
+      return !store.sameSnapshot(store.worldForm, store.world);
+});
+
+store.anyDirty = computed(() => {
+      return (
+        store.genDirty || store.charDirty || store.profileDirty ||
+        store.memoryDirty || store.worldDirty
+      );
+});
+
+    // 当前标签是否有未保存改动：面板底部那一行"未保存 / 还原"按它显示。
+    // 键名与 armRevert / revertArm 的取值一致（gen / world / char / profile / memory）
+store.activeTabDirty = computed(() => {
+      if (store.panelTab === "world") return store.worldDirty;
+      if (store.panelTab === "char") return store.charDirty;
+      if (store.panelTab === "profile") return store.profileDirty;
+      if (store.panelTab === "memory") return store.memoryDirty;
+      return store.genDirty;
+});
+
+    // 面板底部的保存键几个标签共用：只有角色设定要求姓名非空（后端也要求）；
+    // 世界设定与"我的设定"一样可以全空保存
+store.saveDisabled = computed(() => {
+      return store.panelTab === "char" && !store.charForm.name.trim();
+});
+
+    // 用户消息要不要显示头像那一列：只在角色两模式（有 activeChar）、
+    // 且用户至少设了名字或头像时才渲染，否则会留一个空白列
+store.showUserSide = computed(() => {
+      return !!store.activeChar && !!(store.profile.avatar || store.profile.name);
+});
+
+store.displayMessages = computed(() => {
+      return store.showArchived
+        ? store.messages
+        : store.messages.filter((m) => !m.archived);
+});
+
+    // 会话内搜索的计划：把每条消息按"渲染块"切开，标出每块里命中的片段以及它们的
+    // 全局序号。一次算完，模板按 id 取用——渲染时不必再关心"这是第几个命中"。
+    // 只搜当前显示出来的消息（已归档且未展开的不参与），与用户看到的一致
+store.searchPlan = computed(() => {
+      const plan = { parts: {}, total: 0 };
+      if (!store.searchQuery.trim()) return plan;
+      // 转义后按正则搜：这样大小写不敏感，且命中位置直接是原串下标
+      // （先用 toLowerCase 再 indexOf 在少数 Unicode 上会因长度变化而错位）
+      const re = new RegExp(store.escapeRegExp(store.searchQuery.trim()), "gi");
+      let n = 0;
+      for (const m of store.displayMessages) {
+        const parts = [];
+        for (const p of store.textParts(m)) {
+          const pieces = [];
+          let last = 0;
+          let hit;
+          re.lastIndex = 0;
+          while ((hit = re.exec(p.text)) !== null) {
+            if (hit[0] === "") break; // 空匹配会死循环，理论上不会发生
+            if (hit.index > last) pieces.push({ text: p.text.slice(last, hit.index), hit: false });
+            pieces.push({ text: hit[0], hit: true, index: n++ });
+            last = hit.index + hit[0].length;
+          }
+          pieces.push({ text: p.text.slice(last), hit: false });
+          parts.push({ kind: p.kind, pieces });
+        }
+        plan.parts[m.id] = parts;
+      }
+      plan.total = n;
+      return plan;
+});
+
+store.searchTotal = computed(() => {
+      return store.searchPlan.total;
+});
+
+// ---- 侦听器（原 watch）----
+// 注册在 App.vue 的 setup 里（那里有组件实例，卸载时自动清理）。
+// 键支持点号路径（如 charModal.gen.mode），取值方式与 Vue 的 watch 一致。
+export const watchDefs = {
+    activeSessionId() {
+      // 切换会话时右侧面板保持展开，只把内容刷新成新会话的
+      store.showArchived = false;
+      store.loadMemory();
+      store.initGenForm();
+    },
+    activeSession(s) {
+      if (s && s.character) {
+        const c = s.character;
+        store.charForm = {
+          name: c.name,
+          appearance: c.appearance,
+          // 锁定的角色拿不到这三项（接口就不下发），留空即可：保存时后端也会忽略它们
+          personality: c.personality || "",
+          speech_style: c.speech_style || "",
+          backstory: c.backstory || "",
+          // 必须带上：面板是整体提交的，漏了它就会在保存角色设定时把头像一个不剩地清掉
+          avatar: c.avatar || "",
+          // 背景图不随角色下发，由 loadBackgrounds() 填充
+          backgrounds: [],
+        };
+        store.charLocked = !!c.locked;
+      } else {
+        store.charForm = emptyCharForm();
+        store.charLocked = false;
+      }
+      store.charSaved = store.snapshot(store.charForm); // 重新载入即视为已保存
+      store.fixPanelTab();
+    },
+    // 生成前换了模式，之前那份结果就不适用了：探索模式的结果前端压根没拿到隐藏字段，
+    // 开放模式的结果也不该直接变成"锁定"。清掉草稿，请用户重新生成
+    "charModal.gen.mode"() {
+      if (store.charModal.gen.draftId) store.resetGeneratedDraft();
+    },
+    panelCollapsed(collapsed) {      // 展开面板时重新拉一次记忆，避免收起期间的数据过期；
+      // 但用户手上有未保存的编辑时不能覆盖掉
+      if (!collapsed && !store.memoryDirty) store.loadMemory();
+    },
+    // 改动被撤销（标识消失）时顺手解除还原键的武装，免得下次单击就误回退
+    genDirty(v) {
+      if (!v) store.disarmRevert("gen");
+    },
+    charDirty(v) {
+      if (!v) store.disarmRevert("char");
+    },
+    profileDirty(v) {
+      if (!v) store.disarmRevert("profile");
+    },
+    // 换了关键词就从头开始数，并直接把第一处命中滚到眼前
+    searchQuery() {
+      store.searchIndex = 0;
+      store.scrollToHit();
+    },
+    // 命中数变少（消息被编辑/删除、归档折叠）时把序号夹回范围内
+    searchTotal(v) {
+      if (store.searchIndex >= v) store.searchIndex = 0;
+    },
+    memoryDirty(v) {
+      if (!v) store.disarmRevert("memory");
+    },
 };
+
+export function registerWatchers() {
+  for (const [path, handler] of Object.entries(watchDefs)) {
+    const get = () => path.split(".").reduce((o, k) => (o == null ? o : o[k]), store);
+    watch(get, handler);
+  }
+}
+
+// ---- 生命周期（原 mounted / beforeUnmount）----
+export async function initApp() {
+    store.init();
+    // 点空白处 / 按 Esc 关掉消息删除菜单与编辑弹窗，避免它们只能靠再次点按钮关闭
+    document.addEventListener("click", store.onDocumentClick);
+    document.addEventListener("keydown", store.onDocumentKeydown);
+}
+
+export function disposeApp() {
+    document.removeEventListener("click", store.onDocumentClick);
+    document.removeEventListener("keydown", store.onDocumentKeydown);
+}

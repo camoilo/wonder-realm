@@ -85,10 +85,15 @@ for mode, fields in form.items():
         else:
             check(f"{mode}.{f['key']} 不该有上限", "max" in f, False)
 
-# 前端模板引用的每个 limits.<key> 都必须在上限表里（写错键会渲染成 undefined）
+# 前端模板引用的每个 limits.<key> 都必须在上限表里（写错键会渲染成 undefined）。
+# 模板现在拆在 frontend/ 下的若干 .vue 里（index.html 只是挂载点），所以把这些文件拼起来看。
 import re  # noqa: E402
 
-html = (Path(__file__).resolve().parent.parent / "app/static/index.html").read_text(encoding="utf-8")
+frontend = Path(__file__).resolve().parent.parent / "frontend"
+html = (frontend / "index.html").read_text(encoding="utf-8")
+html += "\n" + "\n".join(
+    p.read_text(encoding="utf-8") for p in sorted((frontend / "src").rglob("*.vue"))
+)
 used = set(re.findall(r"limits\.([a-z_]+)", html))
 check("模板引用的上限键都在表里", sorted(used - set(LIMITS)), [])
 # genre / extra 走的是 FIELDS 里的 "max"（后端随字段定义下发），模板里不会写 limits.xxx
