@@ -22,11 +22,14 @@
 
 <CharacterModal />
 <NewSessionModal />
-<ConfirmModal />
 <EditMessageModal />
 <CropModal />
 <PresetModal />
 <LoadPresetModal />
+
+<!-- 确认框放最后：它的层级已经最高（.confirm-mask），这里再按 DOM 顺序兜一层——
+     同级 z-index 时后面的兄弟节点压前面的，它要能从上面任何一个弹窗里弹出来 -->
+<ConfirmModal />
 
 <!-- 悬停提示的浮层：全局只有这一个，由 v-hint 指令驱动（文本与位置都从指令那边来），
      这样提示的样式与行为在整页统一。放在最后，层级高于弹窗遮罩，弹窗里的提示也能看见 -->

@@ -125,7 +125,7 @@ html, body {
    再由 max-width 封顶换行。 */
 .hint-tip {
   position: fixed;
-  z-index: 1300;
+  z-index: 1500;
   width: max-content;
   max-width: 260px;
 }
@@ -1835,6 +1835,15 @@ mark.search-hit.current {
 .ghost-btn.full { width: 100%; }
 
 /* ---------- 弹窗 ---------- */
+/* 浮层层级表（从下到上，改动前先看这里）：
+     1000  普通弹窗遮罩（.modal-mask）
+     1200  裁剪弹窗遮罩（.crop-mask，叠在角色弹窗之上）
+     1400  确认框遮罩（.confirm-mask）——它可能从任何弹窗里弹出来（删除预设、载入预设覆盖、
+           删除角色…），所以必须压在所有弹窗之上；同级 z-index 会按 DOM 顺序决胜，而
+           PresetModal / LoadPresetModal 恰好排在 ConfirmModal 之后，之前就是这么被盖住的：
+           用户"点确认"实际点到上层弹窗的遮罩，反而把那个弹窗关掉。
+     1500  悬停提示浮层（.hint-tip），永远在最上面
+   同一层级里再按 DOM 顺序决胜，所以 App.vue 里 ConfirmModal 也挪到了最后。 */
 .modal-mask {
   position: fixed;
   inset: 0;
@@ -1844,6 +1853,8 @@ mark.search-hit.current {
   justify-content: center;
   z-index: 1000;
 }
+
+.confirm-mask { z-index: 1400; }
 
 .modal {
   width: 430px;

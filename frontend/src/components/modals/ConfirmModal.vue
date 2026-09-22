@@ -1,5 +1,8 @@
 <template>
-<div class="modal-mask" v-if="confirmBox.visible"
+<!-- 确认框可能从**任何**弹窗里弹出来（删除预设、载入预设覆盖、删除角色…），所以它的遮罩
+     必须压在所有弹窗之上（.confirm-mask 的 z-index 见 style.css 里的层级表）：
+     否则它会被上层弹窗盖住，用户"点确认"实际点到的是那个弹窗的遮罩，反而把它关掉 -->
+<div class="modal-mask confirm-mask" v-if="confirmBox.visible"
      @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal confirm-modal">
       <p class="confirm-text">{{ confirmBox.text }}</p>

@@ -1108,6 +1108,7 @@ data_dir: ./data                  # 数据库目录，直接指定
 - **关键键的位置固定**：顶栏「配置」键在整页的坐标不随面板开合、有无会话而变（它常驻、只在两个箭头间换文案）。
 - **"滚不走"的部分移出滚动容器**，不用 `position: sticky`（sticky 会让内容从背后穿过、且仍占 `scrollHeight`）。
 - **点遮罩关闭以"按下"的位置为准**：只有 mousedown 就落在遮罩上才算点了窗口外。用 `@click.self` 会把"在弹窗里选文字、拖到遮罩或窗口外松开"误判成关闭（click 的目标是 mousedown 与 mouseup 的共同祖先），七个弹窗统一走 `frontend/src/composables/maskClose.js`。
+- **浮层层级表**（`style.css` 里也写了一份）：普通弹窗遮罩 1000 < 裁剪遮罩 1200 < 确认框 1400 < 悬停提示 1500。**确认框必须最高** —— 它可能从任何弹窗里弹出来（删除预设、载入预设覆盖当前配置、删除角色…），级别不够就会被上层弹窗盖住，于是用户"点确认"实际点到的是那个弹窗的遮罩，反而把它关掉（`ConfirmModal` 与 `PresetModal` / `LoadPresetModal` 都曾经是 1000，而确认框在 `App.vue` 里排在前面，同级按 DOM 顺序决胜；现在层级最高、同时也在根组件里排在最后，双保险）。
 - **悬停提示统一走 `v-hint`**，不用原生 `title`（它延迟约一秒、样式跟浏览器走、不能换行）。指令在 `main.js` 里全局注册，浮层是 `App.vue` 里唯一的一个 `.hint-tip`；提示文案写在指令值里（静态写 `v-hint="'文案'"`，动态直接写表达式），纯图标按钮（✎ / ✕ / ‹ / › / ↑ / ↓）另加 `aria-label` 保无障碍。定位与宽度的两个坑：浮层最终坐标**不用 `transform`**（动画一旦碰 transform 就会把坐标带偏），且必须给 `width: max-content`——fixed 元素只给了 `left` 时宽度按"视口宽 − left"收缩，目标靠右边缘时提示会被挤成一列一个字。
 - **浮层不占布局、不吃鼠标**：提示类浮层（模式介绍 `.mode-tip` 与 `v-hint` 的 `.hint-tip` 共用一套样式）都是"绝对/固定定位 + `pointer-events: none`"，既不改变任何控件的位置，也不会因为鼠标移向浮层而触发原控件的 mouseleave、把自己晃掉。
 - **弹窗的操作行钉底**（中间一层 `.modal-body` 滚动）；弹窗变体的**宽度与布局都必须压得住基类**——单类选择器优先级相同时**按源码顺序决胜**，写在基础规则之前会被覆盖。这条踩过三次：`.edit-modal` 的宽度被基础 `.modal` 盖掉、`.preset-modal` 的宽度被 `.modal.edit-modal` 盖掉、预设弹窗的两栏还差点被基础 `.modal-body`（列布局）盖成上下堆叠——所以这三处都写成复合选择器（`.modal.edit-modal` / `.modal.preset-modal` / `.modal-body.preset-split`）。

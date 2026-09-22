@@ -722,8 +722,29 @@ check("指令模块在", (frontend / "src/composables/hint.js").exists(), True)
 check("两种浮层共用一套样式",
       "pointer-events: none;" in _shared_tip and "background: #2f3441;" in _shared_tip, True)
 check("v-hint 浮层定位与层级",
-      "position: fixed;" in _hint_css and "z-index: 1300;" in _hint_css, True)
-check("浮层层级高于弹窗遮罩", "z-index: 1200" in css and "z-index: 1300;" in _hint_css, True)
+      "position: fixed;" in _hint_css and "z-index: 1500;" in _hint_css, True)
+# 浮层层级表必须单调递增：普通遮罩 < 裁剪遮罩 < 确认框 < 提示浮层。
+# 确认框可能从任何弹窗里弹出来（删除预设、载入预设覆盖…），级别不够就会被上层弹窗盖住，
+# 用户"点确认"实际点到那个弹窗的遮罩上，反而把它关掉——之前就是这么坏的。
+_z = {}
+for _sel, _name in ((".modal-mask", "遮罩"), (".crop-mask", "裁剪"), (".confirm-mask", "确认框"),
+                    (".hint-tip", "提示")):
+    _m = re.search(r"^" + re.escape(_sel) + r"\s*\{[^}]*z-index:\s*(\d+)", css, re.M)
+    if not _m:  # .modal-mask 的规则里 z-index 不在最前面
+        _m = re.search(r"^" + re.escape(_sel) + r"\s*\{([^}]*)\}", css, re.M)
+        _n = re.search(r"z-index:\s*(\d+)", _m.group(1)) if _m else None
+        _z[_name] = int(_n.group(1)) if _n else 0
+    else:
+        _z[_name] = int(_m.group(1))
+check("层级表单调递增（遮罩 < 裁剪 < 确认框 < 提示）",
+      [_z["遮罩"] < _z["裁剪"] < _z["确认框"] < _z["提示"]], [True])
+# 同级按 DOM 顺序决胜，所以确认框在 App.vue 里也排在最后
+_app = dict(zip(VUE_ORDER, vue_sources))["App.vue"]
+check("ConfirmModal 在根组件里排在最后",
+      _app.index("<ConfirmModal />") > max(
+          _app.index(f"<{m} />") for m in ("CharacterModal", "NewSessionModal", "EditMessageModal",
+                                          "CropModal", "PresetModal", "LoadPresetModal")), True)
+check("确认框有专属遮罩类", 'class="modal-mask confirm-mask"' in html, True)
 # 纯图标按钮（可见内容是个符号）去掉 title 后必须能读出来
 check("图标按钮都有 aria-label", [rel for rel, src in zip(VUE_ORDER, vue_sources)
       for _l in src.splitlines()
