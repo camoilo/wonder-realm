@@ -1,0 +1,189 @@
+// 右侧面板：标签与脏标记、保存派发与还原、生成要求表单、记忆查看。
+//
+// 只依赖 state.js（唯一的 reactive 对象），不 import 别的领域模块 —— 依赖是星形的，
+// 所以不存在循环依赖；跨领域的调用都走 store.xxx（运行时才解析）。
+import { store } from "./state.js";
+import { computed } from "vue";
+import { revertTimers } from "./helpers.js";
+
+Object.assign(store, {
+  fixPanelTab() {
+    const hasChar = !!(store.activeSession && store.activeSession.character);
+    if (store.panelTab === "char" && !hasChar) store.panelTab = "gen";
+    if (store.panelTab === "memory" && !store.memoryScope) store.panelTab = "gen";
+  },
+  sameSnapshot(a, b) {
+    const keys = (o) =>
+      Object.keys(o || {})
+        .filter((k) => o[k] !== undefined)
+        .sort();
+    const ka = keys(a);
+    const kb = keys(b);
+    if (ka.length !== kb.length || ka.some((k, i) => k !== kb[i])) return false;
+    return ka.every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+  },
+  snapshot(o) {
+    return JSON.parse(JSON.stringify(o || {}));
+  },
+  disarmRevert(section) {
+    clearTimeout(revertTimers[section]);
+    delete revertTimers[section];
+    store.revertArm[section] = false;
+  },
+  armRevert(section) {
+    if (store.revertArm[section]) {
+      store.revertSection(section);
+      return;
+    }
+    store.revertArm[section] = true;
+    clearTimeout(revertTimers[section]);
+    // 几秒内没有第二次点击就自动解除，免得一直停在"待确认"状态
+    revertTimers[section] = setTimeout(() => store.disarmRevert(section), 5000);
+  },
+  revertSection(section) {
+    store.disarmRevert(section);
+    if (section === "gen") store.genForm = store.snapshot(store.genSaved);
+    else if (section === "char") store.charForm = store.snapshot(store.charSaved);
+    else if (section === "profile") store.profileForm = store.snapshot(store.profile);
+    else if (section === "world") store.worldForm = store.snapshot(store.world);
+    else if (section === "memory") store.memoryText = store.memorySaved;
+  },
+  fieldsOf(mode) {
+    return store.genFields[mode] || [];
+  },
+  initGenForm() {
+    const mode = store.activeSession ? store.activeSession.mode : store.mode;
+    const merged = { ...(store.genDefaults[mode] || {}) };
+    const stored = (store.activeSession && store.activeSession.gen_settings) || {};
+    for (const k of Object.keys(stored)) {
+      if (stored[k] !== null && stored[k] !== "") merged[k] = stored[k];
+    }
+    for (const f of store.fieldsOf(mode)) {
+      if (f.type === "tags" && !Array.isArray(merged[f.key])) merged[f.key] = [];
+      if (f.type === "radio" && !merged[f.key]) {
+        merged[f.key] = (f.options && f.options[0] && f.options[0][0]) || "";
+      }
+    }
+    store.genForm = merged;
+    store.genSaved = store.snapshot(merged);
+  },
+  toggleTag(key, tag) {
+    const list = store.genForm[key] || [];
+    const i = list.indexOf(tag);
+    if (i >= 0) list.splice(i, 1);
+    else list.push(tag);
+    store.genForm[key] = [...list];
+  },
+  addTag(key) {
+    const draft = (store.tagDraft[key] || "").trim();
+    if (draft && !(store.genForm[key] || []).includes(draft)) {
+      store.genForm[key] = [...(store.genForm[key] || []), draft];
+    }
+    store.tagDraft[key] = "";
+  },
+  removeTag(key, tag) {
+    store.genForm[key] = (store.genForm[key] || []).filter((t) => t !== tag);
+  },
+  customTags(field) {
+    return (store.genForm[field.key] || []).filter(
+      (t) => !(field.presets || []).includes(t)
+    );
+  },
+  async saveGenSettings() {
+    const payload = {};
+    for (const f of store.fieldsOf(store.activeSession.mode)) {
+      payload[f.key] = store.genForm[f.key];
+    }
+    try {
+      store.activeSession = await store.api(
+        `/api/sessions/${store.activeSessionId}`,
+        store.jsonOpts("PATCH", { gen_settings: payload })
+      );
+      store.initGenForm();
+    } catch (e) {
+      store.error = e.message;
+    }
+  },
+  saveCurrentTab() {
+    if (store.panelTab === "world") return store.saveWorld();
+    if (store.panelTab === "char") return store.saveCharacterDrawer();
+    if (store.panelTab === "profile") return store.saveProfile();
+    if (store.panelTab === "memory") return store.saveMemory();
+    return store.saveGenSettings();
+  },
+  async loadMemory() {
+    if (!store.memoryScope) return;
+    const { type, id } = store.memoryScope;
+    try {
+      store.memoryData = await store.api(`/api/memories/${type}/${id}`);
+      store.memoryText = store.memoryData.content;
+      store.memorySaved = store.memoryText;
+    } catch (e) {
+      /* scope 不存在等场景：面板留空 */
+    }
+  },
+  async saveMemory() {
+    const { type, id } = store.memoryScope;
+    try {
+      store.memoryData = await store.api(
+        `/api/memories/${type}/${id}`,
+        store.jsonOpts("PUT", { content: store.memoryText })
+      );
+      store.memoryText = store.memoryData.content;
+      store.memorySaved = store.memoryText; // 保存成功后"未保存"标识随之消失
+    } catch (e) {
+      store.error = e.message;
+    }
+  },
+  scheduleMemoryRefresh() {
+    // 压缩是后台任务，done 后延迟拉取一次归档状态与记忆
+    const sid = store.activeSessionId;
+    setTimeout(async () => {
+      if (store.activeSessionId !== sid) return;
+      await store.refreshMessages();
+      if (store.memoryScope) await store.loadMemory();
+    }, 12000);
+  },
+});
+
+store.memoryScope = computed(() => {
+      if (!store.activeSession) return null;
+      if (store.activeSession.mode === "free_scenario") {
+        return { type: "session", id: store.activeSession.id, label: "会话记忆" };
+      }
+      if (store.activeSession.character) {
+        return {
+          type: "character",
+          id: store.activeSession.character.id,
+          label: "角色记忆",
+        };
+      }
+      return null;
+});
+
+store.genDirty = computed(() => {
+      return !store.sameSnapshot(store.genForm, store.genSaved);
+});
+
+store.memoryDirty = computed(() => {
+      return store.memoryText !== store.memorySaved;
+});
+
+store.anyDirty = computed(() => {
+      return (
+        store.genDirty || store.charDirty || store.profileDirty ||
+        store.memoryDirty || store.worldDirty
+      );
+});
+
+store.activeTabDirty = computed(() => {
+      if (store.panelTab === "world") return store.worldDirty;
+      if (store.panelTab === "char") return store.charDirty;
+      if (store.panelTab === "profile") return store.profileDirty;
+      if (store.panelTab === "memory") return store.memoryDirty;
+      return store.genDirty;
+});
+
+store.saveDisabled = computed(() => {
+      return store.panelTab === "char" && !store.charForm.name.trim();
+});

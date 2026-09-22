@@ -25,7 +25,10 @@ VUE_ORDER = ["App.vue"] + sorted(
     for x in (frontend / "src" / "components").rglob("*.vue")
 )
 vue_sources = [(frontend / "src" / rel).read_text(encoding="utf-8") for rel in VUE_ORDER]
-store_js = (frontend / "src/store.js").read_text(encoding="utf-8")
+# store 现在拆成 barrel（src/store.js）+ 领域模块（src/store/*.js）：断言要在整份源码上看，
+# 所以拼成一坨（顺序稳定：先 barrel，再按文件名排序的模块）
+store_files = [frontend / "src/store.js"] + sorted((frontend / "src/store").glob("*.js"))
+store_js = "\\n".join(f.read_text(encoding="utf-8") for f in store_files)
 main_js = (frontend / "src/main.js").read_text(encoding="utf-8")
 vite_cfg = (frontend / "vite.config.js").read_text(encoding="utf-8")
 css = (frontend / "src/style.css").read_text(encoding="utf-8")
