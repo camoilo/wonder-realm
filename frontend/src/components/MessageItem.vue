@@ -1,6 +1,6 @@
 <template>
 <!-- 只渲染一条消息（外层 v-for 在 ChatArea 里）。这里如果自己再遍历一次
-     displayMessages，就会变成 n 个组件 × 每个 n 条 = n² 条气泡（见 10.50） -->
+     displayMessages，就会变成 n 个组件 × 每个 n 条 = n² 条气泡（见 DEVELOPMENT §9.7 前端工程约定） -->
 <div class="msg" :class="[m.role, {archived: m.archived}]">
             <div v-if="m.role === 'assistant' && activeChar" class="msg-side">
               <span class="avatar lg">
@@ -40,7 +40,7 @@
               </div>
             </div>
             <!-- 用户自己的头像在气泡右侧（聊天与沉浸两种模式才有；导演模式不显示用户的
-                 头像与名字，见 10.35）。还没设名字也没传头像时整列不渲染 -->
+                 头像与名字，见 DEVELOPMENT §2.3 我的设定）。还没设名字也没传头像时整列不渲染 -->
             <div v-if="m.role === 'user' && showUserSide" class="msg-side">
               <span class="avatar lg">
                 <img v-if="profile.avatar" :src="profile.avatar" :alt="profile.name">

@@ -6,7 +6,7 @@
 
 | 模式 | 生成内容 | 绑定角色 | 长期记忆归属 |
 |---|---|---|---|
-| **聊天模式** | 只有角色说出的话 | 是，会话创建时选定 | 按角色，该角色所有会话共享 |
+| **聊天模式** | 只有角色说出的话（像发消息，没有动作与旁白） | 是，会话创建时选定 | 按角色，该角色所有会话共享 |
 | **沉浸模式** | 角色话语 + 情境说明 | 是，与聊天模式共用同一套角色 | 与聊天模式共用同一份角色记忆 |
 | **导演模式** | 自由生成的对话与情境 | 否 | 按会话独立保存 |
 
@@ -187,7 +187,7 @@ npm run dev            # http://127.0.0.1:5173，/api 自动代理到 17800
 - 右侧面板里带"✕"的栏位，那个 ✕ 不参与 Tab 键顺序，但照旧可以鼠标点击清空
 - 每个输入框右下角都有 `已用/上限` 的实时计数（单行框里垂直居中、多行框里贴右下角），到九成变橙色
 - **探索模式生成的角色**：右侧面板和"编辑角色"弹窗里，性格 / 语言风格 / 背景故事显示为一块 `🔒 已锁定` 说明，点其中的"公开角色设定"并确认后永久解锁；锁定期这两个入口只显示姓名与外观
-- 左侧栏顶部有 **模式选择** 标题（居中加粗，下方一条分隔线）和三个模式按钮（聊天模式 / 沉浸模式 / 导演模式），点一下切换模式
+- 左侧栏顶部有 **模式选择** 标题（居中加粗，下方一条分隔线）和三个模式按钮（聊天模式 / 沉浸模式 / 导演模式），点一下切换模式；**鼠标移上去（或键盘 Tab 聚焦）会浮出一句这个模式是干什么的**，不挡任何控件
 - 顶栏**模型下拉框左边**是**会话内搜索框**：输入即标黄，↑/↓ 或 Enter/Shift+Enter 在命中之间跳，**Esc 清空**；计数与两个跳转键一直都在（不随输入出现消失，所以框的宽窄始终不变）
 - 左侧 `☰` 收起左栏，顶栏"配置"键收起右栏（它固定在顶栏最右，不随面板开合移动），收起后对话区自动重新居中
 - 被压缩归档的消息默认折叠为"已归档 N 条"，点击可展开查看原文
@@ -261,21 +261,23 @@ data_dir: ./data                  # 数据库目录
 
 ## 测试
 
-八个纯 Python 测试 + 两个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py` 会临时建库，不碰 `data/`）。**最下面那两个 Node 测试需要先装一次前端依赖**（它们直接 import `frontend/src/store.js`，那份逻辑依赖 Vue）：
+十个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
 
 ```powershell
 uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
 uv run python tests/test_parser.py         # 输出解析与分段
-uv run python tests/test_naming.py         # 标题清洗、建表
+uv run python tests/test_naming.py         # 标题清洗、建表、删库自愈
 uv run python tests/test_character_gen.py  # 角色生成草稿与探索模式锁定
-uv run python tests/test_app_js.py         # 前端结构、重名检查、每个 store 模块的导入来源
+uv run python tests/test_app_js.py         # 前端结构、重名检查、导入来源、弹窗关闭判定
 uv run python tests/test_limits.py         # 各输入的字数上限（前后端同一份）
 uv run python tests/test_profile.py        # 我的设定的预设 + 未选模型时的行为
 uv run python tests/test_context.py        # 记忆阈值必须留在 num_ctx 窗口内
 uv run python tests/test_world.py          # 世界设定：名称不进提示词，其余三项进三种模式
+uv run python tests/test_prompts.py        # 提示词内容：聊天模式只写说出口的话、段落顺序
 
 node tests/test_search.mjs                 # 会话内搜索的标记/计数/跳转（需先 cd frontend && npm install）
 node tests/test_init.mjs                   # 初始化容错：某个接口 500 时其余步骤照样完成（同上）
+node tests/test_mask_close.mjs             # 弹窗"点窗口外"判定：选文字拖出去不该关（同上）
 ```
 
 ## 目录结构

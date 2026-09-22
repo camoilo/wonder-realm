@@ -37,7 +37,7 @@ script_blocks = [re.search(r"<script setup>(.*?)</script>", v, re.S).group(1)
                  for v in vue_sources if "<script setup>" in v]
 js = store_js + "\n" + main_js + "\n" + "\n".join(script_blocks)
 # store.js 是把选项对象的 this. 机械换成 store. 得来的；下面这行把视图换回 this.，
-# 于是原先针对选项对象写的断言（this.panelTab / this.api(...) 之类）一条都不用改。
+# 于是针对选项对象写的断言（this.panelTab / this.api(...) 之类）不用改。
 # 排除前面带 / 的情况，免得把 "../store.js" 这种路径也改坏。
 js = re.sub(r"(?<![\w/])store\.", "this.", js)
 # 判断"某条样式是否已清除"时要先去掉注释：注释里解释"这里原来有个 XXX"是正常的，
@@ -1647,7 +1647,7 @@ for _rel, _src in zip(VUE_ORDER, vue_sources):
     check(f"{_rel} 模板用到的 store 成员都已声明", _missing, [])
 
 
-# ---- 消息列表只能在一处遍历（10.50） ----
+# ---- 消息列表只能在一处遍历（DEVELOPMENT §9.7 前端工程约定） ----
 # MessageItem 是"一条消息"的组件（ChatArea 里 `v-for … :m="m"` 传进去）。它的模板里
 # 如果还留着外层 v-for="m in displayMessages"，就变成 n 个组件 × 每个渲染 n 条 = n² 条
 # 气泡——两条消息看着"双倍"，四条就是"8 组"。这类结构错误静态检查一点都看不见：prop
@@ -1716,12 +1716,12 @@ check("保存带 draft_id", "charPayload.draft_id = this.charModal.gen.draftId" 
 check("保存失败在弹窗内提示", "charModal.saveError" in js and "charModal.saveError" in html, True)
 check("样式含 gen-box / locked-box", (".gen-box" in css) and (".locked-box" in css), True)
 
-# 发送键旁的"回到最新"键（10.28 顺带加的）
+# 发送键旁的"回到最新"键（DEVELOPMENT §9.6 界面约定 顺带加的）
 check("有 ↓ 键", 'class="jump-btn"' in html, True)
 check("↓ 在发送行内", html.index('class="send-row"') < html.index('class="jump-btn"'), True)
 check("有 jumpToBottom 方法", "jumpToBottom" in methods, True)
 
-# 弹窗变体宽度必须压得住基础 .modal（10.28 的坑）
+# 弹窗变体宽度必须压得住基础 .modal（DEVELOPMENT §9.6 界面约定 的坑）
 check("编辑弹窗宽度用复合选择器", ".modal.edit-modal { width: 780px; }" in css, True)
 check("裁剪弹窗宽度用复合选择器", ".modal.crop-modal { width: 380px;" in css, True)
 check("角色弹窗宽度用复合选择器并与编辑弹窗同宽",
@@ -1744,7 +1744,7 @@ check("旧的折叠结构已清除",
 check("CSS 里的折叠样式已清除", ".panel-section" in css_code, False)
 check("未保存圆点样式在", ".tab-dot" in css, True)
 check("当前标签的未保存状态有计算属性", "activeTabDirty" in js and "activeTabDirty" in html, True)
-# ---- "配置"开关：常驻 + 改名 + 位置固定（面板开合都不动）（10.46） ----
+# ---- "配置"开关：常驻 + 改名 + 位置固定（面板开合都不动）（DEVELOPMENT §9.6 界面约定） ----
 check("面板里没有标题行（开关不搬进面板）", 'class="panel-head"' not in html, True)
 check("面板里没有第二个开关", 'class="panel-title"' not in html, True)
 check("顶栏那一份没有 v-if（常驻，不随会话/面板出现消失）",
@@ -1754,7 +1754,7 @@ check("禁用样式有定义（否则看起来仍可点）", ".ghost-btn:disable
 check("开关在顶栏里（位置固定在工具栏最右）",
       html.index('class="toolbar"') < html.index("panel-toggle") < html.index("</header>"), True)
 # 顶栏必须横跨"对话区 + 面板"：面板是 .main 的兄弟列时，面板一开顶栏就窄 330px，
-# 按钮会左移并落到面板标签上（10.46 第二版的真实事故）。这条断言把结构钉住
+# 按钮会左移并落到面板标签上（DEVELOPMENT §9.6 界面约定 第二版的真实事故）。这条断言把结构钉住
 _app_tpl = re.search(r"<template>(.*?)</template>", vue_sources[0], re.S).group(1)
 check("App 骨架里 TopBar 在 .work 之前（宽度不受面板影响）",
       _app_tpl.index("<TopBar />") < _app_tpl.index('class="work"'), True)
@@ -1772,7 +1772,7 @@ check("旧文案'面板'已清除",
 check("标题提示随状态变化",
       "(panelCollapsed ? '展开配置面板' : '收起配置面板')" in html, True)
 
-# ---- 分隔线：左右两侧同一条（10.46） ----
+# ---- 分隔线：左右两侧同一条（DEVELOPMENT §9.6 界面约定） ----
 check("分隔线定义成变量", "--divider: 2px solid #d7dae1;" in css, True)
 check("三处分区线都用它（面板标签栏 / 左侧标题 / 左侧模式按钮）",
       css.count("border-bottom: var(--divider);"), 3)
@@ -1890,7 +1890,7 @@ check("两侧消息用同一份间距",
       ".msg.user,\n.msg.assistant { align-items: flex-start; gap: 12px; }" in css, True)
 # user 侧与模型侧镜像：时间在名字左边
 check("user 侧时间换到名字左边", ".msg.user .msg-head { flex-direction: row-reverse; }" in css, True)
-# "已编辑"标记已移除（数据字段仍在，只是不再显示）
+# "已编辑"标记不渲染（数据字段仍在，只是不显示）
 check("页面里没有「已编辑」标记", ("已编辑" in html) or ("edited-flag" in css), False)
 
 # ---- 弹窗底部的操作行钉底 ----
@@ -1969,6 +1969,23 @@ check("标题加粗", "font-weight: 700;" in sl, True)
 check("标题字号比模式按钮大", css_font_size(".side-label") > css_font_size(".mode-tab"), True)
 check("标题底部有分隔线（与右侧面板同一条）", "border-bottom: var(--divider);" in sl, True)
 
+# ---- 模式按钮的介绍浮层（鼠标移上去/键盘聚焦时显示这个模式是干什么的） ----
+_helpers_src = (frontend / "src/store/helpers.js").read_text(encoding="utf-8")
+_modes_src = _helpers_src[_helpers_src.index("export const MODES"):]
+_modes_src = _modes_src[:_modes_src.index("\n};")]
+check("三种模式的介绍都写在 MODES 里（单一数据源）",
+      [m for m in ("chat", "immersive", "director")
+       if not re.search(rf"{m}: \{{[^}}]*hint:", _modes_src, re.S)], [])
+_side_src = dict(zip(VUE_ORDER, vue_sources))["components/SideBar.vue"]
+check("侧栏渲染介绍浮层", 'class="mode-tip"' in _side_src and "MODES[hoveredMode].hint" in _side_src, True)
+check("鼠标移入与键盘聚焦都显示",
+      all(k in _side_src for k in ('@mouseenter="hoveredMode = key"', "@mouseleave=\"hoveredMode = ''\"",
+                                   '@focus="hoveredMode = key"', "@blur=\"hoveredMode = ''\"")), True)
+_tip = css_block(".mode-tip")
+check("介绍浮层绝对定位（不改变布局）", "position: absolute;" in _tip, True)
+check("介绍浮层不吃鼠标（否则自己把自己关掉）", "pointer-events: none;" in _tip, True)
+check("浮层的父层可作定位参照", "position: relative;" in css_block(".mode-tabs"), True)
+
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)
 check("面板里旧的保存文案已清除",
@@ -2023,7 +2040,7 @@ check("启动时若没选模型会提示", "还没有选择模型，生成前请
 check("没选模型时思考开关置灰",
       "if (!this.currentModel) return false;" in js and "还没有选择模型，先在左边选一个" in js, True)
 
-# ---- 拆 store 后的守卫：模块里用到的"模块级名字"必须导入或就地声明（10.47） ----
+# ---- 拆 store 后的守卫：模块里用到的"模块级名字"必须导入或就地声明（DEVELOPMENT §9.7 前端工程约定） ----
 # 星形依赖的代价是每个模块都得自己 import 用到的 helper。漏一个，打包器不会吭声
 # （ESM 是静态的，缺的标识符只在真的执行到那一行才 ReferenceError），于是
 # "点开角色弹窗就崩"这种问题只能靠人拿浏览器点出来。这里把它变成静态检查。
@@ -2094,6 +2111,18 @@ for _f in store_files:
     check(f"{_rel} 用到的模块级名字都有来源", _miss, [])
     _dead = [n for n in sorted(_local_names(_raw) - _declared_names(_raw)) if not _uses(_code, n)]
     check(f"{_rel} 没有导入了却没用到的名字", _dead, [])
+
+# ---- 弹窗怎么关：只有"按下"就落在遮罩上，才算点了窗口外（11 处回归） ----
+# 用 @click.self 的坑：click 的目标是 mousedown 与 mouseup 的**共同祖先**。在弹窗里按住
+# 鼠标选文字、拖到遮罩上（或拖出窗口）再松开时，click 会落到遮罩上，于是"点窗口外关闭"
+# 被误触发——用户选个文字窗口就没了。判据必须是"按下"的位置。
+check("弹窗不再用 @click.self 关闭", [rel for rel, src in zip(VUE_ORDER, vue_sources)
+      if "modal-mask" in src and "@click.self" in src], [])
+_mask_modals = [rel for rel, src in zip(VUE_ORDER, vue_sources) if "modal-mask" in src]
+check("五个弹窗都在", len(_mask_modals), 5)
+check("每个弹窗走同一套关闭判定", [rel for rel, src in zip(VUE_ORDER, vue_sources)
+      if "modal-mask" in src and not all(k in src for k in (
+          "useMaskClose(", '@mousedown="onMaskDown"', '@mouseup="onMaskUp"', '@click="onMaskClick"'))], [])
 
 print()
 if FAILED:

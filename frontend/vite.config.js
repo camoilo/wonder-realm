@@ -7,7 +7,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [vue()],
   // 模板都在 .vue 单文件组件里，构建期就编译好了，所以**不需要**再 alias 到带编译器的
-  // vue.esm-bundler：用默认的运行时版即可（省下约 30KB）。DOM 内模板时代那条 alias 见 10.47。
+  // vue.esm-bundler：用默认的运行时版即可（省下约 30KB）。DOM 内模板时代那条 alias 见 DEVELOPMENT §9.7 前端工程约定。
   define: {
     // 本项目大量使用 Options API 风格的选项对象（收在 store.js 里），且不需要 devtools
     __VUE_OPTIONS_API__: "true",

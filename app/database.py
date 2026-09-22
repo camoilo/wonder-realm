@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS characters (
     -- 自定义头像，存 data URL（jpg/png/webp）。空串表示不用自定义头像，回落到姓名首字占位
     avatar       TEXT NOT NULL DEFAULT '',
     -- 探索模式：1 = 性格/语言风格/背景故事对用户隐藏且不可改（接口也不下发），
-    -- 点击「公开角色设定」后永久置 0。见 character_gen.py 与 10.29
+    -- 点击「公开角色设定」后永久置 0。见 character_gen.py 与 DEVELOPMENT §2.2 角色设定
     locked       INTEGER NOT NULL DEFAULT 0
 );
 
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     id               INTEGER PRIMARY KEY CHECK(id = 1),
     model            TEXT NOT NULL,
     memory_model     TEXT NOT NULL DEFAULT '',
-    -- 界面偏好也收在这一张表里（原先是独立的 app_prefs 键值表，见 10.46）。
+    -- 界面偏好也收在这一张表里（见 DEVELOPMENT §9.6 界面约定）。
     -- 代价：以后每加一个偏好都要加列，届时要按 4.2 的例外流程做一次性维护
     disable_thinking INTEGER NOT NULL DEFAULT 0,
     updated_at       TEXT NOT NULL
@@ -75,10 +75,10 @@ CREATE TABLE IF NOT EXISTS character_images (
 );
 CREATE INDEX IF NOT EXISTS idx_character_images ON character_images(character_id, position, id);
 
--- 零散的界面偏好原先是这里的一张 app_prefs 键值表，已并入 app_settings（见 10.46）
+-- 界面偏好也在这张表里（见 DEVELOPMENT §9.6 界面约定）
 
 -- 用户本人的设定（右侧面板的"我的设定"）。**约定** id=1 是当前使用的那份，
--- id>1 是用户存下来的预设（见 10.39）——所以这里**不能**再写 CHECK(id=1)：
+-- id>1 是用户存下来的预设（见 DEVELOPMENT §2.3 我的设定）——所以这里**不能**再写 CHECK(id=1)：
 -- 那条约束会把整张表锁成单行，预设就存不进来。
 -- 单开一张表而不是给别的表加列：新表对已有库也会建出来（见 4.2），无需用户删库；
 -- 而且它是"用户"这个主体的属性，跟角色、会话都没有从属关系
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS user_profile (
 );
 
 -- 世界设定（右侧面板的"世界设定"）。**全局一份**，约定 id=1，三种模式都注入提示词。
--- 同样不写 CHECK(id=1)：以后若要做"多世界切换"，往这张表插 id>1 的行即可（同 10.39 的预设）。
+-- 同样不写 CHECK(id=1)：以后若要做"多世界切换"，往这张表插 id>1 的行即可（同 DEVELOPMENT §2.3 我的设定 的预设）。
 -- 单开一张表而不是给 app_settings 加列：新表对已有库也会建出来（见 4.2），无需用户删库。
 -- terms 存 JSON 数组 [{"term": ..., "meaning": ...}]：它有序、可增删，整体读写最省事；
 -- 名称只给自己辨认，**不进提示词**（用户明确要求）。
@@ -155,8 +155,8 @@ def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -
 def ensure_db() -> None:
     """运行中库文件（或 data/ 目录）不见了就重建再继续，不必重启应用。
 
-    建表原先只发生在启动路径上，于是运行中删掉 data/ 会让之后每个请求都 500，
-    界面看起来像"前端连不上后端"（见 DEVELOPMENT 10.48 / 11.9）。
+    建表若只发生在启动路径上，运行中删掉 data/ 就会让之后每个请求都 500，
+    界面看起来像"前端连不上后端"（见 DEVELOPMENT §9.3）。
     """
     if DB_PATH is None:  # 还没 init_db（例如备份脚本只 import 本模块）
         return
@@ -189,7 +189,7 @@ def get_db():
 def thinking_disabled() -> bool:
     """生成时是否禁用思考模式。集中在这里读，聊天/重新生成/记忆压缩/自动命名就都会遵守。
 
-    这个开关就在 `app_settings` 那一行里（原先在 `app_prefs` 键值表，见 10.46）：
+    这个开关就在 `app_settings` 那一行里（见 DEVELOPMENT §9.6）：
     与模型选择同表同行的好处是"读一次设置就拿到全部"，不必再查第二张表。
     """
     con = connect()
@@ -220,7 +220,7 @@ PROFILE_FIELDS = ("name", "identity", "appearance", "avatar")
 def read_profile() -> dict:
     """用户本人的设定。行不存在时返回全空，调用方不必判 None（init_db 会补行）。
 
-    `id=1` 这一行是"当前使用的设定"；`id>1` 的行是保存下来的**预设**（见 10.39）。
+    `id=1` 这一行是"当前使用的设定"；`id>1` 的行是保存下来的**预设**（见 DEVELOPMENT §2.3 我的设定）。
     两者共用一张表：旧库直接可用，不必改表结构，也不必再开一张表。
     """
     con = connect()
@@ -265,7 +265,7 @@ def write_profile(values: dict) -> dict:
     return read_profile()
 
 
-# ---- "我的设定"的预设：同一张表的 id>1 行（见 10.39） ----
+# ---- "我的设定"的预设：同一张表的 id>1 行（见 DEVELOPMENT §2.3 我的设定） ----
 
 _PRESET_COLS = "id, name, identity, appearance, avatar, updated_at"
 
@@ -400,7 +400,7 @@ def write_world(values: dict) -> dict:
 
 
 def read_settings() -> dict:
-    """运行设置 + 界面偏好。合并成一张表后一次查询就够（原先开关还要再查 app_prefs）。"""
+    """运行设置 + 界面偏好。两者同表，一次查询就够。"""
     con = connect()
     try:
         row = con.execute(

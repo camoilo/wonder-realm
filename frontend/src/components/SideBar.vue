@@ -4,7 +4,13 @@
       <div class="side-label">模式选择</div>
       <nav class="mode-tabs">
         <button v-for="(m, key) in MODES" :key="key" class="mode-tab" :class="{active: mode === key}"
-                @click="switchMode(key)">{{ m.label }}</button>
+                :aria-label="m.hint"
+                @click="switchMode(key)"
+                @mouseenter="hoveredMode = key" @mouseleave="hoveredMode = ''"
+                @focus="hoveredMode = key" @blur="hoveredMode = ''">{{ m.label }}</button>
+        <!-- 模式介绍：鼠标移入或键盘聚焦时出现。绝对定位在按钮行下方，所以不改变任何布局；
+             pointer-events: none 让它不会截住鼠标，也就不会自己把自己关掉 -->
+        <div v-if="hoveredMode" class="mode-tip" role="tooltip">{{ MODES[hoveredMode].hint }}</div>
       </nav>
 
       <div class="side-list">
@@ -62,8 +68,11 @@
 </template>
 
 <script setup>
-import { toRefs } from "vue";
+import { ref, toRefs } from "vue";
 import { store, MODES } from "../store.js";
+
+// 当前鼠标悬停（或键盘聚焦）的模式 key；空串表示不显示介绍浮层
+const hoveredMode = ref("");
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {

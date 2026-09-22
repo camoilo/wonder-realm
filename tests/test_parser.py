@@ -47,7 +47,7 @@ run_case(
 
 # ---- 以下用例来自实际遇到的输出 ----
 # 模型把标记写成 [SCENERY]、台词写在标记之前、末尾还多了个空的 [DIALOG]
-# （旧实现只匹配到那个空 [DIALOG]，于是情境为空、整段被打成纯文本）
+# （只认标准标记的话会只匹配到那个空 [DIALOG]，于是情境为空、整段被打成纯文本）
 run_case(
     "tolerant-scenery-tag",
     parse_output(

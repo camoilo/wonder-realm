@@ -1,5 +1,6 @@
 <template>
-<div class="modal-mask" v-if="charModal.visible" @click.self="charModal.visible = false">
+<div class="modal-mask" v-if="charModal.visible"
+     @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal char-modal">
       <h2>{{ charModal.editingId ? "编辑角色" : "新建角色" }}</h2>
       <!-- 字段区：弹窗里唯一可滚动的部分（操作行在它外面，始终可见） -->
@@ -137,6 +138,7 @@
 <script setup>
 import { toRefs } from "vue";
 import { store } from "../../store.js";
+import { useMaskClose } from "../../composables/maskClose.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
@@ -168,4 +170,9 @@ const {
   saveCharacterModal,
   unlockCharacter,
 } = store;
+
+// 点窗口外 = 关闭（判据是"按下"落在遮罩上，选文字时拖出去不会误关，见 composables/maskClose.js）
+const { onMaskDown, onMaskUp, onMaskClick } = useMaskClose(() => {
+  charModal.value.visible = false;
+});
 </script>

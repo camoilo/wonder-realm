@@ -45,7 +45,7 @@ try:
     for expected in ("characters", "sessions", "messages", "memories", "app_settings",
                      "character_images", "user_profile", "world"):
         assert expected in tables, f"建表缺少 {expected}：{sorted(tables)}"
-    # 偏好已并入 app_settings，不该再有 app_prefs（见 10.46）
+    # 偏好已并入 app_settings，不该再有 app_prefs（见 DEVELOPMENT §9.6 界面约定）
     assert "app_prefs" not in tables, f"app_prefs 应已并入 app_settings：{sorted(tables)}"
     # 新库的 sessions / characters 应当自带全部字段
     assert "title_auto" in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
@@ -58,8 +58,8 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
 
-# ---- 运行中删库要能自愈（10.49） ----
-# 建表原先只发生在启动路径上：用户运行中删掉 data/，之后每个请求都 500，界面看起来像
+# ---- 运行中删库要能自愈（DEVELOPMENT §9.3 数据与兼容） ----
+# 建表若只发生在启动路径上：运行中删掉 data/ 之后每个请求都 500，界面看起来像
 # "前端连不上后端"，只能重启应用。现在 connect() 发现库文件不在就重建再继续。
 from app import database as db  # noqa: E402
 

@@ -2,7 +2,7 @@
 <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
     <div class="panel-inner">
       <!-- 面板里没有标题行、也没有关闭键：开关只有一个，就在顶栏最右那一格，
-           位置不随面板开合变化（见 10.46）。所以标签栏是面板最上面的一行 -->
+           位置不随面板开合变化（见 DEVELOPMENT §9.6 界面约定）。所以标签栏是面板最上面的一行 -->
       <!-- 标签栏放在滚动容器**外面**：面板内容一长，滚轮往下滚时标签会被顶出视野、
            得再滚回顶部才能切标签。放在外面就永远贴在面板顶部。
            （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->

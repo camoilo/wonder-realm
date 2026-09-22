@@ -1,4 +1,4 @@
-"""角色生成与探索模式锁定（10.29）。
+"""角色生成与探索模式锁定（DEVELOPMENT §2.2 角色设定）。
 
 覆盖：锁定时接口真的不下发那三个字段、保存不会清空它们、解锁单向、生成草稿的取舍。
 用临时库 + TestClient，绝不碰 data/ 下的真实库。
@@ -259,7 +259,7 @@ try:
     enabled = _payload(captured["model"], [], False, captured["options"], "json")
     check("开着思考时生成不带 think 字段", "think" in enabled, False)
 
-    # 偏好与运行设置在同一张表（10.46）：写开关立刻能从 read_settings 读到，且不影响模型字段
+    # 偏好与运行设置在同一张表（DEVELOPMENT §9.6 界面约定）：写开关立刻能从 read_settings 读到，且不影响模型字段
     model_before = database.read_settings()["model"]
     database.write_disable_thinking(True)
     check("开关与模型同表：写后即时可读", database.read_settings()["disable_thinking"], True)

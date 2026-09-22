@@ -1,5 +1,6 @@
 <template>
-<div class="modal-mask" v-if="newSessionModal.visible" @click.self="newSessionModal.visible = false">
+<div class="modal-mask" v-if="newSessionModal.visible"
+     @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal">
       <h2>新会话 · {{ MODES[mode].label }}</h2>
       <label class="field">角色
@@ -26,6 +27,7 @@
 <script setup>
 import { toRefs } from "vue";
 import { store, MODES } from "../../store.js";
+import { useMaskClose } from "../../composables/maskClose.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
@@ -42,4 +44,9 @@ const {
   len,
   openCharacterModal,
 } = store;
+
+// 点窗口外 = 关闭（判据是"按下"落在遮罩上，见 composables/maskClose.js）
+const { onMaskDown, onMaskUp, onMaskClick } = useMaskClose(() => {
+  newSessionModal.value.visible = false;
+});
 </script>

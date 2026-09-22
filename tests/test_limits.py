@@ -1,4 +1,4 @@
-"""输入字数上限（10.31）：后端按 limits.LIMITS 校验，前端从 /api/limits 取同一份。
+"""输入字数上限（DEVELOPMENT §9.2 单一数据源）：后端按 limits.LIMITS 校验，前端从 /api/limits 取同一份。
 
 上限只写一处：`app/limits.py`。这里盯住三件事——超限被拒（422）、等于上限放行、
 以及 `GET /api/limits` 与 `FIELDS` 里下发的数字和上限表一致（前端据此设 maxlength

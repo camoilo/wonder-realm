@@ -12,7 +12,7 @@
   --error-bg: #fdeeee;
   --error-text: #b3413c;
   --radius: 12px;
-  /* 分区与内容之间的分界线：左右两栏共用同一条（见 10.46）。
+  /* 分区与内容之间的分界线：左右两栏共用同一条（见 DEVELOPMENT §9.6 界面约定）。
      1px 的 --border 在白底上几乎看不见，所以这里固定成"2px + 压深一档" */
   --divider: 2px solid #d7dae1;
   --side-w: 260px;
@@ -63,13 +63,15 @@ html, body {
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 10px;
-  /* 模式按钮与下面的列表之间：与右侧面板标签栏下沿同一条线（10.46） */
+  /* 模式按钮与下面的列表之间：与右侧面板标签栏下沿同一条线 */
   border-bottom: var(--divider);
+  /* 模式介绍浮层（.mode-tip）挂在它里面做绝对定位，浮在下面的列表之上 */
+  position: relative;
 }
 
 /* 左侧栏顶部的小标题：说明下面这排按钮是干什么的。
    比按钮本身更醒目（加大加粗居中），并用一条分隔线把它和模式按钮分开；
-   分隔线与右侧面板用同一条（--divider，见 10.46） */
+   分隔线与右侧面板用同一条（--divider，见 DEVELOPMENT §9.6 界面约定） */
 .side-label {
   padding: 14px 12px 10px;
   font-size: 15px;
@@ -93,6 +95,29 @@ html, body {
 .mode-tab:hover:not(:disabled):not(.active) { background: #f0f2f6; color: var(--text); }
 .mode-tab.active { background: var(--accent); color: #fff; font-weight: 500; }
 .mode-tab:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 模式介绍浮层：绝对定位在按钮行下方，浮在下面的列表之上，所以不占布局。
+   pointer-events: none 是必须的——否则鼠标移向浮层时会先触发按钮的 mouseleave，
+   浮层自己把自己关掉，看起来像在闪。 */
+.mode-tip {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: calc(100% + 6px);
+  z-index: 40;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #2f3441;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.65;
+  box-shadow: 0 8px 20px rgba(24, 28, 38, 0.22);
+  pointer-events: none;
+  animation: mode-tip-in 0.12s ease-out;
+}
+@keyframes mode-tip-in {
+  from { opacity: 0; transform: translateY(-3px); }
+}
 
 .side-list {
   flex: 1;
@@ -214,7 +239,7 @@ html, body {
 
 /* 顶栏之下那一行：左边是对话区 + 输入区，右边是面板。
    拆成这样是为了让**顶栏的宽度不随面板开合变化**——"配置"键钉在顶栏最右，
-   面板开关都不会让它移动（见 10.46） */
+   面板开关都不会让它移动（见 DEVELOPMENT §9.6 界面约定） */
 .work {
   flex: 1 1 auto;
   display: flex;
@@ -1152,10 +1177,8 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   min-height: 0;
 }
 
-/* 这里原来有一个"面板"标题 + 关闭键（.panel-head），10.45 删掉后 10.46 一度以"把配置键
-   搬进来当标题"的形式回来，最终按用户澄清改为：**开关永远待在顶栏最右那一格，位置不随
-   面板开合变化**（"不挪鼠标点开、看一眼、再点关"）。所以面板里没有标题行，
-   标签栏就是面板最上面的一行 */
+/* 面板里没有标题行，标签栏就是最上面的一行：收起/展开只有顶栏最右那一格「配置」键，
+   它位置不随面板开合变化（"不挪鼠标点开、看一眼、再点关"），面板内不再放第二个开关 */
 
 /* 滚动容器只包住标签内容：标签栏与"未保存 / 还原"行在它外面（见 .panel-tabs）。
    它们不被滚轮带走，所以这里只负责内容区的内边距 */
@@ -1302,7 +1325,7 @@ mark.search-hit.current {
 .term-del:hover { color: var(--error-text); border-color: var(--border); background: #fff; }
 
 /* ---------- 右侧面板的标签页 ---------- */
-/* 三个分区改成一次只显示一块的标签页（原先是"整行可点折叠"）。
+/* 三个分区一次只显示一块（标签页）。
    未保存的改动在对应标签右上角点一个圆点，选中标签的内容区顶部显示"未保存 / 还原"。
    标签栏放在 .panel-body（滚动容器）**外面**：内容一长，滚轮往下滚时标签会被顶出视野，
    得再滚回顶部才能切标签 */
@@ -1313,10 +1336,10 @@ mark.search-hit.current {
   display: flex;
   /* 聊天与沉浸两种模式下有 5 个标签（生成要求 / 世界设定 / 角色设定 / 我的设定 / 记忆）。
      330px 面板里等分下来每个只有约 56px，而四个字的标签要 68px——不换行就会被截成
-     "生成要…"。换行只在聊天与沉浸两种模式出现（其它模式只有 3 个标签，仍是一行）。见 10.44 */
+     "生成要…"。换行只在聊天与沉浸两种模式出现（其它模式只有 3 个标签，仍是一行）。见 DEVELOPMENT §2.4 世界设定 */
   flex-wrap: wrap;
   gap: 4px;
-  /* 标签区与内容区的分界：与左侧栏用同一条线（--divider，见 10.46） */
+  /* 标签区与内容区的分界：与左侧栏用同一条线（--divider，见 DEVELOPMENT §9.6 界面约定） */
   border-bottom: var(--divider);
 }
 
@@ -1335,7 +1358,7 @@ mark.search-hit.current {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-soft);
-  /* 边框常驻：未选中的标签也有边，靠底色与边框色区分选中状态（见 10.45）。
+  /* 边框常驻：未选中的标签也有边，靠底色与边框色区分选中状态（见 DEVELOPMENT §7.1 布局）。
      只给选中项画边时，未选中的标签看起来像悬空的文字，跟下面的内容分不开 */
   background: #f7f8fa;
   border: 1px solid var(--border);
@@ -1372,7 +1395,7 @@ mark.search-hit.current {
 
 /* ---------- 面板底部常驻的保存区 ---------- */
 /* 保存键与"未保存 / 还原"固定在面板底部：内容再长也不会跟着滚走、不会被内容量挤位置
-   （原先是每个标签内容末尾各放一个保存键，三处文案还不一样）。
+   （三块共用一个保存键，不必滚到底才能按）。
    底色与面板一致，内容滚到它底下时不会透上来 */
 .panel-footer {
   flex: none;
@@ -1717,7 +1740,7 @@ mark.search-hit.current {
   max-height: 88vh;
   /* 外层仍保留 auto 作为兜底：没有 .modal-body 的弹窗（裁剪头像、新会话）只有这一层；
      有 .modal-body 的弹窗里，正文会先把溢出吃掉（flex + min-height:0），外层不会滚，
-     于是操作行被钉在底部（见 10.36）。横向一律 hidden，免得出现横向滚动条盖住圆角 */
+     于是操作行被钉在底部（见 DEVELOPMENT §9.6 界面约定）。横向一律 hidden，免得出现横向滚动条盖住圆角 */
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--panel);
@@ -1764,7 +1787,7 @@ mark.search-hit.current {
 .modal-body::-webkit-scrollbar-thumb:hover { background: #aab0bb; background-clip: content-box; }
 
 /* 角色编辑/新建弹窗：内容最多（生成区 + 头像 + 背景 + 5 个字段），与消息编辑弹窗同宽。
-   选择器加 `.modal` 前缀的理由同 `.modal.edit-modal`（见 10.28）：单写 `.char-modal`
+   选择器加 `.modal` 前缀的理由同 `.modal.edit-modal`（见 DEVELOPMENT §9.6 界面约定）：单写 `.char-modal`
    会被文件后部的基础 `.modal` 按出现顺序压掉 */
 .modal.char-modal { width: 780px; }
 

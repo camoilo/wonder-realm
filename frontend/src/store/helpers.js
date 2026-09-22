@@ -1,9 +1,21 @@
 // 模块级常量与纯函数：模式表、空的表单工厂、图片编解码等（不碰 store、不碰 Vue）。
 // 这里的东西被 state.js 与各领域模块 import，所以顶层声明统一 export。
 export const MODES = {
-  chat: { label: "聊天模式", character: true },
-  immersive: { label: "沉浸模式", character: true },
-  director: { label: "导演模式", character: false },
+  chat: {
+    label: "聊天模式",
+    character: true,
+    hint: "像发消息一样和角色聊天：只出现角色说出口的话，没有动作与旁白。",
+  },
+  immersive: {
+    label: "沉浸模式",
+    character: true,
+    hint: "角色说的话 + 情境描写（动作、环境、心理），适合演一段剧情。",
+  },
+  director: {
+    label: "导演模式",
+    character: false,
+    hint: "你给指令、模型写故事：可以只写情境，也可以只要台词。",
+  },
 };
 
 // 与后端 parser.py 保持同一套标记识别（理由见那里的注释）：宽容认标记，

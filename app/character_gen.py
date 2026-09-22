@@ -134,7 +134,7 @@ async def generate_character(hint: str = "") -> dict:
     # format="json" 让 Ollama 约束成合法 JSON，比在提示词里"求"它可靠得多；
     # 解析仍然容错，因为不是所有模型都严格遵守（见 _clean_json）。
     # 模型与思考开关都走同一条 chat_once → _payload：用的是当前选中的模型，
-    # 用户关掉思考模式时会带 think=False（见 10.30）
+    # 用户关掉思考模式时会带 think=False（见 DEVELOPMENT §2.5 系统生成要求）
     raw = await ollama_client.chat_once(
         [{"role": "user", "content": prompt}], model, opts, fmt="json",
         timeout=cfg.get("character_gen", {}).get("timeout", 600),

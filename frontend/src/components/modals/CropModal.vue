@@ -1,5 +1,6 @@
 <template>
-<div class="modal-mask crop-mask" v-if="crop.visible" @click.self="cancelCrop">
+<div class="modal-mask crop-mask" v-if="crop.visible"
+     @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal crop-modal">
       <h2>裁剪头像</h2>
       <p class="hint">拖动图片调整位置，方框内的部分会成为头像</p>
@@ -28,6 +29,7 @@
 <script setup>
 import { toRefs } from "vue";
 import { store } from "../../store.js";
+import { useMaskClose } from "../../composables/maskClose.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
@@ -45,4 +47,7 @@ const {
   cropUp,
   setCropZoom,
 } = store;
+
+// 点窗口外 = 取消裁剪（判据是"按下"落在遮罩上，见 composables/maskClose.js）
+const { onMaskDown, onMaskUp, onMaskClick } = useMaskClose(cancelCrop);
 </script>

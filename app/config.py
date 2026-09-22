@@ -13,7 +13,7 @@ DEFAULTS = {
         # temperature 只是兜底：对话生成的实际取值来自会话的「发散程度」档位
         # （见 prompts.chat_options），记忆压缩与会话命名自己压到 0.3
         # num_ctx 是硬天花板：超窗时 Ollama 从最前面静默截断，而系统提示词（角色设定 +
-        # 记忆 + 我的设定）正好在最前面。32768 与 memory 的阈值配套，见 10.42
+        # 记忆 + 我的设定）正好在最前面。32768 与 memory 的阈值配套，见 DEVELOPMENT §9.5 提示词与解析
         "options": {"temperature": 0.9, "num_ctx": 32768},
     },
     "memory": {
