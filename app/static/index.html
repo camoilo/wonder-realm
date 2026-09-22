@@ -112,14 +112,15 @@
                 :title="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
         <!-- "配置"面板的开关。三点约定（见 10.46）：**常驻**（没有会话时也在，只是禁用）、
-             **改名"配置"**、**固定位置**——面板展开后它就搬进面板顶部当标题，所以这里只在
-             收起或无会话时出现。未保存的小圆点只挂在顶栏这一份上：面板展开时标签自己有小点，
-             不重复提示 -->
-        <button v-if="!activeSession || panelCollapsed" class="ghost-btn panel-toggle"
+             **改名"配置"**、**位置固定**——它永远待在顶栏最右这一格，面板开、关都不移动，
+             所以能"不挪鼠标点开、看一眼、再点关"。文案只换箭头、字数不变，宽度也不变。
+             未保存的小圆点同样常驻（面板收起时标签看不见，只能靠它提示） -->
+        <button class="ghost-btn panel-toggle"
                 :disabled="!activeSession"
                 :title="!activeSession ? '先打开一个会话，才能打开配置面板'
-                        : ('展开配置面板' + (anyDirty ? '（有未保存的修改）' : ''))"
-                @click="panelCollapsed = !panelCollapsed">{{ activeSession ? "配置 ›" : "配置" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
+                        : ((panelCollapsed ? '展开配置面板' : '收起配置面板')
+                           + (anyDirty ? '（有未保存的修改）' : ''))"
+                @click="panelCollapsed = !panelCollapsed">{{ activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
       </div>
     </header>
 
@@ -256,11 +257,8 @@
 
   <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
     <div class="panel-inner">
-      <!-- 展开后，顶栏那个"配置"键就搬到这里当面板标题：同一个开关只有一个去处，
-           收回时它回到顶栏。这里不再放第二个开关（原先的 ✕ 已删，见 10.45/10.46） -->
-      <div class="panel-head">
-        <button class="panel-title" title="收起配置面板" @click="panelCollapsed = true">配置 ‹</button>
-      </div>
+      <!-- 面板里没有标题行、也没有关闭键：开关只有一个，就在顶栏最右那一格，
+           位置不随面板开合变化（见 10.46）。所以标签栏是面板最上面的一行 -->
       <!-- 标签栏放在滚动容器**外面**：面板内容一长，滚轮往下滚时标签会被顶出视野、
            得再滚回顶部才能切标签。放在外面就永远贴在面板顶部。
            （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->

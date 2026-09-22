@@ -135,25 +135,22 @@ check("旧的折叠结构已清除",
 check("CSS 里的折叠样式已清除", ".panel-section" in css_code, False)
 check("未保存圆点样式在", ".tab-dot" in css, True)
 check("当前标签的未保存状态有计算属性", "activeTabDirty" in js and "activeTabDirty" in html, True)
-# ---- "配置"开关：常驻 + 改名 + 展开时搬进面板当标题（10.46） ----
-check("面板有标题行（住着那个开关）", 'class="panel-head"' in html, True)
-check("标题行里就是那个开关", html.count('class="panel-title"'), 1)
-check("面板标题键是收起方向", ">配置 ‹</button>" in html, True)
-# 断言名里刻意不写 ‹ › 这两个字符：控制台是 GBK，打不出来会把测试自己搞崩
-check("顶栏那份按状态给出'配置'与展开箭头",
-      'activeSession ? "配置 ›" : "配置"' in html, True)
-check("旧的面板文案已清除",
-      any(w in html for w in ("面板 ‹", "面板 ›", ">面板</h2>")), False)
-check("没有第二个关闭键", 'title="收起面板"' not in html, True)
-# 常驻：无会话时也渲染（只是禁用），所以 v-if 里必须带上 !activeSession
-toggle_line = re.search(r'<button v-if="([^"]*)" class="ghost-btn panel-toggle"', html).group(1)
-check("无会话时也常驻", toggle_line, "!activeSession || panelCollapsed")
+# ---- "配置"开关：常驻 + 改名 + 位置固定（面板开合都不动）（10.46） ----
+check("面板里没有标题行（开关不搬进面板）", 'class="panel-head"' not in html, True)
+check("面板里没有第二个开关", 'class="panel-title"' not in html, True)
+check("顶栏那一份没有 v-if（常驻，不随会话/面板出现消失）",
+      re.search(r'<button v-if="[^"]*" class="ghost-btn panel-toggle"', html), None)
 check("无会话时禁用", ':disabled="!activeSession"' in html, True)
 check("禁用样式有定义（否则看起来仍可点）", ".ghost-btn:disabled {" in css, True)
-check("点标题键收起面板", 'title="收起配置面板" @click="panelCollapsed = true"' in html, True)
-check("顶栏那份只在收起时出现（展开时位置在面板内）",
-      html.count("panelCollapsed = !panelCollapsed"), 1)
-check("面板标题样式在", ".panel-title {" in css, True)
+check("开关在顶栏里（位置固定在工具栏最右）",
+      html.index('class="toolbar"') < html.index("panel-toggle") < html.index("</header>"), True)
+# 文案只换箭头、字数不变，所以按钮宽度不随状态变化（"不挪鼠标点开、看一眼、再点关"）
+check("文案按状态只换箭头",
+      'activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›"' in html, True)
+check("旧文案'面板'已清除",
+      any(w in html for w in ("面板 ‹", "面板 ›", ">面板</h2>", "收起面板")), False)
+check("标题提示随状态变化",
+      "(panelCollapsed ? '展开配置面板' : '收起配置面板')" in html, True)
 
 # ---- 分隔线：左右两侧同一条（10.46） ----
 check("分隔线定义成变量", "--divider: 2px solid #d7dae1;" in css, True)

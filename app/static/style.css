@@ -1135,29 +1135,10 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   min-height: 0;
 }
 
-/* 面板标题行：里面只有"配置 ‹"这一个开关（顶栏那一份在面板展开时收起来，见 10.46） */
-.panel-head {
-  flex: none;
-  padding: 12px 16px 0;
-}
-.panel-title {
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-  background: none;
-  border: none;
-  border-radius: 6px;
-  /* 往左偏 4px：让标题文字与下面标签的左边缘对齐（按钮自身有内边距） */
-  padding: 2px 4px;
-  margin-left: -4px;
-  cursor: pointer;
-}
-.panel-title:hover { color: var(--accent-dark); background: #f0f2f6; }
-
-/* 这里原来有一个"面板"标题 + 关闭键（.panel-head），10.45 删掉后又在 10.46 以另一种形式
-   回来：**展开时"配置"开关就住在这里当标题**——不是又加一个开关，而是同一个键在
-   展开状态下有个固定去处。真正的分界线是下面标签栏那一条（--divider），所以这里不画线 */
+/* 这里原来有一个"面板"标题 + 关闭键（.panel-head），10.45 删掉后 10.46 一度以"把配置键
+   搬进来当标题"的形式回来，最终按用户澄清改为：**开关永远待在顶栏最右那一格，位置不随
+   面板开合变化**（"不挪鼠标点开、看一眼、再点关"）。所以面板里没有标题行，
+   标签栏就是面板最上面的一行 */
 
 /* 滚动容器只包住标签内容：标签栏与"未保存 / 还原"行在它外面（见 .panel-tabs）。
    它们不被滚轮带走，所以这里只负责内容区的内边距 */
@@ -1310,8 +1291,8 @@ mark.search-hit.current {
    得再滚回顶部才能切标签 */
 .panel-tabs {
   flex: none;
-  /* 上面 8px：标题行已经在 .panel-head 里给了 12px；下面 10px 让分隔线不贴着标签 */
-  padding: 8px 16px 10px;
+  /* 标签栏就是面板最上面的一行（没有标题行），所以上内边距给足 12px */
+  padding: 12px 16px 10px;
   display: flex;
   /* 角色模式下有 5 个标签（生成要求 / 世界设定 / 角色设定 / 我的设定 / 记忆）。
      330px 面板里等分下来每个只有约 56px，而四个字的标签要 68px——不换行就会被截成
