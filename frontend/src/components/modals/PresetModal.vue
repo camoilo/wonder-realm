@@ -3,8 +3,17 @@
      @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal edit-modal preset-modal">
       <h2>编辑预设</h2>
-      <!-- 预设是"另存的一份设定"：这里改的只是这一条，当前使用的设定不受影响 -->
+      <!-- 预设是"另存的一份设定"：这里改的只是这一条，当前使用的设定不受影响。
+           删除是不可逆操作，收在这个弹窗里（面板上不放） -->
       <div class="modal-body">
+        <label class="field">要编辑哪条预设
+          <select class="preset-select" :value="presetModal.id"
+                  @change="editPickPreset(Number($event.target.value))">
+            <option v-for="p in profilePresets" :key="p.id" :value="p.id">
+              {{ p.name }}{{ p.identity ? " · " + p.identity : "" }}
+            </option>
+          </select>
+        </label>
         <div class="avatar-pick">
           <span class="avatar xl">
             <img v-if="presetModal.form.avatar" :src="presetModal.form.avatar" alt="">
@@ -43,6 +52,8 @@
         <p v-if="presetModal.saveError" class="avatar-error">{{ presetModal.saveError }}</p>
       </div>
       <div class="modal-actions">
+        <button class="danger-btn" v-hint="'删除这条预设（当前使用的设定不受影响）'"
+                @click="deletePresetInModal">删除这条预设</button>
         <button class="ghost-btn" @click="closePresetModal">取消</button>
         <button class="primary-btn" :disabled="!presetModal.form.name.trim()"
                 @click="savePresetModal">保存</button>
@@ -61,12 +72,15 @@ const {
   avatarError,
   limits,
   presetModal,
+  profilePresets,
 } = toRefs(store);
 
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {
   clearAvatar,
   closePresetModal,
+  deletePresetInModal,
+  editPickPreset,
   isNear,
   len,
   pickAvatar,

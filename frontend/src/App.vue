@@ -26,6 +26,7 @@
 <EditMessageModal />
 <CropModal />
 <PresetModal />
+<LoadPresetModal />
 
 <!-- 悬停提示的浮层：全局只有这一个，由 v-hint 指令驱动（文本与位置都从指令那边来），
      这样提示的样式与行为在整页统一。放在最后，层级高于弹窗遮罩，弹窗里的提示也能看见 -->
@@ -51,6 +52,7 @@ import ConfirmModal from "./components/modals/ConfirmModal.vue";
 import EditMessageModal from "./components/modals/EditMessageModal.vue";
 import CropModal from "./components/modals/CropModal.vue";
 import PresetModal from "./components/modals/PresetModal.vue";
+import LoadPresetModal from "./components/modals/LoadPresetModal.vue";
 
 registerWatchers();
 

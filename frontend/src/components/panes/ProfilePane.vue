@@ -1,35 +1,23 @@
 <template>
-<!-- 预设是"另存的一份设定"，与当前配置（下面这份表单）彻底分开：
-     下拉只挑"要操作哪条预设"，选它不碰表单；
-     「载入」把预设复制进下面的表单（还要点底部"保存当前配置"才生效）；
-     「存为预设」把当前表单另存成一条新预设；
-     「编辑预设」在弹窗里改选中的那一条（含头像），改完列表立刻更新——都不影响当前配置。
-     四个键常驻、不适用时置灰：控件不按状态出现/消失，免得按钮跳来跳去 -->
-<div class="preset-row">
-  <select class="preset-select" v-model="presetPick">
-    <option value="">选择预设…</option>
-    <option v-for="p in profilePresets" :key="p.id" :value="p.id">
-      {{ p.name }}{{ p.identity ? " · " + p.identity : "" }}
-    </option>
-  </select>
-</div>
+<!-- 预设是"另存的一份设定"，与下面这份表单（当前使用的设定）分开：
+     面板只显示"当前预设是谁"，挑选、看详情、编辑都在弹窗里做——
+     预设名字可能重复，光看下拉里一行字分不清，弹窗里能一眼看到头像与身份/外观。
+     删除也收在"编辑预设"弹窗里，面板上不放不可逆的操作。 -->
+<div class="preset-current">当前预设：<b>{{ currentPresetLabel }}</b></div>
 <div class="preset-row preset-actions">
-  <button class="ghost-btn" :disabled="!presetPick"
-          v-hint="'把这条预设复制进下面的表单（这时还没生效，点底部「保存当前配置」才写入）'"
-          @click="loadPreset">载入</button>
   <button class="ghost-btn" :disabled="!profileForm.name.trim()"
           v-hint="'把下面的表单另存成一条新预设'"
           @click="savePreset">存为预设</button>
-  <button class="ghost-btn" :disabled="!presetPick"
-          v-hint="'在弹窗里改选中的这条预设（含头像），不影响当前使用的设定'"
-          @click="openPresetModal">编辑预设</button>
-  <button class="ghost-btn" :disabled="!presetPick"
-          v-hint="'删除选中的这条预设'"
-          @click="removePreset">删除预设</button>
+  <button class="ghost-btn" :disabled="!profilePresets.length"
+          v-hint="'在弹窗里挑一条预设，看清详情后载入（立即生效，覆盖当前使用的设定）'"
+          @click="openLoadModal">载入预设…</button>
+  <button class="ghost-btn" :disabled="!profilePresets.length"
+          v-hint="'在弹窗里选一条预设来改（含头像），删除也在这里'"
+          @click="openPresetModal">编辑预设…</button>
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
 <p v-if="!profilePresets.length" class="hint">
-  还没有预设：填好下面几项后点「存为预设」，以后就能从下拉里选一条「载入」（含头像）。
+  还没有预设：填好下面几项后点「存为预设」，以后就能在这里挑一条载入（含头像）。
 </p>
 <div class="avatar-pick">
   <span class="avatar xl">
@@ -74,9 +62,9 @@ import { store } from "../../store.js";
 
 const {
   avatarError,
+  currentPresetLabel,
   limits,
   presetError,
-  presetPick,
   profileForm,
   profilePresets,
 } = toRefs(store);
@@ -85,10 +73,9 @@ const {
   clearAvatar,
   isNear,
   len,
-  loadPreset,
+  openLoadModal,
   openPresetModal,
   pickAvatar,
-  removePreset,
   savePreset,
 } = store;
 </script>

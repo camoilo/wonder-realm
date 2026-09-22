@@ -68,10 +68,12 @@ export const store = reactive({
       profile: emptyProfile(),
       profileForm: emptyProfile(),
       profilePresets: [],
-      presetPick: "",
+      // 当前使用的设定来自哪条预设（空 = 未选择预设），面板那行据此显示名字
+      currentPresetId: "",
       presetError: "",
-      // 编辑某条预设的弹窗：里面是那条预设的一份副本，保存时 PUT 回它，
-      // 完全不碰"当前使用的设定"（那份只由面板底部的「保存当前配置」写）
+      // 载入预设的弹窗：左边挑一条、右边看详情，确认后立即生效
+      loadPresetModal: { visible: false, pick: "" },
+      // 编辑预设的弹窗：在里面选要改哪条，删除也在这里
       presetModal: { visible: false, id: null, form: emptyProfile(), saveError: "" },
       world: emptyWorld(),
       worldForm: emptyWorld(),
