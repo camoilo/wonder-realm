@@ -57,4 +57,48 @@ try:
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
+
+# ---- 运行中删库要能自愈（10.49） ----
+# 建表原先只发生在启动路径上：用户运行中删掉 data/，之后每个请求都 500，界面看起来像
+# "前端连不上后端"，只能重启应用。现在 connect() 发现库文件不在就重建再继续。
+from app import database as db  # noqa: E402
+
+tmp2 = Path(__file__).resolve().parent.parent / ".test_naming_tmp2"
+shutil.rmtree(tmp2, ignore_errors=True)
+try:
+    db.init_db(str(tmp2), "默认模型", "记忆模型")
+    assert db.read_settings()["model"] == "默认模型", db.read_settings()
+    # 删掉整个数据目录（就是用户当时的动作）
+    shutil.rmtree(tmp2)
+    assert not tmp2.exists()
+    # 下一个请求不该 500：库要自己建回来，而且是同一份默认值
+    settings = db.read_settings()
+    assert settings["model"] == "默认模型", f"自愈后设置不对：{settings}"
+    assert settings["memory_model"] == "记忆模型", settings
+    assert (tmp2 / db.DB_FILENAME).exists(), "自愈后库文件应当存在"
+    # 自愈出来的库是真能用的：写一个角色再读回来
+    con = db.connect()
+    try:
+        con.execute(
+            "INSERT INTO characters(name, created_at, updated_at) VALUES(?, ?, ?)",
+            ("重建后的角色", db.now(), db.now()),
+        )
+        con.commit()
+        names = [r[0] for r in con.execute("SELECT name FROM characters")]
+    finally:
+        con.close()
+    assert names == ["重建后的角色"], names
+    # 单行表也要补上（读的时候不必判 None）
+    assert db.read_profile()["name"] == "", db.read_profile()
+    assert db.read_world()["name"] == "", db.read_world()
+    # 已经存在的库不该被反复重建：连上两次后仍然只有刚才那个角色
+    db.connect().close()
+    con = db.connect()
+    try:
+        assert [r[0] for r in con.execute("SELECT name FROM characters")] == ["重建后的角色"]
+    finally:
+        con.close()
+finally:
+    shutil.rmtree(tmp2, ignore_errors=True)
+
 print("naming._clean 与建表用例全部通过")

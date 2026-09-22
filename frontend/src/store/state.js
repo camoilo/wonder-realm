@@ -26,6 +26,8 @@ export const store = reactive({
       abortCtrl: null,
       stopped: false,
       error: "",
+      // 初始化时有哪几步没加载上（顶栏常驻提示用；底部错误条只在打开会话时才渲染）
+      initError: "",
       sideCollapsed: false,
       panelCollapsed: false,
       charForm: emptyCharForm(),

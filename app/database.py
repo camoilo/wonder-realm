@@ -108,6 +108,9 @@ CREATE TABLE IF NOT EXISTS world (
 
 DB_PATH: Path | None = None
 DB_FILENAME = "chatbot.db"
+# init_db 时记下来的默认值：运行中库文件被删掉要重建时，得用同一份默认值补 app_settings
+_DEFAULT_MODEL = ""
+_DEFAULT_MEMORY_MODEL = ""
 
 
 def db_file(data_dir) -> Path:
@@ -119,18 +122,14 @@ def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -> None:
-    """建库建表。不做旧库补列：开发阶段直接删掉 data/ 重建即可（见 DEVELOPMENT 4.2）。"""
-    global DB_PATH
-    path = Path(data_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    DB_PATH = path / DB_FILENAME
+def _create_schema() -> None:
+    """建表 + 三张单行表的初始行。幂等（IF NOT EXISTS / INSERT OR IGNORE），可反复调用。"""
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
     con.execute(
         "INSERT OR IGNORE INTO app_settings(id, model, memory_model, updated_at) VALUES(1, ?, ?, ?)",
-        (default_model, default_memory_model, now()),
+        (_DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL, now()),
     )
     # "我的设定"也是单行表：缺了就补一行空白的，读的时候不必到处判 None
     con.execute(
@@ -142,7 +141,36 @@ def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -
     con.close()
 
 
+def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -> None:
+    """建库建表。不做旧库补列：开发阶段直接删掉 data/ 重建即可（见 DEVELOPMENT 4.2）。"""
+    global DB_PATH, _DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL
+    _DEFAULT_MODEL = default_model
+    _DEFAULT_MEMORY_MODEL = default_memory_model
+    path = Path(data_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    DB_PATH = path / DB_FILENAME
+    _create_schema()
+
+
+def ensure_db() -> None:
+    """运行中库文件（或 data/ 目录）不见了就重建再继续，不必重启应用。
+
+    建表原先只发生在启动路径上，于是运行中删掉 data/ 会让之后每个请求都 500，
+    界面看起来像"前端连不上后端"（见 DEVELOPMENT 10.48 / 11.9）。
+    """
+    if DB_PATH is None:  # 还没 init_db（例如备份脚本只 import 本模块）
+        return
+    try:
+        if DB_PATH.exists() and DB_PATH.stat().st_size > 0:
+            return
+    except OSError:  # 正好被删/被占：当成"不在"处理，重建
+        pass
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _create_schema()
+
+
 def connect() -> sqlite3.Connection:
+    ensure_db()
     # check_same_thread=False：SSE 生成器与依赖注入可能在不同线程使用连接
     con = sqlite3.connect(DB_PATH, check_same_thread=False)
     con.row_factory = sqlite3.Row

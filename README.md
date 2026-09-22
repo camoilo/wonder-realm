@@ -257,11 +257,11 @@ data_dir: ./data                  # 数据库目录
 2. 从 `backups/` 里挑一份，复制成 `data/chatbot.db`，并删掉旁边的 `data/chatbot.db-wal` 与 `data/chatbot.db-shm`（如果存在）
 3. 重新启动应用
 
-**彻底重置**：删掉 `data/chatbot.db`，下次启动会自动重建空库。`backups/` 里的历史备份不受影响，所以即使误删也还能从备份捞回来。
+**彻底重置**：删掉 `data/chatbot.db`，下次启动会自动重建空库；**应用正在运行时删掉整个 `data/` 目录也不用重启**——下一个请求会把空库建回来（见 DEVELOPMENT 10.49）。`backups/` 里的历史备份不受影响，所以即使误删也还能从备份捞回来。
 
 ## 测试
 
-八个纯 Python 测试 + 一个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py` 会临时建库，不碰 `data/`）。**只有最下面那个 Node 测试需要先装一次前端依赖**（它直接 import `frontend/src/store.js`，那份逻辑依赖 Vue）：
+八个纯 Python 测试 + 两个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py` 会临时建库，不碰 `data/`）。**最下面那两个 Node 测试需要先装一次前端依赖**（它们直接 import `frontend/src/store.js`，那份逻辑依赖 Vue）：
 
 ```powershell
 uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
@@ -275,6 +275,7 @@ uv run python tests/test_context.py        # 记忆阈值必须留在 num_ctx �
 uv run python tests/test_world.py          # 世界设定：名称不进提示词，其余三项进三种模式
 
 node tests/test_search.mjs                 # 会话内搜索的标记/计数/跳转（需先 cd frontend && npm install）
+node tests/test_init.mjs                   # 初始化容错：某个接口 500 时其余步骤照样完成（同上）
 ```
 
 ## 目录结构

@@ -57,6 +57,9 @@ Object.assign(store, {
   },
   async init() {
     let ollamaOk = true;
+    // 有哪几步没加载上。各步独立容错：一步失败只影响它自己，界面照常出来
+    // （以前 /api/settings 失败会直接 return，于是顶栏空、模型列表和角色列表都不拉）
+    const failed = [];
     // 字数上限以后端为准；拿不到就沿用 data 里的兜底值，不影响使用
     try {
       store.limits = await store.api("/api/limits");
@@ -91,8 +94,8 @@ Object.assign(store, {
       store.currentModel = s.model;
       store.disableThinking = !!s.disable_thinking;
     } catch (e) {
-      store.error = e.message;
-      return;
+      // 设置读不到（例如库文件被删）不该带走整个初始化：下面的角色/会话照常拉
+      failed.push({ label: "设置", msg: e.message });
     }
     if (ollamaOk) {
       if (store.models.length === 0) {
@@ -104,14 +107,29 @@ Object.assign(store, {
         store.modelWarning = `所选模型 ${store.currentModel} 未安装，请在右侧重新选择`;
       }
     }
-    await store.refreshCharacters();
-    await store.refreshSessions();
+    // 角色/会话/生成表单也各自容错：任何一个失败都不再让 init 抛出去
+    // （initApp 没有 await 它，抛出来只会变成静默的 unhandledrejection）
+    try {
+      await store.refreshCharacters();
+    } catch (e) {
+      failed.push({ label: "角色列表", msg: e.message });
+    }
+    try {
+      await store.refreshSessions();
+    } catch (e) {
+      failed.push({ label: "会话列表", msg: e.message });
+    }
     try {
       const form = await store.api("/api/gen-settings");
       store.genFields = form.fields;
       store.genDefaults = form.defaults;
     } catch (e) {
-      /* 表单定义拉取失败时生成要求区留空 */
+      failed.push({ label: "生成表单", msg: e.message });
+    }
+    if (failed.length) {
+      // 顶栏的常驻提示只放短句，完整原因（含后端原话）给底部错误条
+      store.initError = `初始化未完成：${failed.map((f) => f.label).join("、")}没加载上`;
+      store.error = `${store.initError}（${failed.map((f) => `${f.label}：${f.msg}`).join("；")}）`;
     }
   },
   async switchModel() {
@@ -242,7 +260,12 @@ export function registerWatchers() {
 
 // 生命周期（原 mounted / beforeUnmount）
 export async function initApp() {
-    store.init();
+    // init 内部每步都已各自容错，这里再兜一层：万一还有漏网的异常，也让它显示出来，
+    // 而不是静默变成 unhandledrejection（这正是 chatBoxEl 那次的表现形式）
+    store.init().catch((e) => {
+      store.error = e.message;
+      store.initError = `初始化失败：${e.message}`;
+    });
     // 点空白处 / 按 Esc 关掉消息删除菜单与编辑弹窗，避免它们只能靠再次点按钮关闭
     document.addEventListener("click", store.onDocumentClick);
     document.addEventListener("keydown", store.onDocumentKeydown);

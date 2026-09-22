@@ -16,6 +16,7 @@
         <h1 v-else class="title muted">未选择会话</h1>
       </div>
       <div class="toolbar">
+        <span v-if="initError" class="chip warn">{{ initError }}</span>
         <span v-if="modelWarning" class="model-warning">{{ modelWarning }}</span>
         <!-- 会话内搜索：命中处标黄，↑/↓ 在命中之间跳转（Enter 下一个、Shift+Enter 上一个）。
              计数与两个键**始终**占位（不按有无关键词显示/隐藏）——否则输入前后整个框会变宽
@@ -64,6 +65,7 @@ const {
   currentModel,
   currentModelSupportsThinking,
   disableThinking,
+  initError,
   limits,
   modelWarning,
   models,
