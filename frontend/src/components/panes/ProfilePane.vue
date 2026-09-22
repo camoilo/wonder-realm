@@ -1,8 +1,10 @@
 <template>
-<!-- 预设是"另存的一份设定"，与当前配置完全分开：
-     下拉只挑"要操作哪条预设"，不碰表单（所以选来选去不会冒出"未保存"）；
-     要拿来用就点「载入」（只填表单，仍走底部"保存当前配置"才真正生效）；
-     选中某条后，存按钮从「存为预设」变成「保存预设」（覆盖这一条） -->
+<!-- 预设是"另存的一份设定"，与当前配置（下面这份表单）彻底分开：
+     下拉只挑"要操作哪条预设"，选它不碰表单；
+     「载入」把预设复制进下面的表单（还要点底部"保存当前配置"才生效）；
+     「存为预设」把当前表单另存成一条新预设；
+     「编辑预设」在弹窗里改选中的那一条（含头像），改完列表立刻更新——都不影响当前配置。
+     四个键常驻、不适用时置灰：控件不按状态出现/消失，免得按钮跳来跳去 -->
 <div class="preset-row">
   <select class="preset-select" v-model="presetPick">
     <option value="">选择预设…</option>
@@ -10,13 +12,19 @@
       {{ p.name }}{{ p.identity ? " · " + p.identity : "" }}
     </option>
   </select>
-  <button v-if="presetPick" class="ghost-btn"
-          v-hint="'把这条预设填进下面的表单（这时还没生效，点底部「保存当前配置」才写入）'"
+</div>
+<div class="preset-row preset-actions">
+  <button class="ghost-btn" :disabled="!presetPick"
+          v-hint="'把这条预设复制进下面的表单（这时还没生效，点底部「保存当前配置」才写入）'"
           @click="loadPreset">载入</button>
   <button class="ghost-btn" :disabled="!profileForm.name.trim()"
-          v-hint="presetPick ? '把当前表单覆盖保存到选中的这条预设' : '把当前这几项存成一条新预设，之后可以一键载入'"
-          @click="savePreset">{{ presetPick ? "保存预设" : "存为预设" }}</button>
-  <button v-if="presetPick" class="ghost-btn" v-hint="'删除选中的这条预设'"
+          v-hint="'把下面的表单另存成一条新预设'"
+          @click="savePreset">存为预设</button>
+  <button class="ghost-btn" :disabled="!presetPick"
+          v-hint="'在弹窗里改选中的这条预设（含头像），不影响当前使用的设定'"
+          @click="openPresetModal">编辑预设</button>
+  <button class="ghost-btn" :disabled="!presetPick"
+          v-hint="'删除选中的这条预设'"
           @click="removePreset">删除预设</button>
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
@@ -78,6 +86,7 @@ const {
   isNear,
   len,
   loadPreset,
+  openPresetModal,
   pickAvatar,
   removePreset,
   savePreset,

@@ -57,19 +57,58 @@ Object.assign(store, {
     };
   },
   async savePreset() {
-    // 选中了某条预设 = "保存预设"（覆盖它）；没选 = "存为预设"（新建一条）。
-    // 两条路径都只动 id>1 的行，碰不到"当前使用的设定"（id=1）。
+    // 「存为预设」= 用面板里当前的这份设定新建一条预设（不碰当前配置，也不改已有预设；
+    // 要改已有预设走「编辑预设」那个弹窗）
     store.presetError = "";
-    const editing = store.presetPick;
     try {
       const p = await store.api(
-        editing ? `/api/profile/presets/${editing}` : "/api/profile/presets",
-        store.jsonOpts(editing ? "PUT" : "POST", store.profileForm)
+        "/api/profile/presets",
+        store.jsonOpts("POST", store.profileForm)
       );
       await store.loadPresets();
-      store.presetPick = p.id; // 存完保持选中它，方便接着改或删
+      store.presetPick = p.id; // 存完选中它，方便接着编辑或删除
     } catch (e) {
       store.presetError = e.message;
+    }
+  },
+  openPresetModal() {
+    const p = store.profilePresets.find((x) => x.id === store.presetPick);
+    if (!p) return;
+    store.avatarError = "";
+    store.presetModal = {
+      visible: true,
+      id: p.id,
+      form: {
+        name: p.name || "",
+        identity: p.identity || "",
+        appearance: p.appearance || "",
+        avatar: p.avatar || "",
+      },
+      saveError: "",
+    };
+  },
+  closePresetModal() {
+    store.presetModal.visible = false;
+    store.avatarError = "";
+  },
+  async savePresetModal() {
+    // 只写这一条预设（PUT /api/profile/presets/{id}）：当前使用的设定不受影响
+    const form = store.presetModal.form;
+    store.presetModal.saveError = "";
+    if (!form.name.trim()) {
+      store.presetModal.saveError = "先给这条预设填个名字";
+      return;
+    }
+    try {
+      const saved = await store.api(
+        `/api/profile/presets/${store.presetModal.id}`,
+        store.jsonOpts("PUT", form)
+      );
+      await store.loadPresets();
+      store.presetPick = saved.id;
+      store.presetModal.visible = false;
+    } catch (e) {
+      store.presetModal.saveError = e.message;
     }
   },
   async removePreset() {

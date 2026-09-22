@@ -1327,6 +1327,9 @@ mark.search-hit.current {
 }
 .preset-select:focus { outline: 2px solid rgba(63, 106, 216, 0.25); }
 .preset-row .ghost-btn { flex: none; padding: 6px 10px; font-size: 12.5px; }
+/* 四个预设动作键单独一行（下拉占一行）：平分宽度，330px 面板里一行放得下、不跳行 */
+.preset-actions { margin-top: 6px; }
+.preset-actions .ghost-btn { flex: 1 1 0; min-width: 0; padding: 6px 4px; }
 
 /* ---------- "世界设定"里的词库 ---------- */
 /* 一条词条 = 名词 + 解释，各自带字数计数。用小卡片分隔，避免几条连在一起看不出一条到哪结束 */

@@ -114,6 +114,18 @@
 
 预设与当前设定**共用这张表**：`id=1` 是当前使用的那份，`id>1` 是保存下来的预设。所以表上不能有 `CHECK(id=1)`——那条约束会把预设挡在门外。
 
+**面板里的表单永远等于"当前使用的设定"（`id=1`）**，预设是"另存的一份"，两边各走各的入口，谁也不会误改谁：
+
+| 想做 | 怎么做 |
+|---|---|
+| 改当前设定 | 直接在表单里改 → 点底部「保存当前配置」（写 `id=1`） |
+| 把当前这份存成预设 | 点「存为预设」（`POST`，新建一条） |
+| 改某条预设 | 下拉选它 → 「编辑预设」→ 弹出**独立的编辑弹窗**（名字 / 身份 / 外观 / 头像）→ 保存（`PUT /api/profile/presets/{id}`，只动这一条，改完下拉列表立刻更新） |
+| 用某条预设 | 下拉选它 → 「载入」把内容复制进表单 → 再点底部「保存当前配置」才真正生效 |
+| 删某条预设 | 下拉选它 → 「删除预设」 |
+
+四个动作键**常驻、不适用时置灰**（`控件不按状态出现/消失`）。之所以要把"编辑预设"单独做成弹窗：早期是"选中预设即把它填进表单、表单里的改动再存回预设"，结果"表单现在代表谁"变得含糊——用户改完名字点底部的保存键，改的是当前设定而预设没动，看起来就像"保存没生效"；载入预设又把旧名字带回来。分成两个入口之后，每条路径只写一个明确的目标。
+
 **"当前配置"与"预设"是两件事，界面上的动作也是分开的**：面板里的表单永远就是"当前使用的设定"（`id=1`），下拉只用来挑"要操作哪条预设"，**选它不会碰表单**（所以来回切换不会冒出"未保存"）。要拿来用就点「载入」——只把预设填进表单，真正生效仍走底部「保存当前配置」（选错了可以直接还原，不会已经写进库）。存的一侧按是否选中切换：没选中是「存为预设」（新建一条），选中了是「保存预设」（`PUT /api/profile/presets/{id}` 覆盖这一条）。两条路都只动 `id>1`，碰不到当前配置。
 
 注入方式是 system prompt 里的一段独立块（`# 与你对话的人`），紧跟角色设定之后；三项全空时整块不出现。**导演模式不注入、也不显示**用户头像与名字，面板里也不出现这个标签——那里没有"我是谁"这回事。
@@ -904,7 +916,7 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 
 **编辑**：点"编辑"按钮弹出居中的编辑弹窗。沉浸模式下**无论该消息当前有没有情境**都会给出情境输入框，方便手动补上或清空；两个输入框分别带"情境说明""话语内容"标签，避免分不清。保存调 PUT，气泡刷新并带"已编辑"角标；点弹窗外的遮罩或按 Esc 取消。弹窗靠 `editingId` 定位目标消息，不依赖消息在列表中的位置。
 
-**关弹窗**（五个弹窗一致）：点遮罩关闭的判据是**按下（mousedown）时鼠标就在遮罩上**，不是"click 落在遮罩上"。后者会在"在弹窗里按住鼠标选文字、拖到遮罩上或窗口外再松开"时误判成点了窗口外（click 的目标是 mousedown 与 mouseup 的共同祖先），把用户正在编辑的窗口关掉。共用逻辑在 `frontend/src/composables/maskClose.js`，五个弹窗都挂 `@mousedown` / `@mouseup` / `@click` 三件套。
+**关弹窗**（六个弹窗一致）：点遮罩关闭的判据是**按下（mousedown）时鼠标就在遮罩上**，不是"click 落在遮罩上"。后者会在"在弹窗里按住鼠标选文字、拖到遮罩上或窗口外再松开"时误判成点了窗口外（click 的目标是 mousedown 与 mouseup 的共同祖先），把用户正在编辑的窗口关掉。共用逻辑在 `frontend/src/composables/maskClose.js`，五个弹窗都挂 `@mousedown` / `@mouseup` / `@click` 三件套。
 
 **继续生成**（仅导演模式）：点发送键上方的"继续" → 走与发送完全相同的那条路径（`runSend()`），只是内容固定为 `CONTINUE_PROMPT`（"继续"）→ 历史里因此多出一条用户消息，模型顺着往下写。之所以共用一条路径而不是另写一份流式处理：停止、重试、归档折叠、失败回滚这些分支只该有一处实现，两边各写一遍必然走偏。它与手动发送的差别只有两点——入参不来自输入框，且不清空输入框。
 
@@ -915,7 +927,7 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 ### 7.3 前端技术约定
 
 - **Vue 3 + Vite 构建**：源码在 `frontend/`（`index.html` 是入口、`src/` 放脚本与样式），`npm run build` 产物落到 `app/static/`（`index.html` + `assets/` 带哈希文件名），由 FastAPI 直接托管。**产物提交进仓库**，所以运行应用不需要 Node；`start.bat` 检测到 `frontend/node_modules` 与 Node 时会先顺手重建一次。
-- **拆成单文件组件后的文件布局**：`src/store.js` 只是 **barrel**（19 行：import 各领域模块并 re-export，组件里的 `import { store } from "../store.js"` 不用改）；逻辑按领域分在 `src/store/` 下：`state.js`（唯一的 reactive 状态 + `setChatBox`）、`helpers.js`（纯常量与纯函数）、`api.js`（请求封装 / SSE / 初始化 / 模型与思考开关 / 侦听器与生命周期）、`session.js`、`chat.js`、`search.js`、`panel.js`、`character.js`、`profile.js`、`ui.js`；`src/composables/` 放与具体界面无关的复用逻辑（目前只有弹窗关闭判定的 `maskClose.js`）。`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（标签栏 + 5 个 `.panel-tab-pane` 外壳 + 底部保存区，85 行）/ `panes/` 下的 5 个标签页内容 / `modals/` 下的 5 个弹窗。**"一次只显示一个标签"的 v-if/v-show 留在 Panel.vue**，pane 组件只负责内容——这样切换逻辑与 `panel-tab-pane` 结构都在一处，测试断言与样式都不受影响。
+- **拆成单文件组件后的文件布局**：`src/store.js` 只是 **barrel**（19 行：import 各领域模块并 re-export，组件里的 `import { store } from "../store.js"` 不用改）；逻辑按领域分在 `src/store/` 下：`state.js`（唯一的 reactive 状态 + `setChatBox`）、`helpers.js`（纯常量与纯函数）、`api.js`（请求封装 / SSE / 初始化 / 模型与思考开关 / 侦听器与生命周期）、`session.js`、`chat.js`、`search.js`、`panel.js`、`character.js`、`profile.js`、`ui.js`；`src/composables/` 放与具体界面无关的复用逻辑（目前只有弹窗关闭判定的 `maskClose.js`）。`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（标签栏 + 5 个 `.panel-tab-pane` 外壳 + 底部保存区，85 行）/ `panes/` 下的 5 个标签页内容 / `modals/` 下的 6 个弹窗（角色 / 新建会话 / 确认 / 编辑消息 / 裁剪 / 预设）。**"一次只显示一个标签"的 v-if/v-show 留在 Panel.vue**，pane 组件只负责内容——这样切换逻辑与 `panel-tab-pane` 结构都在一处，测试断言与样式都不受影响。
 - **store 的依赖是星形的**：每个领域模块只 `import { store } from "./state.js"`（外加自己用到的 helpers 与 vue 的具名导出），**彼此不互相 import**，所以结构上不可能出现循环依赖；跨领域调用一律走 `store.xxx`（运行时才解析）。状态集中在 `state.js`（"有哪些状态"只看一个文件），行为按功能分文件（"做什么"按领域找）。**`let` 声明的可变私有状态留在唯一使用它的那个模块里**（如 `cropImage` 在 `character.js`）——它不能被 import：ESM 不允许给导入的绑定赋值（打包器会报 `ASSIGN_TO_IMPORT`）。
 - **组件怎么拿状态**：每个组件 `<script setup>` 里 `import { store } from "../store.js"`，用 `const { … } = toRefs(store)` 把**自己模板用到**的成员暴露成 setup 绑定，方法再用 `const { … } = store` 解构（函数不是响应式的）。这样**模板里的表达式与原文件逐字一致**——不需要给几百个引用加 `store.` 前缀，拆分因此可以逐行对照；同时依赖仍是显式的：看组件开头就知道它用了哪些状态。漏声明的后果是模板拿到 `undefined`（列表为空、按钮点了没反应），所以 `tests/test_app_js.py` 有一条守卫逐个组件比对"模板引用到的 store 成员 ⊆ 该文件声明过的绑定"。
 - **不使用 Pinia**：单一 store 对象 + 组合式 API 足够这个体量，省一个依赖。
@@ -982,7 +994,7 @@ ollama_agent/
 │           ├── MessageItem.vue InputBar.vue    Panel.vue
 │           ├── panes/          GenPane · WorldPane · CharPane · ProfilePane · MemoryPane
 │           └── modals/         CharacterModal · NewSessionModal · ConfirmModal
-│                               EditMessageModal · CropModal
+│                               EditMessageModal · CropModal · PresetModal
 ├── tests/
 │   ├── test_thinkfilter.py    # ThinkFilter 状态机单测（uv run python tests/test_thinkfilter.py）
 │   ├── test_parser.py         # 输出解析与分段单测（uv run python tests/test_parser.py）
@@ -1093,7 +1105,7 @@ data_dir: ./data                  # 数据库目录，直接指定
 - **控件的外框尺寸不随状态变化**：要么常驻，要么预留等宽占位（搜索计数、跳转键、"面板"上的未保存小点都按这条做）。
 - **关键键的位置固定**：顶栏「配置」键在整页的坐标不随面板开合、有无会话而变（它常驻、只在两个箭头间换文案）。
 - **"滚不走"的部分移出滚动容器**，不用 `position: sticky`（sticky 会让内容从背后穿过、且仍占 `scrollHeight`）。
-- **点遮罩关闭以"按下"的位置为准**：只有 mousedown 就落在遮罩上才算点了窗口外。用 `@click.self` 会把"在弹窗里选文字、拖到遮罩或窗口外松开"误判成关闭（click 的目标是 mousedown 与 mouseup 的共同祖先），五个弹窗统一走 `frontend/src/composables/maskClose.js`。
+- **点遮罩关闭以"按下"的位置为准**：只有 mousedown 就落在遮罩上才算点了窗口外。用 `@click.self` 会把"在弹窗里选文字、拖到遮罩或窗口外松开"误判成关闭（click 的目标是 mousedown 与 mouseup 的共同祖先），六个弹窗统一走 `frontend/src/composables/maskClose.js`。
 - **悬停提示统一走 `v-hint`**，不用原生 `title`（它延迟约一秒、样式跟浏览器走、不能换行）。指令在 `main.js` 里全局注册，浮层是 `App.vue` 里唯一的一个 `.hint-tip`；提示文案写在指令值里（静态写 `v-hint="'文案'"`，动态直接写表达式），纯图标按钮（✎ / ✕ / ‹ / › / ↑ / ↓）另加 `aria-label` 保无障碍。定位与宽度的两个坑：浮层最终坐标**不用 `transform`**（动画一旦碰 transform 就会把坐标带偏），且必须给 `width: max-content`——fixed 元素只给了 `left` 时宽度按"视口宽 − left"收缩，目标靠右边缘时提示会被挤成一列一个字。
 - **浮层不占布局、不吃鼠标**：提示类浮层（模式介绍 `.mode-tip` 与 `v-hint` 的 `.hint-tip` 共用一套样式）都是"绝对/固定定位 + `pointer-events: none`"，既不改变任何控件的位置，也不会因为鼠标移向浮层而触发原控件的 mouseleave、把自己晃掉。
 - **弹窗的操作行钉底**（中间一层 `.modal-body` 滚动）；弹窗变体宽度必须压得住基类——单类选择器优先级相同时**按源码顺序决胜**，写在基础规则之前会被覆盖。

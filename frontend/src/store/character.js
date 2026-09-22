@@ -118,6 +118,7 @@ Object.assign(store, {
   },
   avatarForm(target) {
     if (target === "profile") return store.profileForm;
+    if (target === "preset") return store.presetModal.form;
     return target === "modal" ? store.charModal.form : store.charForm;
   },
   clearAvatar(target) {

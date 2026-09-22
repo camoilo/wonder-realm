@@ -1787,8 +1787,8 @@ check("选中标签用强调色边框区分",
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量（含底部输入区情境/话语两栏、我的设定三项、世界设定三项与词条两项）",
-      counters, 27)
+check("计数提示数量（含底部输入区两栏、我的设定三项、预设弹窗三项、世界设定三项与词条两项）",
+      counters, 30)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）；会话内搜索框是
@@ -1895,7 +1895,7 @@ check("user 侧时间换到名字左边", ".msg.user .msg-head { flex-direction:
 check("页面里没有「已编辑」标记", ("已编辑" in html) or ("edited-flag" in css), False)
 
 # ---- 弹窗底部的操作行钉底 ----
-check("两个弹窗各有字段滚动区", html.count('class="modal-body"'), 2)
+check("每个滚动型弹窗都有字段滚动区（角色 / 编辑消息 / 预设）", html.count('class="modal-body"'), 3)
 check("弹窗外层保留滚动兜底", ".modal {" in css and "overflow-y: auto;" in css, True)
 check("字段区是弹窗里唯一滚动区",
       ".modal-body {" in css and "flex: 1 1 auto;" in css and "min-height: 0;" in css, True)
@@ -2029,18 +2029,20 @@ check("生成区说明提到思考开关", "跟着顶栏的思考开关走" in h
 
 # 头像入口：面板与弹窗的按钮文案必须一致（曾经一个写"选择图片"、一个写"选择头像"）
 picker = re.findall(r'class="ghost-btn file-btn">\{\{([^}]*)\}\}', html)
-normalized = sorted(re.sub(r"(?:char(?:Modal\.form|Form)|profileForm)\.avatar", "AV", p).strip() for p in picker)
-check("三处头像按钮都在（面板 / 弹窗 / 我的设定）", len(picker), 3)
-check("三处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
-      normalized, ['AV ? "更换头像" : "上传头像"'] * 3)
+normalized = sorted(re.sub(
+    r"(?:char(?:Modal\.form|Form)|profileForm|presetModal\.form)\.avatar", "AV", p).strip()
+    for p in picker)
+check("四处头像入口都在（角色面板 / 角色弹窗 / 我的设定 / 预设弹窗）", len(picker), 4)
+check("四处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
+      normalized, ['AV ? "更换头像" : "上传头像"'] * 4)
 check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
 
 # ---- 我的设定的预设 ----
 check("有预设下拉", 'class="preset-select"' in html and 'v-model="presetPick"' in html, True)
 check("下拉列出预设（名字 + 身份）",
       'v-for="p in profilePresets"' in html and "p.identity" in html, True)
-check("有存为预设 / 保存预设与删除预设",
-      ('{{ presetPick ? "保存预设" : "存为预设" }}' in html) and (">删除预设</button>" in html), True)
+check("预设四个动作键都在（载入 / 存为预设 / 编辑预设 / 删除预设）",
+      all(f">{t}</button>" in html for t in ("载入", "存为预设", "编辑预设", "删除预设")), True)
 check("没有预设时给出提示", "还没有预设" in html, True)
 check("预设方法齐全",
       all(k in js for k in ("async loadPresets()", "loadPreset() {", "async savePreset()",
@@ -2137,7 +2139,7 @@ for _f in store_files:
 check("弹窗不再用 @click.self 关闭", [rel for rel, src in zip(VUE_ORDER, vue_sources)
       if "modal-mask" in src and "@click.self" in src], [])
 _mask_modals = [rel for rel, src in zip(VUE_ORDER, vue_sources) if "modal-mask" in src]
-check("五个弹窗都在", len(_mask_modals), 5)
+check("六个弹窗都在", len(_mask_modals), 6)
 check("每个弹窗走同一套关闭判定", [rel for rel, src in zip(VUE_ORDER, vue_sources)
       if "modal-mask" in src and not all(k in src for k in (
           "useMaskClose(", '@mousedown="onMaskDown"', '@mouseup="onMaskUp"', '@click="onMaskClick"'))], [])
@@ -2205,11 +2207,12 @@ check("下拉占位是名词（不再有“从预设载入”）",
 check("选下拉不再自动载入表单",
       'v-model="presetPick" @change="loadPreset"' in _pp, False)
 check("有显式的「载入」按钮", '>载入</button>' in _pp and '@click="loadPreset"' in _pp, True)
-check("选中预设后存按钮变成「保存预设」",
-      '{{ presetPick ? "保存预设" : "存为预设" }}' in _pp, True)
-check("保存预设走 PUT、新建走 POST",
-      "const editing = store.presetPick" in store_js
-      and 'editing ? "PUT" : "POST"' in store_js, True)
+check("预设的编辑走独立弹窗",
+      '@click="openPresetModal"' in _pp and (frontend / "src/components/modals/PresetModal.vue").exists(), True)
+check("存为预设只新建、编辑预设才覆盖",
+      'store.jsonOpts("POST", store.profileForm)' in store_js
+      and "`/api/profile/presets/${store.presetModal.id}`" in store_js
+      and 'store.jsonOpts("PUT", form)' in store_js, True)
 check("覆盖接口在", "@router.put(\"/profile/presets/{preset_id}\")" in
       (ROOT / "app/routes/profile.py").read_text(encoding="utf-8"), True)
 

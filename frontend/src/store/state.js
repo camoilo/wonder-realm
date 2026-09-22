@@ -70,6 +70,9 @@ export const store = reactive({
       profilePresets: [],
       presetPick: "",
       presetError: "",
+      // 编辑某条预设的弹窗：里面是那条预设的一份副本，保存时 PUT 回它，
+      // 完全不碰"当前使用的设定"（那份只由面板底部的「保存当前配置」写）
+      presetModal: { visible: false, id: null, form: emptyProfile(), saveError: "" },
       world: emptyWorld(),
       worldForm: emptyWorld(),
       limits: {
