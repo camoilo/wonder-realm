@@ -12,6 +12,9 @@
   --error-bg: #fdeeee;
   --error-text: #b3413c;
   --radius: 12px;
+  /* 分区与内容之间的分界线：左右两栏共用同一条（见 10.46）。
+     1px 的 --border 在白底上几乎看不见，所以这里固定成"2px + 压深一档" */
+  --divider: 2px solid #d7dae1;
   --side-w: 260px;
   --panel-w: 330px;
   --chat-max: 860px;
@@ -60,11 +63,13 @@ html, body {
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 10px;
-  border-bottom: 1px solid var(--border);
+  /* 模式按钮与下面的列表之间：与右侧面板标签栏下沿同一条线（10.46） */
+  border-bottom: var(--divider);
 }
 
 /* 左侧栏顶部的小标题：说明下面这排按钮是干什么的。
-   比按钮本身更醒目（加大加粗居中），并用一条分隔线把它和模式按钮分开 */
+   比按钮本身更醒目（加大加粗居中），并用一条分隔线把它和模式按钮分开；
+   分隔线与右侧面板用同一条（--divider，见 10.46） */
 .side-label {
   padding: 14px 12px 10px;
   font-size: 15px;
@@ -72,7 +77,7 @@ html, body {
   color: var(--text);
   letter-spacing: 1px;
   text-align: center;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--divider);
 }
 
 .mode-tab {
@@ -1130,8 +1135,29 @@ textarea:disabled { background: #f0f1f4; color: var(--text-soft); }
   min-height: 0;
 }
 
-/* 这里原来有一个"面板"标题 + 关闭键（.panel-head），已删掉：收起/展开统一走顶栏那个
-   "面板"按钮，面板里不必再来一遍（见 10.45）。标签栏因此成了面板最上面的一行 */
+/* 面板标题行：里面只有"配置 ‹"这一个开关（顶栏那一份在面板展开时收起来，见 10.46） */
+.panel-head {
+  flex: none;
+  padding: 12px 16px 0;
+}
+.panel-title {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  /* 往左偏 4px：让标题文字与下面标签的左边缘对齐（按钮自身有内边距） */
+  padding: 2px 4px;
+  margin-left: -4px;
+  cursor: pointer;
+}
+.panel-title:hover { color: var(--accent-dark); background: #f0f2f6; }
+
+/* 这里原来有一个"面板"标题 + 关闭键（.panel-head），10.45 删掉后又在 10.46 以另一种形式
+   回来：**展开时"配置"开关就住在这里当标题**——不是又加一个开关，而是同一个键在
+   展开状态下有个固定去处。真正的分界线是下面标签栏那一条（--divider），所以这里不画线 */
 
 /* 滚动容器只包住标签内容：标签栏与"未保存 / 还原"行在它外面（见 .panel-tabs）。
    它们不被滚轮带走，所以这里只负责内容区的内边距 */
@@ -1284,17 +1310,16 @@ mark.search-hit.current {
    得再滚回顶部才能切标签 */
 .panel-tabs {
   flex: none;
-  /* 上 12px 给顶栏留白、下 10px 让分隔线与标签之间不贴脸 */
-  padding: 12px 16px 10px;
+  /* 上面 8px：标题行已经在 .panel-head 里给了 12px；下面 10px 让分隔线不贴着标签 */
+  padding: 8px 16px 10px;
   display: flex;
   /* 角色模式下有 5 个标签（生成要求 / 世界设定 / 角色设定 / 我的设定 / 记忆）。
      330px 面板里等分下来每个只有约 56px，而四个字的标签要 68px——不换行就会被截成
      "生成要…"。换行只在角色模式出现（其它模式只有 3 个标签，仍是一行）。见 10.44 */
   flex-wrap: wrap;
   gap: 4px;
-  /* 这条线是"标签区 / 内容区"的分界，也是面板里唯一的分隔线（标题行已删，见 10.45）：
-     1px 的 --border 在白色面板上太淡，用户看不清标签到哪儿结束，所以加粗到 2px 并压深一档 */
-  border-bottom: 2px solid #d7dae1;
+  /* 标签区与内容区的分界：与左侧栏用同一条线（--divider，见 10.46） */
+  border-bottom: var(--divider);
 }
 
 .panel-tab {
@@ -1652,6 +1677,15 @@ mark.search-hit.current {
   font-family: inherit;
 }
 .ghost-btn:hover { background: #f0f2f6; }
+/* 禁用的次级按钮：常驻的"配置"键在没打开会话时就是这个样子——留在原位、看得见、
+   但明确不可点（没有会话就没有面板可开） */
+.ghost-btn:disabled {
+  color: #a9aeb8;
+  background: #f7f8fa;
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+.ghost-btn:disabled:hover { background: #f7f8fa; }
 
 .danger-btn {
   padding: 9px 16px;

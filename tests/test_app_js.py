@@ -135,21 +135,35 @@ check("旧的折叠结构已清除",
 check("CSS 里的折叠样式已清除", ".panel-section" in css_code, False)
 check("未保存圆点样式在", ".tab-dot" in css, True)
 check("当前标签的未保存状态有计算属性", "activeTabDirty" in js and "activeTabDirty" in html, True)
-check("切到没有该标签的会话时有兜底", "fixPanelTab" in js, True)
-
-# ---- 面板里不再有标题与关闭键；收起/展开只走顶栏那个"面板"按钮（10.45） ----
-check("面板里没有标题行", 'class="panel-head"' not in html, True)
-check("面板里没有'面板'二字", ">面板</h2>" not in html, True)
-check("面板里没有关闭键", 'title="收起面板"' not in html, True)
-check("面板标题的样式已清除", ".panel-head" in css_code, False)
-check("顶栏的'面板'按钮仍是唯一开关",
+# ---- "配置"开关：常驻 + 改名 + 展开时搬进面板当标题（10.46） ----
+check("面板有标题行（住着那个开关）", 'class="panel-head"' in html, True)
+check("标题行里就是那个开关", html.count('class="panel-title"'), 1)
+check("面板标题键是收起方向", ">配置 ‹</button>" in html, True)
+# 断言名里刻意不写 ‹ › 这两个字符：控制台是 GBK，打不出来会把测试自己搞崩
+check("顶栏那份按状态给出'配置'与展开箭头",
+      'activeSession ? "配置 ›" : "配置"' in html, True)
+check("旧的面板文案已清除",
+      any(w in html for w in ("面板 ‹", "面板 ›", ">面板</h2>")), False)
+check("没有第二个关闭键", 'title="收起面板"' not in html, True)
+# 常驻：无会话时也渲染（只是禁用），所以 v-if 里必须带上 !activeSession
+toggle_line = re.search(r'<button v-if="([^"]*)" class="ghost-btn panel-toggle"', html).group(1)
+check("无会话时也常驻", toggle_line, "!activeSession || panelCollapsed")
+check("无会话时禁用", ':disabled="!activeSession"' in html, True)
+check("禁用样式有定义（否则看起来仍可点）", ".ghost-btn:disabled {" in css, True)
+check("点标题键收起面板", 'title="收起配置面板" @click="panelCollapsed = true"' in html, True)
+check("顶栏那份只在收起时出现（展开时位置在面板内）",
       html.count("panelCollapsed = !panelCollapsed"), 1)
-# 标签栏现在是面板最上面一行，它下面那条线就是"标签区 / 内容区"的分界，必须够清楚
-check("标签栏分隔线加重", "border-bottom: 2px solid #d7dae1;" in css, True)
-panel_tab_css = re.search(r"\.panel-tab \{[^}]*\}", css)
+check("面板标题样式在", ".panel-title {" in css, True)
+
+# ---- 分隔线：左右两侧同一条（10.46） ----
+check("分隔线定义成变量", "--divider: 2px solid #d7dae1;" in css, True)
+check("三处分区线都用它（面板标签栏 / 左侧标题 / 左侧模式按钮）",
+      css.count("border-bottom: var(--divider);"), 3)
 check("标签边框常驻（不再只给选中项画边）",
-      bool(panel_tab_css) and "border: 1px solid var(--border);" in panel_tab_css.group(0)
-      and "border: 1px solid transparent;" not in panel_tab_css.group(0), True)
+      bool(re.search(r"\.panel-tab \{[^}]*\}", css))
+      and "border: 1px solid var(--border);" in re.search(r"\.panel-tab \{[^}]*\}", css).group(0)
+      and "border: 1px solid transparent;" not in re.search(r"\.panel-tab \{[^}]*\}", css).group(0),
+      True)
 on_tab_css = re.search(r"\.panel-tab\.on \{[^}]*\}", css)
 check("选中标签用强调色边框区分",
       bool(on_tab_css) and "border-color: var(--accent);" in on_tab_css.group(0), True)
@@ -275,8 +289,8 @@ check("保存失败提示也在字段区之外（与按钮一起常驻）",
 
 # ---- 会话内搜索 ----
 check("顶栏有搜索框", 'class="search-box"' in html and 'class="search-input"' in html, True)
-check("搜索框在工具栏里（面板按钮之前）",
-      html.index('class="search-box"') < html.index('面板 ‹'), True)
+check("搜索框在工具栏里（配置开关之前）",
+      html.index('class="search-box"') < html.index("panel-toggle"), True)
 check("搜索框只在有会话时出现", 'v-if="activeSession" class="search-box"' in html, True)
 check("Enter / Shift+Enter / Esc 都接上了",
       ('@keydown.enter.exact.prevent="searchNext"' in html)
@@ -335,7 +349,7 @@ sl = css_block(".side-label")
 check("标题居中", "text-align: center;" in sl, True)
 check("标题加粗", "font-weight: 700;" in sl, True)
 check("标题字号比模式按钮大", css_font_size(".side-label") > css_font_size(".mode-tab"), True)
-check("标题底部有分隔线", "border-bottom: 1px solid var(--border);" in sl, True)
+check("标题底部有分隔线（与右侧面板同一条）", "border-bottom: var(--divider);" in sl, True)
 
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)

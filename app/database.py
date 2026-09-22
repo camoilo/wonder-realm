@@ -54,10 +54,13 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 
 CREATE TABLE IF NOT EXISTS app_settings (
-    id           INTEGER PRIMARY KEY CHECK(id = 1),
-    model        TEXT NOT NULL,
-    memory_model TEXT NOT NULL DEFAULT '',
-    updated_at   TEXT NOT NULL
+    id               INTEGER PRIMARY KEY CHECK(id = 1),
+    model            TEXT NOT NULL,
+    memory_model     TEXT NOT NULL DEFAULT '',
+    -- 界面偏好也收在这一张表里（原先是独立的 app_prefs 键值表，见 10.46）。
+    -- 代价：以后每加一个偏好都要加列，届时要按 4.2 的例外流程做一次性维护
+    disable_thinking INTEGER NOT NULL DEFAULT 0,
+    updated_at       TEXT NOT NULL
 );
 
 -- 角色的对话区背景图，每个角色至多若干张（上限在 schemas.py）。
@@ -72,13 +75,7 @@ CREATE TABLE IF NOT EXISTS character_images (
 );
 CREATE INDEX IF NOT EXISTS idx_character_images ON character_images(character_id, position, id);
 
--- 零散的界面偏好，键值对存放。用独立的新表而不是给 app_settings 加列：
--- CREATE TABLE IF NOT EXISTS 对**已有库**也会把新表建出来，而加列不会（我们不做补列，
--- 见 4.2）——所以新表不需要用户删库重建，新列需要。
-CREATE TABLE IF NOT EXISTS app_prefs (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL DEFAULT ''
-);
+-- 零散的界面偏好原先是这里的一张 app_prefs 键值表，已并入 app_settings（见 10.46）
 
 -- 用户本人的设定（右侧面板的"我的设定"）。**约定** id=1 是当前使用的那份，
 -- id>1 是用户存下来的预设（见 10.39）——所以这里**不能**再写 CHECK(id=1)：
@@ -161,35 +158,32 @@ def get_db():
         con.close()
 
 
-# 界面偏好：是否禁用思考模式（存 "1"/"0"）
-PREF_DISABLE_THINKING = "disable_thinking"
+def thinking_disabled() -> bool:
+    """生成时是否禁用思考模式。集中在这里读，聊天/重新生成/记忆压缩/自动命名就都会遵守。
 
-
-def read_pref(key: str, default: str = "") -> str:
+    这个开关就在 `app_settings` 那一行里（原先在 `app_prefs` 键值表，见 10.46）：
+    与模型选择同表同行的好处是"读一次设置就拿到全部"，不必再查第二张表。
+    """
     con = connect()
     try:
-        row = con.execute("SELECT value FROM app_prefs WHERE key=?", (key,)).fetchone()
-        return row["value"] if row else default
+        row = con.execute(
+            "SELECT disable_thinking FROM app_settings WHERE id=1"
+        ).fetchone()
     finally:
         con.close()
+    return bool(row["disable_thinking"]) if row else False
 
 
-def write_pref(key: str, value: str) -> None:
+def write_disable_thinking(disabled: bool) -> None:
     con = connect()
     try:
         con.execute(
-            "INSERT INTO app_prefs(key, value) VALUES(?,?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, value),
+            "UPDATE app_settings SET disable_thinking=?, updated_at=? WHERE id=1",
+            (1 if disabled else 0, now()),
         )
         con.commit()
     finally:
         con.close()
-
-
-def thinking_disabled() -> bool:
-    """生成时是否禁用思考模式。集中在这里读，聊天/重新生成/记忆压缩/自动命名就都会遵守。"""
-    return read_pref(PREF_DISABLE_THINKING, "0") == "1"
 
 
 PROFILE_FIELDS = ("name", "identity", "appearance", "avatar")
@@ -378,13 +372,18 @@ def write_world(values: dict) -> dict:
 
 
 def read_settings() -> dict:
+    """运行设置 + 界面偏好。合并成一张表后一次查询就够（原先开关还要再查 app_prefs）。"""
     con = connect()
     try:
         row = con.execute(
-            "SELECT model, memory_model FROM app_settings WHERE id=1"
+            "SELECT model, memory_model, disable_thinking FROM app_settings WHERE id=1"
         ).fetchone()
-        out = dict(row)
     finally:
         con.close()
-    out["disable_thinking"] = thinking_disabled()
-    return out
+    if not row:
+        return {"model": "", "memory_model": "", "disable_thinking": False}
+    return {
+        "model": row["model"],
+        "memory_model": row["memory_model"],
+        "disable_thinking": bool(row["disable_thinking"]),
+    }

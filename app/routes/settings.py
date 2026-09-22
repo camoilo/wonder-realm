@@ -2,7 +2,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import ollama_client
-from ..database import PREF_DISABLE_THINKING, get_db, now, read_settings, write_pref
+from ..database import get_db, now, read_settings, write_disable_thinking
 from ..limits import LIMITS
 from ..prompts import DEFAULT_SETTINGS, FIELDS
 from ..schemas import SettingsIn
@@ -55,7 +55,7 @@ async def update_settings(body: SettingsIn, db=Depends(get_db)):
         db.execute(f"UPDATE app_settings SET {', '.join(sets)} WHERE id=?", vals)
         db.commit()
     if body.disable_thinking is not None:
-        write_pref(PREF_DISABLE_THINKING, "1" if body.disable_thinking else "0")
+        write_disable_thinking(body.disable_thinking)
     return read_settings()
 
 

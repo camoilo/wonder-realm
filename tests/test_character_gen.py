@@ -252,12 +252,20 @@ try:
     con.execute("UPDATE app_settings SET model='fake-model' WHERE id=1")
     con.commit()
     con.close()
-    database.write_pref(database.PREF_DISABLE_THINKING, "1")
+    database.write_disable_thinking(True)
     disabled = _payload(captured["model"], [], False, captured["options"], "json")
     check("关掉思考时生成带 think=False", disabled.get("think"), False)
-    database.write_pref(database.PREF_DISABLE_THINKING, "0")
+    database.write_disable_thinking(False)
     enabled = _payload(captured["model"], [], False, captured["options"], "json")
     check("开着思考时生成不带 think 字段", "think" in enabled, False)
+
+    # 偏好与运行设置在同一张表（10.46）：写开关立刻能从 read_settings 读到，且不影响模型字段
+    model_before = database.read_settings()["model"]
+    database.write_disable_thinking(True)
+    check("开关与模型同表：写后即时可读", database.read_settings()["disable_thinking"], True)
+    check("写开关不碰模型字段", database.read_settings()["model"], model_before)
+    database.write_disable_thinking(False)
+    check("关回去也即时生效", database.read_settings()["disable_thinking"], False)
 finally:
     character_gen.ollama_client.chat_once = real_chat_once
 

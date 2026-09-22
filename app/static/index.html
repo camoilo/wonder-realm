@@ -111,9 +111,15 @@
                 :disabled="!currentModelSupportsThinking"
                 :title="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
-        <button v-if="activeSession" class="ghost-btn panel-toggle"
-                :title="(panelCollapsed ? '展开右侧面板' : '收起右侧面板') + (anyDirty ? '（有未保存的修改）' : '')"
-                @click="panelCollapsed = !panelCollapsed">{{ panelCollapsed ? "面板 ›" : "面板 ‹" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
+        <!-- "配置"面板的开关。三点约定（见 10.46）：**常驻**（没有会话时也在，只是禁用）、
+             **改名"配置"**、**固定位置**——面板展开后它就搬进面板顶部当标题，所以这里只在
+             收起或无会话时出现。未保存的小圆点只挂在顶栏这一份上：面板展开时标签自己有小点，
+             不重复提示 -->
+        <button v-if="!activeSession || panelCollapsed" class="ghost-btn panel-toggle"
+                :disabled="!activeSession"
+                :title="!activeSession ? '先打开一个会话，才能打开配置面板'
+                        : ('展开配置面板' + (anyDirty ? '（有未保存的修改）' : ''))"
+                @click="panelCollapsed = !panelCollapsed">{{ activeSession ? "配置 ›" : "配置" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
       </div>
     </header>
 
@@ -250,9 +256,14 @@
 
   <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
     <div class="panel-inner">
-      <!-- 面板里不再有"面板"标题与关闭键：收起/展开统一走顶栏那个"面板"按钮
-           （见 10.45）。标签栏因此成为面板最上面的一行，它下面那条分隔线也兼作
-           "标签区 / 内容区"的分界 -->
+      <!-- 展开后，顶栏那个"配置"键就搬到这里当面板标题：同一个开关只有一个去处，
+           收回时它回到顶栏。这里不再放第二个开关（原先的 ✕ 已删，见 10.45/10.46） -->
+      <div class="panel-head">
+        <button class="panel-title" title="收起配置面板" @click="panelCollapsed = true">配置 ‹</button>
+      </div>
+      <!-- 标签栏放在滚动容器**外面**：面板内容一长，滚轮往下滚时标签会被顶出视野、
+           得再滚回顶部才能切标签。放在外面就永远贴在面板顶部。
+           （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->
       <div class="panel-tabs">
         <button class="panel-tab" :class="{on: panelTab === 'gen'}"
                 @click="panelTab = 'gen'">生成要求<span v-if="genDirty" class="tab-dot"></span></button>

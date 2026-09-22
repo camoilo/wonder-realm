@@ -43,12 +43,16 @@ try:
     con.executescript(SCHEMA)
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for expected in ("characters", "sessions", "messages", "memories", "app_settings",
-                     "character_images", "app_prefs"):
+                     "character_images", "user_profile", "world"):
         assert expected in tables, f"建表缺少 {expected}：{sorted(tables)}"
+    # 偏好已并入 app_settings，不该再有 app_prefs（见 10.46）
+    assert "app_prefs" not in tables, f"app_prefs 应已并入 app_settings：{sorted(tables)}"
     # 新库的 sessions / characters 应当自带全部字段
     assert "title_auto" in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
     columns = {r[1] for r in con.execute("PRAGMA table_info(characters)")}
     assert {"avatar", "locked"} <= columns, f"characters 缺字段：{sorted(columns)}"
+    settings_columns = {r[1] for r in con.execute("PRAGMA table_info(app_settings)")}
+    assert "disable_thinking" in settings_columns, f"app_settings 缺字段：{sorted(settings_columns)}"
     con.close()
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
