@@ -152,6 +152,16 @@ check("对话区与面板在同一行里并排（对话区在 .work-main 内）"
       html.index('class="work"') < html.index('class="work-main"') < html.index('class="chat-area"')
       and html.index('class="chat-area"') < html.index('class="panel"'), True)
 check("这两层容器的样式都在", ".work {" in css and ".work-main {" in css, True)
+# 顶栏内部再分两块：左边一块宽度 = 对话区（控件不悬到面板上方），右边一格宽度 = 面板（配置键不动）
+check("顶栏内部分成两块",
+      html.index('class="topbar-main"') < html.index('class="toolbar"')
+      and html.index('class="toolbar"') < html.index("/.topbar-main")
+      and html.index("/.topbar-main") < html.index('class="topbar-side"')
+      and html.index('class="topbar-side"') < html.index("panel-toggle"), True)
+check("顶栏按面板展开状态切换右格宽度",
+      ":class=\"{'with-panel': activeSession && !panelCollapsed}\"" in html, True)
+check("右格展开时与面板等宽", ".topbar.with-panel .topbar-side { width: var(--panel-w); }" in css, True)
+check("两块容器的样式都在", ".topbar-main {" in css and ".topbar-side {" in css, True)
 # 文案只换箭头、字数不变，所以按钮宽度不随状态变化（"不挪鼠标点开、看一眼、再点关"）
 check("文案按状态只换箭头",
       'activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›"' in html, True)

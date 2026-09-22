@@ -71,7 +71,8 @@
   </aside>
 
   <div class="main">
-    <header class="topbar">
+    <header class="topbar" :class="{'with-panel': activeSession && !panelCollapsed}">
+      <div class="topbar-main">
       <div class="title-area">
         <button class="icon-btn rail-toggle" :title="sideCollapsed ? '展开左侧栏' : '收起左侧栏'"
                 @click="sideCollapsed = !sideCollapsed">&#9776;</button>
@@ -111,6 +112,13 @@
                 :disabled="!currentModelSupportsThinking"
                 :title="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
+      </div><!-- /.toolbar -->
+      </div><!-- /.topbar-main：宽度 = 对话区宽度，搜索/模型/思考因此落在对话区右边缘，
+                不会悬在面板上方（见 10.46） -->
+      <!-- 右侧这一格专供"配置"开关：面板展开时它与面板等宽，于是开关的右边缘 =
+           窗口右边缘、面板开合都不动；面板收起时它收成按钮宽度，工具栏贴到它左边
+           （与改动前的观感一致） -->
+      <div class="topbar-side">
         <!-- "配置"面板的开关。三点约定（见 10.46）：**常驻**（没有会话时也在，只是禁用）、
              **改名"配置"**、**位置固定**——它永远待在顶栏最右这一格，面板开、关都不移动，
              所以能"不挪鼠标点开、看一眼、再点关"。文案只换箭头、字数不变，宽度也不变。
@@ -121,7 +129,7 @@
                         : ((panelCollapsed ? '展开配置面板' : '收起配置面板')
                            + (anyDirty ? '（有未保存的修改）' : ''))"
                 @click="panelCollapsed = !panelCollapsed">{{ activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
-      </div>
+      </div><!-- /.topbar-side -->
     </header>
 
     <!-- 顶栏横跨"对话区 + 右侧面板"这一整行：这样顶栏最右那个"配置"键的右边缘就是
