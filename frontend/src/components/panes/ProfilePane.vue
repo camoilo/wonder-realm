@@ -5,15 +5,15 @@
      删除也收在"编辑预设"弹窗里，面板上不放不可逆的操作。 -->
 <div class="preset-current">当前预设：<b>{{ currentPresetLabel }}</b></div>
 <div class="preset-row preset-actions">
-  <button class="ghost-btn" :disabled="!profileForm.name.trim()"
-          v-hint="'把下面的表单另存成一条新预设'"
-          @click="savePreset">存为预设</button>
   <button class="ghost-btn" :disabled="!profilePresets.length"
           v-hint="'在弹窗里挑一条预设，看清详情后载入（立即生效，覆盖当前使用的设定）'"
           @click="openLoadModal">载入预设…</button>
   <button class="ghost-btn" :disabled="!profilePresets.length"
           v-hint="'在弹窗里选一条预设来改（含头像），删除也在这里'"
           @click="openPresetModal">编辑预设…</button>
+  <button class="ghost-btn" :disabled="!profileForm.name.trim()"
+          v-hint="'把下面的表单另存成一条新预设'"
+          @click="savePreset">存为预设</button>
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
 <p v-if="!profilePresets.length" class="hint">

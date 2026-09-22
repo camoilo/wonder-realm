@@ -20,8 +20,8 @@
         <span v-if="initError" class="chip warn">{{ initError }}</span>
         <span v-if="modelWarning" class="model-warning">{{ modelWarning }}</span>
         <!-- 会话内搜索：命中处标黄，↑/↓ 在命中之间跳转（Enter 下一个、Shift+Enter 上一个）。
-             计数与两个键**始终**占位（不按有无关键词显示/隐藏）——否则输入前后整个框会变宽
-             变窄，看起来像换了个控件；清空用 Esc，不再多放一个 ✕ 占顶栏宽度 -->
+             计数、清空键与两个跳转键**始终**占位（不按有无关键词显示/隐藏）——否则输入前后整个框
+             会变宽变窄，看起来像换了个控件；没有关键词 / 没有命中时它们只是置灰 -->
         <div v-if="activeSession" class="search-box">
           <input v-model="searchQuery" type="text" class="search-input"
                  v-hint="'在当前会话里搜索：Enter 下一个、Shift+Enter 上一个、Esc 清空'"
@@ -29,6 +29,8 @@
                  @keydown.enter.exact.prevent="searchNext"
                  @keydown.shift.enter.prevent="searchPrev"
                  @keydown.esc="clearSearch">
+          <button class="icon-btn" v-hint="'清空搜索（Esc）'" aria-label="清空搜索"
+                  :disabled="!searchQuery" @click="clearSearch">&times;</button>
           <span class="search-count">{{ searchTotal ? searchIndex + 1 : 0 }}/{{ searchTotal }}</span>
           <button class="icon-btn" v-hint="'上一个（Shift+Enter）'" aria-label="上一个（Shift+Enter）" :disabled="!searchTotal" @click="searchPrev">↑</button>
           <button class="icon-btn" v-hint="'下一个（Enter）'" aria-label="下一个（Enter）" :disabled="!searchTotal" @click="searchNext">↓</button>

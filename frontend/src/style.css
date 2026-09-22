@@ -1340,8 +1340,20 @@ mark.search-hit.current {
 .preset-current b { color: var(--text); font-weight: 600; }
 
 /* 载入预设弹窗：左边列表、右边详情（名字可能重复，得看详情才分得清） */
-.load-modal { width: 620px; }
-.load-body { display: flex; gap: 14px; align-items: flex-start; }
+/* 预设的两个弹窗（载入 / 编辑）共用同一套两栏骨架：左边列表、右边内容。
+   宽度要压得住 `.modal.edit-modal`（780px），所以这里用复合选择器写——单写类名优先级
+   不够，会被那条规则盖掉（同 `.modal.char-modal` 的理由）。620px 是右侧字段栏够用的宽度；
+   名字可能重复，所以两边都靠列表里的身份摘要分辨 */
+.modal.load-modal,
+.modal.preset-modal { width: 620px; }
+/* 两栏布局必须写成 `.modal-body.preset-split`：基础 `.modal-body`（列布局）在文件后部，
+   两者优先级相同时**按出现顺序决胜**，只写 `.preset-split` 会被它盖成上下堆叠 */
+.modal-body.preset-split {
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+  align-items: flex-start;
+}
 .preset-list {
   flex: 0 0 40%;
   max-height: 320px;

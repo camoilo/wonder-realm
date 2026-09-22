@@ -3,17 +3,25 @@
      @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal edit-modal preset-modal">
       <h2>编辑预设</h2>
-      <!-- 预设是"另存的一份设定"：这里改的只是这一条，当前使用的设定不受影响。
-           删除是不可逆操作，收在这个弹窗里（面板上不放） -->
-      <div class="modal-body">
-        <label class="field">要编辑哪条预设
-          <select class="preset-select" :value="presetModal.id"
-                  @change="editPickPreset(Number($event.target.value))">
-            <option v-for="p in profilePresets" :key="p.id" :value="p.id">
-              {{ p.name }}{{ p.identity ? " · " + p.identity : "" }}
-            </option>
-          </select>
-        </label>
+      <!-- 与「载入预设」同一套两栏骨架（左列表 / 右内容）：左边挑要改哪条，右边就是它的字段。
+           预设是"另存的一份设定"：这里改的只是这一条，当前使用的设定不受影响；
+           删除是不可逆操作，也收在这个弹窗里（面板上不放） -->
+      <div class="modal-body preset-split">
+        <div class="preset-list">
+          <button v-for="p in profilePresets" :key="p.id" class="preset-item"
+                  :class="{on: p.id === presetModal.id}"
+                  @click="editPickPreset(p.id)">
+            <span class="avatar sm">
+              <img v-if="p.avatar" :src="p.avatar" alt="">
+              <template v-else>{{ (p.name || "预").slice(0, 1) }}</template>
+            </span>
+            <span class="preset-item-text">
+              <span class="preset-item-name">{{ p.name }}</span>
+              <span class="preset-item-sub">{{ p.identity || "（没填身份）" }}</span>
+            </span>
+          </button>
+        </div>
+        <div class="preset-detail">
         <div class="avatar-pick">
           <span class="avatar xl">
             <img v-if="presetModal.form.avatar" :src="presetModal.form.avatar" alt="">
@@ -50,6 +58,7 @@
           </div>
         </label>
         <p v-if="presetModal.saveError" class="avatar-error">{{ presetModal.saveError }}</p>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="danger-btn" v-hint="'删除这条预设（当前使用的设定不受影响）'"

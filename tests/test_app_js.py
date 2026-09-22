@@ -406,7 +406,8 @@ check("user 侧时间换到名字左边", ".msg.user .msg-head { flex-direction:
 check("页面里没有「已编辑」标记", ("已编辑" in html) or ("edited-flag" in css), False)
 
 # ---- 弹窗底部的操作行钉底 ----
-check("每个滚动型弹窗都有字段滚动区（角色 / 编辑消息 / 预设）", html.count('class="modal-body"'), 3)
+check("每个滚动型弹窗都有字段滚动区（角色 / 编辑消息 / 编辑预设 / 载入预设）",
+      len(re.findall(r'class="modal-body', html)), 4)
 check("弹窗外层保留滚动兜底", ".modal {" in css and "overflow-y: auto;" in css, True)
 check("字段区是弹窗里唯一滚动区",
       ".modal-body {" in css and "flex: 1 1 auto;" in css and "min-height: 0;" in css, True)
@@ -441,7 +442,10 @@ check("换关键词后回到第一处并滚动", "searchQuery() {" in js and "sc
 check("计数与按键不按关键词显隐", 'v-if="searchQuery"' in html, False)
 check("搜索框里只有上一个/下一个两个键",
       len(re.findall(r'class="icon-btn"[^>]*@click="search(?:Prev|Next)"', html)), 2)
-check("清空靠 Esc（不再多放一个清空键占宽度）", "清空搜索" in html, False)
+check("搜索框后面有清空键（常驻、没关键词时置灰）",
+      'aria-label="清空搜索"' in html and ':disabled="!searchQuery" @click="clearSearch"' in html, True)
+check("清空键不按状态出现/消失（只置灰）",
+      'v-if="searchQuery"' in html, False)
 check("搜索框与计数都不伸缩",
       ".search-box {\n  flex: none;" in css and "min-width: 42px;" in css, True)
 # 按钮必须显式 opacity: 1——.icon-btn 默认是"悬停才显形"（给侧栏用的），
@@ -553,13 +557,26 @@ check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") i
 # 下拉里一行字分不清，弹窗里能看到头像与身份、外观。
 check("面板只显示当前预设名",
       'class="preset-current">当前预设：<b>{{ currentPresetLabel }}</b>' in html, True)
-check("三个入口键（存为预设 / 载入预设… / 编辑预设…）",
-      all(f">{t}</button>" in html for t in ("存为预设", "载入预设…", "编辑预设…")), True)
+check("三个入口键按 载入 / 编辑 / 存为 排列",
+      [f">{k}</button>" in html for k in ("载入预设…", "编辑预设…", "存为预设")]
+      and (html.index(">载入预设…</button>") < html.index(">编辑预设…</button>")
+           < html.index(">存为预设</button>")), True)
 check("面板上不放删除（不可逆操作收进弹窗）", ">删除预设</button>" in html, False)
 check("载入弹窗有列表与详情",
       'class="preset-list"' in html and 'class="preset-detail"' in html
       and ">载入这条</button>" in html and "p.identity" in html, True)
 check("删除在编辑预设弹窗里", ">删除这条预设</button>" in html, True)
+# 两个预设弹窗共用同一套两栏骨架（左列表 / 右内容）与同一条样式：名字可能重复，
+# 两边都得靠列表里的身份摘要分辨
+check("编辑与载入预设都是左列表 + 右内容",
+      html.count('class="modal-body preset-split"') == 2
+      and html.count('class="preset-list"') == 2
+      and html.count('class="preset-detail"') == 2, True)
+check("两个预设弹窗同宽（且压得住 .modal.edit-modal 的写法）",
+      ".modal.load-modal,\n.modal.preset-modal { width: 620px; }" in css, True)
+# 同理：基础 `.modal-body` 是列布局且写在文件后部，两栏要显式写复合选择器才并排
+check("两栏用复合选择器压住 .modal-body 的列布局",
+      ".modal-body.preset-split {" in css and "flex-direction: row;" in css, True)
 check("列表与详情都列出预设（名字 + 身份）",
       'v-for="p in profilePresets"' in html, True)
 check("没有预设时给出提示", "还没有预设" in html, True)

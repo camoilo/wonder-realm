@@ -5,7 +5,7 @@
       <h2>载入预设</h2>
       <!-- 左边挑、右边看详情：预设名字可能重复，光看一行字分不清是谁，
            这里把头像、身份、外观都摆出来。确认后立即写入"当前使用的设定"。 -->
-      <div class="modal-body load-body">
+      <div class="modal-body preset-split">
         <div class="preset-list">
           <button v-for="p in profilePresets" :key="p.id" class="preset-item"
                   :class="{on: p.id === loadPresetModal.pick}"
