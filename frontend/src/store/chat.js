@@ -96,25 +96,29 @@ Object.assign(store, {
   async send() {
     const text = store.input.trim();
     if (!store.canSendText(text)) return;
-    store.input = ""; // 通过校验后才清空，发不出去时不会把草稿弄丢
-    await store.runSend(text);
+    // 情境只有沉浸模式有，且可选；"话语"是必填的那一栏
+    const scenario = store.isImmersiveMode ? store.inputScenario.trim() : "";
+    // 通过校验后才清空，发不出去时不会把草稿弄丢
+    store.input = "";
+    store.inputScenario = "";
+    await store.runSend(text, scenario);
   },
   async continueGeneration() {
     if (!store.canContinue) return;
     await store.runSend(CONTINUE_PROMPT);
   },
-  async runSend(text) {
+  async runSend(text, scenario = "") {
     store.error = "";
     store.lastFailedUser = null;
     store.beginStream();
-    store.messages.push({ id: "tmp-user", role: "user", content: text });
+    store.messages.push({ id: "tmp-user", role: "user", content: text, scenario: scenario || null });
     store.scrollBottom();
     let userId = null;
     let failed = false;
     try {
       await store.ssePost(
         `/api/sessions/${store.activeSessionId}/chat`,
-        { message: text },
+        { message: text, scenario: scenario || null },
         {
           meta: (d) => {
             userId = d.message_id;
@@ -139,7 +143,7 @@ Object.assign(store, {
           },
           error: (d) => {
             store.error = d.message;
-            if (userId) store.lastFailedUser = { id: userId, text };
+            if (userId) store.lastFailedUser = { id: userId, text, scenario };
           },
         },
         store.abortCtrl.signal
@@ -148,7 +152,7 @@ Object.assign(store, {
       // 用户点「停止」导致的中断不算错误：部分内容已由服务端落库
       if (!store.stopped) {
         store.error = e.httpStatus ? e.message : `连接中断：${e.message}`;
-        if (userId) store.lastFailedUser = { id: userId, text };
+        if (userId) store.lastFailedUser = { id: userId, text, scenario };
         // user 消息压根没落库（如角色已删除被拒），界面上那条是乐观渲染的，需要撤掉
         else failed = true;
       }
@@ -160,7 +164,7 @@ Object.assign(store, {
     store.scrollBottom();
   },
   async retryFailed() {
-    const { id, text } = store.lastFailedUser;
+    const { id, text, scenario } = store.lastFailedUser;
     store.lastFailedUser = null;
     store.error = "";
     try {
@@ -171,6 +175,7 @@ Object.assign(store, {
       return;
     }
     store.input = text;
+    store.inputScenario = scenario || ""; // 情境一起恢复，重试发的才是同一条消息
     await store.send();
   },
   startEdit(m) {

@@ -36,6 +36,7 @@ def check(name, got, want):
 # 每个超限字段：[说明, 模型, 其它必填, 字段名, 上限]
 CASES = [
     ("消息正文", ChatIn, {"message": "hi"}, "message", LIMITS["message"]),
+    ("消息情境（沉浸模式输入区左栏，可选）", ChatIn, {"message": "hi"}, "scenario", LIMITS["scenario"]),
     ("角色姓名", CharacterIn, {"name": "甲"}, "name", LIMITS["name"]),
     ("角色外观", CharacterIn, {"name": "甲"}, "appearance", LIMITS["appearance"]),
     ("角色性格", CharacterIn, {"name": "甲"}, "personality", LIMITS["personality"]),

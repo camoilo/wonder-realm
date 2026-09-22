@@ -999,6 +999,23 @@ html, body {
   align-items: flex-end;
 }
 
+/* 输入区的"一格"：小标签 + 输入框。沉浸模式下有两格并排（情境 / 话语），
+   情境那格窄一些、话语那格占满剩余宽度；其它模式只有一格且不渲染标签，
+   所以那些模式下的输入框与之前完全一样 */
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.input-field.scenario-field { flex: 0 0 36%; }
+.input-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-dark);
+}
+
 /* 只作用于底部输入框：面板里的记忆框等不能受这里的 max-height 限制，
    否则 rows=10 的记忆框会被压成一行多高，看起来像被按钮遮住 */
 .input-row textarea {

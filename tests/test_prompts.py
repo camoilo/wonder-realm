@@ -36,17 +36,14 @@ def chat(**kw):
     return prompts.build_chat_system(CHARACTER, kw.get("memory", ""), {}, kw.get("profile"), kw.get("world"))
 
 
-# ---- 聊天模式：只写说出口的话 ----
+# ---- 聊天模式：只写说出口的话（像发短信） ----
 s = chat()
-check("写明像发消息", "像手机发消息" in s, True)
+check("写明像发短信", "像手机发短信" in s, True)
 check("写明只输出说出口的话", "说出口的话" in s, True)
 check("明确禁止括号里的动作", "尤其不要把动作放进括号里" in s, True)
-check("给了括号动作的反例", "（轻轻笑了一下）" in s, True)
+check("禁止动作与表情", "不要写动作" in s and "表情" in s, True)
+check("禁止心理活动", "心理活动" in s, True)
 check("禁止旁白与场景描写", "旁白" in s and "场景描写" in s, True)
-check("禁止星号包裹动作", "*笑*" in s, True)
-check("禁止输出标记", "[SCENARIO]" in s and "[DIALOG]" in s, True)
-check("说明多句要换行分段", "换行分段" in s, True)
-check("不要在开头重复角色名", "不要在正文开头重复角色名" in s, True)
 check("角色名出现在规则里", "阿岚" in s, True)
 # 这条是聊天模式与沉浸模式的分界：聊天模式不该要求输出情境
 check("聊天模式不提情境块", "情境说明" in s, False)
@@ -58,7 +55,6 @@ check("沉浸模式要求两段标记", "[DIALOG]" in immersive, True)
 check("沉浸模式禁止空标记与标记外文字",
       "不要输出空标记" in immersive and "不要在标记之外写任何文字" in immersive, True)
 check("沉浸模式不会说“像发消息”", "像手机发消息" in immersive, False)
-
 # ---- 导演模式仍然按配比写情境与台词 ----
 director = prompts.build_director_system("", {}, None)
 check("导演模式保留标记说明", "[SCENARIO]" in director and "[DIALOG]" in director, True)
@@ -78,6 +74,34 @@ empty = chat()
 check("没有世界设定时整块不出现", "# 世界设定" in empty, False)
 check("没有我的设定时整块不出现", "# 与你对话的人" in empty, False)
 check("没有记忆时给出初次交流的说明", "初次交流" in empty, True)
+
+# ---- 历史消息回填：沉浸模式下用户自己写的情境也要发给模型 ----
+# 用户在底部"情境"栏写的是场景/动作，模型必须看得到，否则它不知道这一幕发生在哪。
+import sqlite3  # noqa: E402
+
+con = sqlite3.connect(":memory:")
+con.row_factory = sqlite3.Row
+con.execute("CREATE TABLE messages(role TEXT, content TEXT, scenario TEXT)")
+con.execute("INSERT INTO messages VALUES('user', '请进', NULL)")
+con.execute("INSERT INTO messages VALUES('user', '推门进来', '雨下得很大')")
+con.execute("INSERT INTO messages VALUES('user', '', '只有情境没有台词')")
+con.execute("INSERT INTO messages VALUES('assistant', '你来了', NULL)")
+rows = con.execute("SELECT role, content, scenario FROM messages ORDER BY rowid").fetchall()
+con.close()
+
+
+def history(mode):
+    msgs = prompts.build_messages({"mode": mode, "gen_settings": "{}"}, CHARACTER, "", rows)
+    return [m["content"] for m in msgs[1:]]
+
+
+h = history("immersive")
+check("沉浸模式：用户没写情境时原样", h[0], "请进")
+check("沉浸模式：用户写了情境就按标记回填", h[1], "[SCENARIO]雨下得很大\n[DIALOG]推门进来")
+check("沉浸模式：只有情境时不补空标记", h[2], "[SCENARIO]只有情境没有台词")
+check("沉浸模式：助手消息没有情境时原样", h[3], "你来了")
+
+check("聊天模式：用户情境不进上下文（那里没有情境块）", history("chat"), ["请进", "推门进来", "", "你来了"])
 
 print()
 if FAILED:

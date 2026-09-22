@@ -202,6 +202,10 @@ store.isDirectorMode = computed(() => {
       return !!store.activeSession && store.activeSession.mode === "director";
 });
 
+store.isImmersiveMode = computed(() => {
+      return !!store.activeSession && store.activeSession.mode === "immersive";
+});
+
 store.directorSessions = computed(() => {
       return store.sessions.filter((s) => s.mode === "director");
 });

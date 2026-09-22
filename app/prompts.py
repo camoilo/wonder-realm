@@ -291,14 +291,9 @@ def build_chat_system(
         + "# 回复要求\n"
         f"{render_chat_settings(settings)}\n\n"
         "# 输出规则\n"
-        f"这个模式像手机发消息：每一轮只输出{name}**说出口的话**，读起来就是聊天记录本身。\n"
+        f"这个模式像手机发短信：每一轮只输出{name}**说出口的话**，读起来就是聊天记录本身。\n"
         "不要写动作、表情、语气提示或心理活动，也不要写旁白、场景描写与舞台说明。"
-        "**尤其不要把动作放进括号里**：像「（轻轻笑了一下）」「（叹了口气）」「（看向窗外）」"
-        "这类括注一律不许出现，动作要用话说出来。\n"
-        "不要用星号、斜杠或书名号包裹动作（如「*笑*」「/叹气/」），也不要写「他/她……」这类叙述。\n"
-        "不要输出 [SCENARIO] / [DIALOG] 之类的标记。\n"
-        "想说几句不同的话时用换行分段，像连着发了几条消息。\n"
-        f"不要在正文开头重复角色名（不要写成「{name}：…」）。"
+        "**尤其不要把动作放进括号里**"
     )
 
 
@@ -366,7 +361,11 @@ def build_system_prompt(
 
 
 def _restore_history(mode: str, row) -> str:
-    """情境模式的历史 assistant 消息按原始标记格式回填，提升格式遵循率。"""
+    """历史消息按原始标记格式回填，提升格式遵循率。
+
+    沉浸模式下两个方向都要：助手消息的情境是它写的场景，用户消息的情境是用户给的场景，
+    两侧都按 [SCENARIO]/[DIALOG] 回填——模型看到的就是一份完整、同格式的对话记录。
+    """
     content = row["content"]
     if mode == "immersive":
         scenario = row["scenario"] if "scenario" in row.keys() else None
@@ -386,8 +385,12 @@ def build_messages(
     limit = get_config()["chat"]["history_max_messages"]
     msgs = [{"role": "system", "content": system}]
     for r in history_rows[-limit:]:
+        # 助手消息：沉浸与导演模式都按标记回填（聊天模式没有情境块）
         if r["role"] == "assistant" and mode != "chat":
             msgs.append({"role": "assistant", "content": _restore_history(mode, r)})
+        # 用户消息：只有沉浸模式带了用户写的情境，同样回填
+        elif r["role"] == "user" and mode == "immersive":
+            msgs.append({"role": "user", "content": _restore_history(mode, r)})
         else:
             msgs.append({"role": r["role"], "content": r["content"]})
     return msgs

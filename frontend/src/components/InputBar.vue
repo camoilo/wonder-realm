@@ -8,16 +8,35 @@
           <button class="dismiss" @click="error = ''">&times;</button>
         </div>
         <div class="input-row">
-          <div class="counted">
-            <textarea
-              v-model="input"
-              :disabled="orphanActive"
-              rows="3"
-              :maxlength="limits.message"
-              placeholder="输入消息，Enter 发送（Shift+Enter 换行）"
-              @keydown.enter.exact.prevent="send"
-            ></textarea>
-            <span class="char-count" :class="{near: isNear(input, limits.message)}">{{ len(input) }}/{{ limits.message }}</span>
+          <!-- 沉浸模式：情境（可选）与话语（必选）分两栏并排，与消息编辑弹窗同一套概念。
+               情境那栏只在沉浸模式出现，其它模式保持原来的单框 -->
+          <div v-if="isImmersiveMode" class="input-field scenario-field">
+            <span class="input-field-label">情境说明（可选）</span>
+            <div class="counted">
+              <textarea
+                v-model="inputScenario"
+                :disabled="orphanActive"
+                rows="3"
+                :maxlength="limits.scenario"
+                placeholder="场景、动作、心理等，可留空"
+                @keydown.enter.exact.prevent="send"
+              ></textarea>
+              <span class="char-count" :class="{near: isNear(inputScenario, limits.scenario)}">{{ len(inputScenario) }}/{{ limits.scenario }}</span>
+            </div>
+          </div>
+          <div class="input-field">
+            <span v-if="isImmersiveMode" class="input-field-label">话语</span>
+            <div class="counted">
+              <textarea
+                v-model="input"
+                :disabled="orphanActive"
+                rows="3"
+                :maxlength="limits.message"
+                :placeholder="isImmersiveMode ? '这一幕里说出的话（必填）' : '输入消息，Enter 发送（Shift+Enter 换行）'"
+                @keydown.enter.exact.prevent="send"
+              ></textarea>
+              <span class="char-count" :class="{near: isNear(input, limits.message)}">{{ len(input) }}/{{ limits.message }}</span>
+            </div>
           </div>
           <div class="send-col">
             <!-- 背景切换与"继续"互斥：前者只在聊天与沉浸两种模式出现，后者只在导演模式出现，
@@ -61,7 +80,9 @@ const {
   canContinue,
   error,
   input,
+  inputScenario,
   isDirectorMode,
+  isImmersiveMode,
   lastFailedUser,
   limits,
   orphanActive,

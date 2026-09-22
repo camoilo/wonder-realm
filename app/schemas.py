@@ -14,6 +14,8 @@ AVATAR_PREFIXES = (
 
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=LIMITS["message"])
+    # 沉浸模式下用户自己写的情境（场景、动作、心理），可选：只有话语也是合法消息
+    scenario: str | None = Field(default=None, max_length=LIMITS["scenario"])
 
 
 def _check_avatar(v: str) -> str:

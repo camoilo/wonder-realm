@@ -20,6 +20,8 @@ export const store = reactive({
       activeByMode: {}, // 各模式各自打开的会话 id，切换模式 Tab 时用来恢复
       messages: [],
       input: "",
+      // 沉浸模式输入区左边那一栏（场景 / 动作 / 心理），可选；其它模式不使用
+      inputScenario: "",
       streaming: false,
       streamText: "",
       thinkPhase: false,

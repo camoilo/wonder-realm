@@ -1787,7 +1787,8 @@ check("选中标签用强调色边框区分",
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量（含我的设定三项、世界设定三项与词条两项）", counters, 26)
+check("计数提示数量（含底部输入区情境/话语两栏、我的设定三项、世界设定三项与词条两项）",
+      counters, 27)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）；会话内搜索框是
@@ -2112,8 +2113,7 @@ for _f in store_files:
     _dead = [n for n in sorted(_local_names(_raw) - _declared_names(_raw)) if not _uses(_code, n)]
     check(f"{_rel} 没有导入了却没用到的名字", _dead, [])
 
-# ---- 弹窗怎么关：只有"按下"就落在遮罩上，才算点了窗口外（11 处回归） ----
-# 用 @click.self 的坑：click 的目标是 mousedown 与 mouseup 的**共同祖先**。在弹窗里按住
+# ---- 弹窗怎么关：只有"按下"就落在遮罩上，才算点了窗口外（11 处回归） ----# 用 @click.self 的坑：click 的目标是 mousedown 与 mouseup 的**共同祖先**。在弹窗里按住
 # 鼠标选文字、拖到遮罩上（或拖出窗口）再松开时，click 会落到遮罩上，于是"点窗口外关闭"
 # 被误触发——用户选个文字窗口就没了。判据必须是"按下"的位置。
 check("弹窗不再用 @click.self 关闭", [rel for rel, src in zip(VUE_ORDER, vue_sources)
@@ -2123,6 +2123,29 @@ check("五个弹窗都在", len(_mask_modals), 5)
 check("每个弹窗走同一套关闭判定", [rel for rel, src in zip(VUE_ORDER, vue_sources)
       if "modal-mask" in src and not all(k in src for k in (
           "useMaskClose(", '@mousedown="onMaskDown"', '@mouseup="onMaskUp"', '@click="onMaskClick"'))], [])
+
+# ---- 沉浸模式的输入区是两栏：情境（可选）+ 话语（必选） ----
+# "话语必填、情境可空"这件事靠"发送键还是绑 store.input"来保证：只填情境时发送键必须是禁用的，
+# 所以这里同时钉住两件事——两栏各自绑对字段、发送键不允许换成看情境。
+_input_bar = dict(zip(VUE_ORDER, vue_sources))["components/InputBar.vue"]
+check("情境栏绑 inputScenario", 'v-model="inputScenario"' in _input_bar, True)
+check("话语栏仍绑 input", 'v-model="input"' in _input_bar, True)
+check("情境栏只在沉浸模式出现", 'v-if="isImmersiveMode" class="input-field scenario-field"' in _input_bar, True)
+check("两栏各有自己的上限（情境 scenario / 话语 message）",
+      ":maxlength=\"limits.scenario\"" in _input_bar and ":maxlength=\"limits.message\"" in _input_bar, True)
+check("话语必填：发送键仍看 input",
+      ':disabled="!input.trim() || orphanActive"' in _input_bar, True)
+check("两栏都支持 Enter 发送", _input_bar.count('@keydown.enter.exact.prevent="send"') == 2, True)
+check("store 里有 inputScenario", "inputScenario: \"\"" in store_js, True)
+# 注意：js 这一坨把 store. 换成了 this.（为了让老的选项对象断言能复用），所以这里不写前缀
+check("沉浸模式的模式判定在", "isImmersiveMode = computed" in js, True)
+check("发送时把情境一起带上（SSE 请求体）", "{ message: text, scenario: scenario || null }" in js, True)
+check("乐观插入的 user 消息带情境", 'role: "user", content: text, scenario: scenario || null' in js, True)
+check("失败重试也恢复情境", "inputScenario = scenario" in js, True)
+_ib_css = css_block(".input-field")
+check("两栏用标签区分（两个并排的框没标签会分不清）",
+      ".input-field-label {" in css and ".input-field.scenario-field { flex: 0 0 36%; }" in css
+      and "flex-direction: column;" in _ib_css, True)
 
 print()
 if FAILED:
