@@ -6,7 +6,6 @@
   --text-soft: #8a8f9a;
   --accent: #3f6ad8;
   --accent-dark: #345cb8;
-  --user-bubble: #3f6ad8;
   --scenario-bg: #fdf6e7;
   --scenario-border: #f0e2bd;
   --error-bg: #fdeeee;
@@ -612,9 +611,11 @@ html, body {
   word-break: break-word;
 }
 
+/* 两侧气泡同一种白底：只靠"靠左/靠右"与下方缺角的方向区分是谁说的。
+   用户消息原来用强调色实底，长段文字读起来比白底累，也和助手那一侧不像同一个界面 */
 .msg.user .bubble {
-  background: var(--user-bubble);
-  color: #fff;
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-bottom-right-radius: 4px;
 }
 

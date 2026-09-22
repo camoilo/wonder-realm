@@ -13,6 +13,7 @@ from ..database import (
     list_presets,
     read_profile,
     read_profile_by_id,
+    update_preset,
     write_profile,
 )
 from ..schemas import ProfileIn
@@ -58,6 +59,30 @@ def create_preset(body: ProfileIn):
             "avatar": body.avatar,
         }
     )
+
+
+@router.put("/profile/presets/{preset_id}")
+def update_preset_route(preset_id: int, body: ProfileIn):
+    """用当前表单覆盖一条已有预设（面板上的「保存预设」）。
+
+    预设是"另存的一份设定"，与当前配置（id=1）互不影响：这里只改 id>1 那一行，
+    所以覆盖预设不会让"当前使用的设定"跟着变。
+    """
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "先给「我的设定」填个名字，才能保存预设")
+    saved = update_preset(
+        preset_id,
+        {
+            "name": name,
+            "identity": body.identity.strip(),
+            "appearance": body.appearance.strip(),
+            "avatar": body.avatar,
+        },
+    )
+    if saved is None:
+        raise HTTPException(404, "预设不存在")
+    return saved
 
 
 @router.delete("/profile/presets/{preset_id}")

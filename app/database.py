@@ -306,6 +306,35 @@ def add_preset(values: dict) -> dict:
     return dict(row)
 
 
+def update_preset(preset_id: int, values: dict) -> dict | None:
+    """用当前表单覆盖一条预设（"保存预设"）；id<=1 或不存在返回 None。"""
+    if preset_id <= 1:
+        return None
+    con = connect()
+    try:
+        cur = con.execute(
+            "UPDATE user_profile SET name=?, identity=?, appearance=?, avatar=?, updated_at=? "
+            "WHERE id=?",
+            (
+                values.get("name", ""),
+                values.get("identity", ""),
+                values.get("appearance", ""),
+                values.get("avatar", ""),
+                now(),
+                preset_id,
+            ),
+        )
+        if cur.rowcount == 0:
+            return None
+        con.commit()
+        row = con.execute(
+            f"SELECT {_PRESET_COLS} FROM user_profile WHERE id=?", (preset_id,)
+        ).fetchone()
+    finally:
+        con.close()
+    return dict(row) if row else None
+
+
 def delete_preset(preset_id: int) -> bool:
     """删除一条预设。id<=1 一律拒绝——那是当前设定本身，不是预设。"""
     if preset_id <= 1:

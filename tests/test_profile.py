@@ -83,6 +83,27 @@ check("当前设定仍只有一行", database.connect().execute(
     "SELECT COUNT(*) FROM user_profile WHERE id=1").fetchone()[0], 1)
 
 check("名字为空拒绝存预设", client.post("/api/profile/presets", json={"name": "  "}).status_code, 400)
+
+# ---- 3b. 覆盖保存已有预设（面板上选中某条后按钮变成「保存预设」）----
+r = client.put(f"/api/profile/presets/{p2['id']}",
+               json={"name": "小满", "identity": "转学生", "appearance": "短发", "avatar": AV})
+check("覆盖保存 200", r.status_code, 200)
+check("覆盖后内容变了", (r.json()["identity"], r.json()["appearance"]), ("转学生", "短发"))
+check("覆盖后头像也换", r.json()["avatar"], AV)
+check("覆盖不新增条目", len(client.get("/api/profile/presets").json()), 2)
+check("覆盖保持同一条 id", [p["id"] for p in client.get("/api/profile/presets").json()
+                          if p["name"] == "小满"], [p2["id"]])
+check("覆盖预设不影响当前设定", client.get("/api/profile").json()["identity"], "见习侦探")
+check("覆盖时名字为空被拒",
+      client.put(f"/api/profile/presets/{p2['id']}", json={"name": " "}).status_code, 400)
+check("覆盖不存在的预设 404",
+      client.put("/api/profile/presets/999", json={"name": "x"}).status_code, 404)
+check("覆盖 id=1（当前设定）被拒",
+      client.put("/api/profile/presets/1", json={"name": "x"}).status_code, 404)
+check("覆盖仍受名字上限约束",
+      client.put(f"/api/profile/presets/{p2['id']}",
+                 json={"name": "字" * 21}).status_code, 422)
+
 check("删除预设 200", client.delete(f"/api/profile/presets/{p1['id']}").status_code, 200)
 check("删完剩一条", len(client.get("/api/profile/presets").json()), 1)
 check("重复删除 404", client.delete(f"/api/profile/presets/{p1['id']}").status_code, 404)

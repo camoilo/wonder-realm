@@ -43,6 +43,8 @@ Object.assign(store, {
     }
   },
   loadPreset() {
+    // 只把预设内容填进表单：不落库、也不改"当前使用的设定"，
+    // 真正生效要等用户按底部「保存当前配置」（选错了可以直接还原）
     store.presetError = "";
     if (!store.presetPick) return;
     const p = store.profilePresets.find((x) => x.id === store.presetPick);
@@ -55,14 +57,17 @@ Object.assign(store, {
     };
   },
   async savePreset() {
+    // 选中了某条预设 = "保存预设"（覆盖它）；没选 = "存为预设"（新建一条）。
+    // 两条路径都只动 id>1 的行，碰不到"当前使用的设定"（id=1）。
     store.presetError = "";
+    const editing = store.presetPick;
     try {
       const p = await store.api(
-        "/api/profile/presets",
-        store.jsonOpts("POST", store.profileForm)
+        editing ? `/api/profile/presets/${editing}` : "/api/profile/presets",
+        store.jsonOpts(editing ? "PUT" : "POST", store.profileForm)
       );
       await store.loadPresets();
-      store.presetPick = p.id; // 存完直接选中它，方便继续改或删
+      store.presetPick = p.id; // 存完保持选中它，方便接着改或删
     } catch (e) {
       store.presetError = e.message;
     }

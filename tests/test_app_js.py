@@ -2036,10 +2036,11 @@ check("三处头像按钮同文案（无头像=上传头像 / 有头像=更换�
 check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
 
 # ---- 我的设定的预设 ----
-check("有预设下拉", 'class="preset-select"' in html and '@change="loadPreset"' in html, True)
+check("有预设下拉", 'class="preset-select"' in html and 'v-model="presetPick"' in html, True)
 check("下拉列出预设（名字 + 身份）",
       'v-for="p in profilePresets"' in html and "p.identity" in html, True)
-check("有存为预设与删除预设", (">存为预设</button>" in html) and (">删除预设</button>" in html), True)
+check("有存为预设 / 保存预设与删除预设",
+      ('{{ presetPick ? "保存预设" : "存为预设" }}' in html) and (">删除预设</button>" in html), True)
 check("没有预设时给出提示", "还没有预设" in html, True)
 check("预设方法齐全",
       all(k in js for k in ("async loadPresets()", "loadPreset() {", "async savePreset()",
@@ -2194,6 +2195,30 @@ check("气泡上没有悬停提示", 'class="bubble"' in _mi and 'class="bubble"
 _actions_from = _mi.index('class="msg-actions"')
 _actions = _mi[_actions_from:_mi.index("</div>", _actions_from)]
 check("操作条按钮（自带文字）不加提示", "v-hint" in _actions, False)
+
+# ---- 预设与当前配置分开：选下拉不碰表单，载入/保存在两个按钮上 ----
+# 之前的做法是"选中即把预设填进表单"，于是切换预设就会把表单改脏、点还原又和下拉里
+# 选中的那条对不上。现在下拉只是"操作对象"，表单（当前配置）只被「载入」改变。
+_pp = dict(zip(VUE_ORDER, vue_sources))["components/panes/ProfilePane.vue"]
+check("下拉占位是名词（不再有“从预设载入”）",
+      '<option value="">选择预设…</option>' in _pp and "从预设载入" in _pp, False)
+check("选下拉不再自动载入表单",
+      'v-model="presetPick" @change="loadPreset"' in _pp, False)
+check("有显式的「载入」按钮", '>载入</button>' in _pp and '@click="loadPreset"' in _pp, True)
+check("选中预设后存按钮变成「保存预设」",
+      '{{ presetPick ? "保存预设" : "存为预设" }}' in _pp, True)
+check("保存预设走 PUT、新建走 POST",
+      "const editing = store.presetPick" in store_js
+      and 'editing ? "PUT" : "POST"' in store_js, True)
+check("覆盖接口在", "@router.put(\"/profile/presets/{preset_id}\")" in
+      (ROOT / "app/routes/profile.py").read_text(encoding="utf-8"), True)
+
+# ---- 两侧气泡同一种白底 ----
+_bub = css_rule(".msg.user .bubble")
+check("用户气泡改成白底 + 边框",
+      "background: var(--panel);" in _bub and "border: 1px solid var(--border);" in _bub, True)
+check("用户气泡不再用强调色实底",
+      "var(--user-bubble)" in css or "color: #fff;" in _bub, False)
 
 print()
 if FAILED:

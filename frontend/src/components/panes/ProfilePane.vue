@@ -1,22 +1,27 @@
 <template>
-<!-- 预设：选中即把那一份设定填进表单（不直接覆盖已保存的当前设定，
-     仍走底部"保存当前配置"），所以载入后会出现"未保存"提示 -->
+<!-- 预设是"另存的一份设定"，与当前配置完全分开：
+     下拉只挑"要操作哪条预设"，不碰表单（所以选来选去不会冒出"未保存"）；
+     要拿来用就点「载入」（只填表单，仍走底部"保存当前配置"才真正生效）；
+     选中某条后，存按钮从「存为预设」变成「保存预设」（覆盖这一条） -->
 <div class="preset-row">
-  <select class="preset-select" v-model="presetPick" @change="loadPreset">
-    <option value="">从预设载入…</option>
+  <select class="preset-select" v-model="presetPick">
+    <option value="">选择预设…</option>
     <option v-for="p in profilePresets" :key="p.id" :value="p.id">
       {{ p.name }}{{ p.identity ? " · " + p.identity : "" }}
     </option>
   </select>
+  <button v-if="presetPick" class="ghost-btn"
+          v-hint="'把这条预设填进下面的表单（这时还没生效，点底部「保存当前配置」才写入）'"
+          @click="loadPreset">载入</button>
   <button class="ghost-btn" :disabled="!profileForm.name.trim()"
-          v-hint="'把当前这几项存成一条预设，之后可从下拉里一键载入'"
-          @click="savePreset">存为预设</button>
+          v-hint="presetPick ? '把当前表单覆盖保存到选中的这条预设' : '把当前这几项存成一条新预设，之后可以一键载入'"
+          @click="savePreset">{{ presetPick ? "保存预设" : "存为预设" }}</button>
   <button v-if="presetPick" class="ghost-btn" v-hint="'删除选中的这条预设'"
           @click="removePreset">删除预设</button>
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
 <p v-if="!profilePresets.length" class="hint">
-  还没有预设：填好下面几项后点「存为预设」，以后就能从下拉里一键载入（含头像）。
+  还没有预设：填好下面几项后点「存为预设」，以后就能从下拉里选一条「载入」（含头像）。
 </p>
 <div class="avatar-pick">
   <span class="avatar xl">
