@@ -888,7 +888,7 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 ### 7.3 前端技术约定
 
 - **Vue 3 + Vite 构建**：源码在 `frontend/`（`index.html` 是入口、`src/` 放脚本与样式），`npm run build` 产物落到 `app/static/`（`index.html` + `assets/` 带哈希文件名），由 FastAPI 直接托管。**产物提交进仓库**，所以运行应用不需要 Node；`start.bat` 检测到 `frontend/node_modules` 与 Node 时会先顺手重建一次。
-- **拆成单文件组件后的文件布局**：`src/store.js` 是**全部状态与逻辑**（从原来的 Vue 选项对象机械搬来：data→`reactive(store)`、computed→`store.X = computed(...)`、methods→`Object.assign(store, {...})`、watch→`watchDefs` + `registerWatchers()`、mounted/beforeUnmount→`initApp()`/`disposeApp()`）；`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（面板内 5 个标签页暂留其中，第二批再拆）/ `modals/` 下的 5 个弹窗。
+- **拆成单文件组件后的文件布局**：`src/store.js` 是**全部状态与逻辑**（从原来的 Vue 选项对象机械搬来：data→`reactive(store)`、computed→`store.X = computed(...)`、methods→`Object.assign(store, {...})`、watch→`watchDefs` + `registerWatchers()`、mounted/beforeUnmount→`initApp()`/`disposeApp()`）；`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（只剩标签栏 + 5 个 `.panel-tab-pane` 外壳 + 底部保存区，88 行）/ `panes/` 下的 5 个标签页内容（`GenPane` / `WorldPane` / `CharPane` / `ProfilePane` / `MemoryPane`）/ `modals/` 下的 5 个弹窗。**"一次只显示一个标签"的 v-if/v-show 留在 Panel.vue**，pane 组件只负责内容——这样切换逻辑与 `panel-tab-pane` 结构都在一处，测试断言与样式都不受影响。
 - **组件怎么拿状态**：每个组件 `<script setup>` 里 `import { store } from "../store.js"`，用 `const { … } = toRefs(store)` 把**自己模板用到**的成员暴露成 setup 绑定，方法再用 `const { … } = store` 解构（函数不是响应式的）。这样**模板里的表达式与原文件逐字一致**——不需要给几百个引用加 `store.` 前缀，拆分因此可以逐行对照；同时依赖仍是显式的：看组件开头就知道它用了哪些状态。漏声明的后果是模板拿到 `undefined`（列表为空、按钮点了没反应），所以 `tests/test_app_js.py` 有一条守卫逐个组件比对"模板引用到的 store 成员 ⊆ 该文件声明过的绑定"。
 - **不使用 Pinia**：单一 store 对象 + 组合式 API 足够这个体量，省一个依赖。
 - **对话滚动容器**：原来是 `this.$refs.chatBox`，现在由 `ChatArea.vue` 在挂载时调 `setChatBox(el)` 交给 store（`scrollBottom` / `jumpToBottom` 在那边用）。
@@ -948,6 +948,7 @@ ollama_agent/
 │       └── components/
 │           ├── SideBar.vue     TopBar.vue      ChatArea.vue
 │           ├── MessageItem.vue InputBar.vue    Panel.vue
+│           ├── panes/          GenPane · WorldPane · CharPane · ProfilePane · MemoryPane
 │           └── modals/         CharacterModal · NewSessionModal · ConfirmModal
 │                               EditMessageModal · CropModal
 ├── tests/
@@ -1105,7 +1106,7 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 按用户要求把前端从"CDN 取 Vue + 三个静态文件"改成"npm 依赖 + Vite 构建"：源码搬到 `frontend/`（`index.html` 入口 + `src/main.js` + `src/app.js` + `src/style.css`），`npm run build` 把产物写进 `app/static/`（`index.html` + 带哈希的 `assets/`）并由 FastAPI 照旧托管，**产物提交进仓库**，所以没装 Node 也能直接跑；`start.bat` 在检测到 Node 与 `node_modules` 时先顺手重建一次。
 验证：`style.css` 与迁移前**逐字节相同**、`app.js` 只改首尾两处（`Vue.createApp({...})` → `export const appOptions = {...}`）、`index.html` 只改 head 与入口两处——三处 diff 都打印出来核对过；构建成功（产物 1 个 js + 1 个 css，文件名带哈希）；**用真实浏览器打开线上页面，DOM 里出现 `模式选择`/`未选择会话`、没有 `{{ }}` 与 `v-cloak` 残留**（这条在迁移前做不到：CDN 在本环境不可达，页面是全白的）；`tests/test_app_js.py` 增加 10 条构建相关断言（不再有 CDN、入口是 ES 模块、样式由入口 import、`app.js` 不在顶层创建应用、产物被引用且文件都在）；`tests/test_search.js` 改成 `tests/test_search.mjs`（直接 import `appOptions`，删掉 Vue 桩，仍然零依赖可跑）；9 个 Python 测试 + Node 测试全绿。
 
-**阶段 24（同轮继续）：拆成 `.vue` 单文件组件**——`src/store.js` 收全部状态与逻辑，`App.vue` 只留布局骨架，`components/` 下按界面区域拆出 11 个组件（面板内 5 个标签页下一批再拆）。验证：dev 与生产构建在真实浏览器里都零警告、点开会话后 5 个标签齐全、按钮位置不变量仍成立、`test_app_js.py` 194 条断言全绿（含"组件绑定必须声明"的新守卫）。细节与踩坑见 10.47。
+**阶段 24（同轮继续）：拆成 `.vue` 单文件组件**——`src/store.js` 收全部状态与逻辑，`App.vue` 只留布局骨架，`components/` 下按界面区域拆出 11 个组件，面板内的 5 个标签页再拆进 `components/panes/`。验证：dev 与生产构建在真实浏览器里都零警告、5 个标签页内容全部渲染、按钮位置不变量仍成立、`test_app_js.py` 199 条断言全绿（含"组件绑定必须声明"的守卫，且组件清单改为自动发现）。细节与踩坑见 10.47。
 
 ## 10. 设计决策记录
 
@@ -1595,6 +1596,11 @@ memories 表读写、scope 规则、后台压缩任务、注入、面板记忆�
 - **构建产物**：141–142 kB（gzip 49 kB）。去掉运行时编译器的 alias 后比"DOM 内模板 + 完整版 Vue"的 210 kB 小了约 70 kB。入口 HTML 只剩 0.39 kB（挂载点）。
 
 **踩到的坑（都记下来）**：① 弹窗在 `components/modals/` 下，store 的相对路径要多一层（`../../store.js`）——dev server 直接把这类错误报出来了，生产构建也会失败，属于响亮失败；② 往 dev server 的监听目录里写探针文件会让它的 watcher 崩（`EBUSY`），所以探针文件要在启动前写好；③ `--virtual-time-budget` 下定时器会抢在模块下载前跑完，探针必须用 `MutationObserver` 等真实挂载；④ dev server 在本沙箱里同样会被 `spawn EPERM` 拦（与 `vite build` 同一个边界，属于环境限制）。
+
+**第三批（同轮）：把面板里的 5 个标签页也拆出去。**`Panel.vue` 从 348 行降到 88 行（只剩标签栏、5 个 `.panel-tab-pane` 外壳、底部保存区），内容是 `panes/` 下的 `GenPane` / `WorldPane` / `CharPane` / `ProfilePane` / `MemoryPane`。拆法与第二批相同（脚本按锚点 `v-show="panelTab === 'X'"` 切外壳内容、机械算绑定），并且**保留 v-if/v-show 在外壳上**——切换逻辑与结构留在 Panel.vue，pane 组件只负责内容，所以样式与断言都不用动。
+
+- **测试这次一行没改就通过**：把 `tests/test_app_js.py` 里的组件清单换成**自动发现**（`App.vue` 排第一，其余 `components/**/*.vue` 按路径排序），于是绑定守卫自动覆盖了新拆出的 5 个组件，断言数从 194 涨到 **199**。
+- **渲染验证**（dev 模式 + 真实后端，逐个标签页查内容是否真的渲染出来）：5 个标签页全部命中——生成要求 `.radio-row`（36 个元素）、世界设定 世界名称输入框（17）、角色设定 `.avatar-pick`（32）、我的设定 `.preset-row`（23）、记忆 `.memory-text`（5）；**控制台零 warning/零 error**；按钮在面板开/关两态仍是同一坐标；生产产物跑同一套探针得到**完全相同的元素计数**。
 
 ## 11. 开放问题
 

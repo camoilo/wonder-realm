@@ -18,20 +18,12 @@ frontend = ROOT / "frontend"
 #   js   —— store.js + main.js + 各 .vue 的 script 块，逻辑类断言在它上面找
 # 顺序固定为"骨架 → 左栏 → 顶栏 → 对话区 → 输入区 → 面板 → 弹窗"，
 # 这样原来那些"A 在 B 之前"的顺序断言仍然成立。
-VUE_ORDER = [
-    "App.vue",
-    "components/SideBar.vue",
-    "components/TopBar.vue",
-    "components/ChatArea.vue",
-    "components/MessageItem.vue",
-    "components/InputBar.vue",
-    "components/Panel.vue",
-    "components/modals/CharacterModal.vue",
-    "components/modals/NewSessionModal.vue",
-    "components/modals/ConfirmModal.vue",
-    "components/modals/EditMessageModal.vue",
-    "components/modals/CropModal.vue",
-]
+# 组件文件自动发现：App.vue 必须排第一（骨架顺序断言要看它），其余按路径排序（结果稳定）。
+# 这样以后继续拆组件（例如把面板里的标签页再拆出去）不用再回来改测试。
+VUE_ORDER = ["App.vue"] + sorted(
+    str(x.relative_to(frontend / "src")).replace("\\", "/")
+    for x in (frontend / "src" / "components").rglob("*.vue")
+)
 vue_sources = [(frontend / "src" / rel).read_text(encoding="utf-8") for rel in VUE_ORDER]
 store_js = (frontend / "src/store.js").read_text(encoding="utf-8")
 main_js = (frontend / "src/main.js").read_text(encoding="utf-8")
