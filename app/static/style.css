@@ -212,6 +212,23 @@ html, body {
   min-height: 0;
 }
 
+/* 顶栏之下那一行：左边是对话区 + 输入区，右边是面板。
+   拆成这样是为了让**顶栏的宽度不随面板开合变化**——"配置"键钉在顶栏最右，
+   面板开关都不会让它移动（见 10.46） */
+.work {
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.work-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;

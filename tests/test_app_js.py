@@ -144,6 +144,14 @@ check("无会话时禁用", ':disabled="!activeSession"' in html, True)
 check("禁用样式有定义（否则看起来仍可点）", ".ghost-btn:disabled {" in css, True)
 check("开关在顶栏里（位置固定在工具栏最右）",
       html.index('class="toolbar"') < html.index("panel-toggle") < html.index("</header>"), True)
+# 顶栏必须横跨"对话区 + 面板"：面板是 .main 的兄弟列时，面板一开顶栏就窄 330px，
+# 按钮会左移并落到面板标签上（10.46 第二版的真实事故）。这条断言把结构钉住
+check("顶栏在 .work 之上（宽度不受面板影响）",
+      html.index('class="topbar"') < html.index('class="work"'), True)
+check("对话区与面板在同一行里并排（对话区在 .work-main 内）",
+      html.index('class="work"') < html.index('class="work-main"') < html.index('class="chat-area"')
+      and html.index('class="chat-area"') < html.index('class="panel"'), True)
+check("这两层容器的样式都在", ".work {" in css and ".work-main {" in css, True)
 # 文案只换箭头、字数不变，所以按钮宽度不随状态变化（"不挪鼠标点开、看一眼、再点关"）
 check("文案按状态只换箭头",
       'activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›"' in html, True)

@@ -124,6 +124,11 @@
       </div>
     </header>
 
+    <!-- 顶栏横跨"对话区 + 右侧面板"这一整行：这样顶栏最右那个"配置"键的右边缘就是
+         **窗口右边缘**，面板开、关都不移动（面板只是下面这一行里的一列）。
+         顶部这份宽度不受面板影响，是"点开→看一眼→点关"不用挪鼠标的前提（见 10.46） -->
+    <div class="work">
+    <div class="work-main">
     <div class="chat-area">
       <!-- 背景层放在滚动容器外面，这样滚动消息时背景是静止的 -->
       <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
@@ -253,7 +258,7 @@
         </div>
       </div>
     </footer>
-  </div>
+    </div><!-- /.work-main -->
 
   <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
     <div class="panel-inner">
@@ -536,6 +541,9 @@
       </div>
     </div>
   </aside>
+
+    </div><!-- /.work：对话区 + 面板这一行（顶栏在它上面，横跨整行） -->
+  </div><!-- /.main -->
 
   <div class="modal-mask" v-if="charModal.visible" @click.self="charModal.visible = false">
     <div class="modal char-modal">
