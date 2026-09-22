@@ -1838,7 +1838,7 @@ check("滚动容器仍是 panel-body", "overflow-y: auto;" in css and ".panel-bo
 check("有名字与时间的那一行", 'class="msg-head"' in html, True)
 check("时间只在消息行里出现一次（流式占位没有）", html.count('class="msg-time"'), 1)
 check("时间在气泡之前（上方那一行）",
-      html.index('class="msg-time"') < html.index("class=\"bubble\" v-hint"), True)
+      html.index('class="msg-time"') < html.index('class="msg-actions"'), True)
 check("时间在 msg-head 行里", html.index('class="msg-head"') < html.index('class="msg-time"'), True)
 check("名字与时间同一行", 'class="msg-head"' in html and 'class="msg-name"' in html, True)
 check("时间样式在", ".msg-time {" in css, True)
@@ -1885,7 +1885,7 @@ check("导演模式不显示用户头像列", "return !!this.activeChar && !!(th
 check("用户头像列排在气泡之后（渲染到右侧）",
       html.rindex('class="msg-side"') > html.index('class="bubble-wrap"'), True)
 check("那一行排在气泡之前（显示在上方）",
-      html.index('class="msg-head"') < html.index("class=\"bubble\" v-hint"), True)
+      html.index('class="msg-head"') < html.index('class="bubble"'), True)
 # 两侧气泡到头像的间距要一致（user 那侧的头像是后加的，漏了 gap 就会紧贴）
 check("两侧消息用同一份间距",
       ".msg.user,\n.msg.assistant { align-items: flex-start; gap: 12px; }" in css, True)
@@ -2184,6 +2184,16 @@ check("浮层层级高于弹窗遮罩", "z-index: 1200" in css and "z-index: 130
 check("图标按钮都有 aria-label", [rel for rel, src in zip(VUE_ORDER, vue_sources)
       for _l in src.splitlines()
       if "v-hint=" in _l and re.search(r">\s*(✎|✕|‹|›|×|↑|↓|☰)\s*<", _l) and "aria-label" not in _l], [])
+
+# ---- 双击编辑已去掉；自带文字的按钮不加悬停提示 ----
+# 双击是"看不见的入口"（用户得先知道有这回事），与旁边的「编辑」按钮重复；
+# 而「复制 / 编辑 / 删除 / 重新生成」四个键自己就写着字，再弹一张卡片纯属噪音。
+_mi = dict(zip(VUE_ORDER, vue_sources))["components/MessageItem.vue"]
+check("气泡不再双击进编辑", "@dblclick" in _mi, False)
+check("气泡上没有悬停提示", 'class="bubble"' in _mi and 'class="bubble" v-hint' in _mi, False)
+_actions_from = _mi.index('class="msg-actions"')
+_actions = _mi[_actions_from:_mi.index("</div>", _actions_from)]
+check("操作条按钮（自带文字）不加提示", "v-hint" in _actions, False)
 
 print()
 if FAILED:

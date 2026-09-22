@@ -15,7 +15,7 @@
                 <span v-if="msgName(m)" class="msg-name">{{ msgName(m) }}</span>
                 <span v-if="timeOf(m)" class="msg-time" v-hint="fullTimeOf(m)">{{ timeOf(m) }}</span>
               </div>
-              <div class="bubble" v-hint="'双击可编辑这条消息'" @dblclick="startEdit(m)">
+              <div class="bubble">
                 <!-- 消息正文按"块"渲染：情境块与话语块。搜索时命中的字词用 <mark> 包起来
                      （仍然全部是文本节点，不走 v-html：模型输出永远不当 HTML 解释） -->
                 <div v-for="(part, pi) in partsOf(m)" :key="pi"
@@ -29,10 +29,11 @@
                 <span v-if="m.archived" class="archived-flag">已归档</span>
               </div>
               <div class="msg-actions" v-show="!streaming">
-                <button v-hint="'复制'" @click="copyText(m)">复制</button>
-                <button v-hint="'编辑'" @click="startEdit(m)">编辑</button>
-                <button v-hint="'删除'" @click.stop="deleteMenuId = deleteMenuId === m.id ? null : m.id">删除</button>
-                <button v-if="!orphanActive" v-hint="'重新生成'" @click="regenerate(m)">重新生成</button>
+                <!-- 这四个按钮都有可见文字，不用再加悬停提示 -->
+                <button @click="copyText(m)">复制</button>
+                <button @click="startEdit(m)">编辑</button>
+                <button @click.stop="deleteMenuId = deleteMenuId === m.id ? null : m.id">删除</button>
+                <button v-if="!orphanActive" @click="regenerate(m)">重新生成</button>
               </div>
               <div v-if="deleteMenuId === m.id" class="delete-menu" @click.stop>
                 <button @click="removeMessage(m, false)">删除这条</button>
