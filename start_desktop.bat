@@ -10,6 +10,20 @@ if not exist "desktop\node_modules\electron\dist\electron.exe" (
   pause
   exit /b 1
 )
+
+rem 前端是 Vue 3 + Vite 构建的：装了 Node 且 npm install 过就顺手重建一次（约 1 秒），
+rem 否则直接用仓库里已提交的构建产物 —— 没装 Node 也能照常启动。
+rem 判断与 start.bat 完全一致，改完前端直接双击这个就能看到效果。
+if exist "frontend\node_modules" (
+  where node >nul 2>nul
+  if not errorlevel 1 (
+    echo 正在重建前端 ...
+    pushd frontend
+    call npm run build
+    popd
+  )
+)
+
 echo 启动电脑端…
 "desktop\node_modules\electron\dist\electron.exe" desktop
 if errorlevel 1 pause

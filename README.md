@@ -130,7 +130,7 @@ http://127.0.0.1:17800
 
 ### 5. 改前端（一般用不到）
 
-前端是 **Vue 3 + Vite** 构建的，**构建产物已经提交在 `app/static/`**，所以只是"用"这个应用的话不需要装 Node（`start.bat` 检测到 Node 时会顺手重建一次，其余情况直接用已提交的产物）。
+前端是 **Vue 3 + Vite** 构建的，**构建产物已经提交在 `app/static/`**，所以只是"用"这个应用的话不需要装 Node（`start.bat` 与 `start_desktop.bat` 检测到 Node 时会顺手重建一次，其余情况直接用已提交的产物）。
 
 要改前端（源码在 `frontend/`）时：
 
@@ -217,6 +217,8 @@ npm run dev            # http://127.0.0.1:5173，/api 自动代理到 17800
 npm install --prefix desktop      :: 只需一次（下载 Electron 运行时，约 100MB）
 start_desktop.bat                 :: 以后双击这个就行
 ```
+
+双击 `start_desktop.bat` 时会像 `start.bat` 那样**顺手重建一次前端**（判断逻辑完全一致：装了 Node 且 `frontend/node_modules` 在才做），所以改完前端直接双击它就能看到效果。
 
 下载慢的话加个国内镜像：`set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 再执行上面那条 `npm install`。
 
@@ -347,7 +349,7 @@ ollama_agent/
 ├── pyproject.toml          # 依赖声明（uv.lock 锁定版本）
 ├── run.py                  # 启动入口（--no-browser 给桌面端，--lan/--no-lan 切"推送局域网"）
 ├── start.bat               # 双击启动：起服务并自动开浏览器（GBK 编码，适配中文控制台）
-├── start_desktop.bat       # 双击启动电脑端（Electron 外壳，需先 npm install --prefix desktop）
+├── start_desktop.bat       # 双击启动电脑端（Electron 外壳，需先 npm install --prefix desktop；同样顺手重建前端）
 ├── desktop/                # 电脑端外壳：main.js / preload.js（依赖装到 desktop/node_modules，不入库）
 ├── app/
 │   ├── main.py             # FastAPI 实例、静态托管、启动自检

@@ -26,7 +26,7 @@
 ### 1.3 技术选型理由
 - **FastAPI**：原生 async + StreamingResponse，SSE 简单；自动 OpenAPI 文档
 - **SQLite + WAL**：单文件零部署，单用户无并发瓶颈，数据全本地
-- **Vue 3 + Vite**：产物提交进仓库，离线可用、可模块化组织。代价是多一个 Node 工具链、改前端要多一步构建（`start.bat` 检测到 Node 时顺手重建）
+- **Vue 3 + Vite**：产物提交进仓库，离线可用、可模块化组织。代价是多一个 Node 工具链、改前端要多一步构建（`start.bat` / `start_desktop.bat` 检测到 Node 时顺手重建）
 - **SSE 而非 WebSocket**：单向流（请求→生成流），SSE 足够且更简单
 
 ### 1.4 术语表
@@ -216,6 +216,8 @@ flowchart LR
 - `desktop.json`：窗口尺寸与上次是不是手机视图。**自检（`--selftest`）刻意不写它**，否则"量一下尺寸"会把用户下次启动真的带进手机视图。
 
 自检：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径（preload 桥接、手机视图是否真的把 `innerWidth` 缩进 640px），全程不弹窗，用于改完壳之后确认没坏。开发期复用项目 `.venv` 里的 Python；**打包分发**（PyInstaller 收后端 + 安装包）留到 v2，见 10.9。
+
+**入口脚本 `start_desktop.bat`**（8.1）：先按与 `start.bat` 完全相同的判断重建一次前端（装了 Node 且 `frontend/node_modules` 在），再拉起 `electron.exe desktop`。窗口与它起的后端都挂在那个 cmd 窗口下，**关掉 cmd 窗口等于关掉应用**——所以它双击后"只有一行提示、看着像卡住"是正常的，界面窗口由 Electron 单独弹出。
 
 ### 3.4 启动流程与 Ollama 自启
 
@@ -479,7 +481,7 @@ event: error  {"message"}                       # 中断发送并结束流
 - **切换模式 Tab**：列表与当前会话一起换，恢复 `activeByMode`，无则清空对话区；生成中禁止切换；聊天/沉浸无角色时显示"创建第一个角色"引导
 
 ### 7.3 前端技术约定
-- **Vue 3 + Vite**：源码 `frontend/`，`npm run build` 产物落 `app/static/`（提交进仓库，运行无需 Node；`start.bat` 检测到 Node 顺手重建）
+- **Vue 3 + Vite**：源码 `frontend/`，`npm run build` 产物落 `app/static/`（提交进仓库，运行无需 Node；`start.bat` / `start_desktop.bat` 检测到 Node 顺手重建）
 - **文件布局**：`src/store.js` 只是 barrel；逻辑按领域分 `store/` 下（`state`/`helpers`/`api`/`session`/`chat`/`search`/`panel`/`character`/`presets`/`attrs`/`ui`）；`composables/` 放无关具体界面的复用（`maskClose`/`hint`）；`App.vue` 只留布局骨架；`components/` 按区域分（含 `panes/`、`modals/`）
 - **store 依赖星形**：各领域模块只 `import { store } from "./state.js"`，彼此不互相 import（结构上无循环依赖）；跨领域走 `store.xxx`。`let` 声明可变私有状态留在唯一使用它的模块
 - **组件拿状态**：`import { store }`，`toRefs(store)` 暴露模板用到的成员（方法解构用 `const {...} = store`），模板保持裸名字，与单文件原文件逐字一致；漏声明=模板拿 undefined。`tests/test_app_js.py` 守卫"模板引用的 store 成员 ⊆ 声明过的绑定"
@@ -500,8 +502,8 @@ ollama_agent/
 ├── pyproject.toml / uv.lock        # uv 管理：fastapi/uvicorn/httpx/pyyaml
 ├── run.py                          # uv run run.py → 建库 → 确保 Ollama → uvicorn.run；起后开浏览器
 │                                   #   --no-browser 给桌面端用；--lan/--no-lan 切"推送局域网"（8.3）
-├── start.bat                       # 双击启动网页版（GBK 适配中文控制台）
-├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3）
+├── start.bat                       # 双击启动网页版（GBK 适配中文控制台；顺手重建前端）
+├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3；同上重建前端）
 ├── app/
 │   ├── main.py        # FastAPI 实例、静态托管、lifespan 自检
 │   ├── config.py      # 配置加载合并
@@ -657,3 +659,4 @@ data_dir: ./data                  # 直接指定
 7. **词库不能拖拽调序**：目前只能增删（顺序即添加序）；可照背景图拖拽加一遍，存储已是数组
 8. **一次会话只能绑一份世界**：导演会话各自一份，聊天/沉浸同角色仅一份（跟角色走）；若要角色在不同会话处于不同世界，需把绑定从角色挪到会话（`sessions.world_id` 列与接口已备，缺的是聊天/沉浸带上它）
 9. **电脑端打包**：Electron 外壳 v1 已能用（复用项目 `.venv` 的 Python，见 3.3 / 10.9 与 8.1），**待做的是打包分发**：PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`——这样别人的机器上不必装 Python 与 uv。同时值得顺手做的还有：桌面端「配置」里**一键添加防火墙规则**（要管理员，做成"复制命令"或提权二选一）、Ollama 未安装时的引导、以及最小化到托盘
+10. **应用名不统一**：网页标签页（`frontend/index.html` 的 `<title>`）是「多模式对话助手」，而 README / DEVELOPMENT 的标题与 `desktop/main.js` 里的窗口标题写的是「多模式对话机器人」。窗口标题实际跟随网页（Electron 默认让 `document.title` 覆盖 `BrowserWindow` 的 `title`），所以 `main.js` 那行目前是失效的。**名字定下来后一起改**（含两份文档的标题），暂不动
