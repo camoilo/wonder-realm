@@ -121,6 +121,18 @@
                   @click="unlockCharacter('modal')">公开角色设定</button>
           <p v-else class="hint">保存后可在右侧面板或这里点「公开角色设定」永久解锁。</p>
         </div>
+        <!-- 「我的设定」绑在这一侧：一份预设可以给多个角色用，读法是"身份跟着角色走"
+             （同一个角色换会话时身份不变；不绑定就不用预设）。见 DEVELOPMENT §2.3 -->
+        <label class="field field-bind">我的身份预设
+          <select v-model="charModal.form.profile_id">
+            <option :value="null">不绑定（不用预设）</option>
+            <option v-for="p in profilePresets" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+          <span class="hint">打开这个角色的会话时自动套用这份「我的设定」，别的角色不受影响。</span>
+        </label>
+        <p v-if="!profilePresets.length" class="hint">
+          还没有预设：先在右侧面板的「我的设定」里填好，再点「存为预设」。
+        </p>
       </div>
       <!-- 操作行钉在弹窗底部：它在 .modal-body（唯一可滚动区）之外，内容再长也不会
            跟着滚走。保存失败的那行提示也放在这里，与按钮一起始终可见 -->
@@ -148,6 +160,7 @@ const {
   bgMax,
   charModal,
   limits,
+  profilePresets,
 } = toRefs(store);
 
 // 模板用到的方法（函数不是响应式的，直接解构）

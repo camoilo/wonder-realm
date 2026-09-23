@@ -17,6 +17,7 @@
             <span class="preset-item-text">
               <span class="preset-item-name">{{ p.name }}</span>
               <span class="preset-item-sub">{{ p.identity || "（没填身份）" }}</span>
+              <span class="preset-item-bind">角色：{{ presetBindLabel(p) }}</span>
             </span>
           </button>
         </div>
@@ -32,6 +33,7 @@
               <dt>名字</dt><dd>{{ picked.name }}</dd>
               <dt>身份</dt><dd>{{ picked.identity || "（未填）" }}</dd>
               <dt>外观</dt><dd class="pre">{{ picked.appearance || "（未填）" }}</dd>
+              <dt>绑定角色</dt><dd>{{ presetBindLabel(picked) }}</dd>
             </dl>
           </template>
         </div>
@@ -65,6 +67,7 @@ const {
   closeLoadModal,
   confirmLoadPreset,
   pickLoadPreset,
+  presetBindLabel,
 } = store;
 
 // 点窗口外 = 取消（判据是"按下"落在遮罩上，见 composables/maskClose.js）

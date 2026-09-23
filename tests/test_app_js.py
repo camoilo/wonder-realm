@@ -586,16 +586,59 @@ check("预设方法齐全",
                             "async savePreset()", "openPresetModal() {", "editPickPreset(id) {",
                             "async savePresetModal() {", "async deletePresetInModal() {")), True)
 # 载入 = 立即生效（写当前使用的设定），所以要带一次"覆盖"确认；删除也要确认
+_apply = js[js.index("async applyPreset(id) {"):js.index("async confirmLoadPreset() {")]
 _confirm = js[js.index("async confirmLoadPreset() {"):js.index("async savePreset()")]
 check("载入前对未保存改动要确认", "await this.ask(" in _confirm, True)
-check("载入写的是当前配置", 'this.api("/api/profile", this.jsonOpts("PUT", values))' in _confirm, True)
-check("载入后记住当前预设", "this.currentPresetId = p.id" in _confirm, True)
+check("载入走同一条“立即生效”路径", "await this.applyPreset(p.id)" in _confirm, True)
+check("立即生效写的是当前配置",
+      'this.api(' in _apply and '"/api/profile"' in _apply and 'this.jsonOpts("PUT"' in _apply, True)
+check("载入后记住当前预设", "this.currentPresetId = p.id" in _apply, True)
 check("当前预设名带“已修改”判定",
       "currentPresetLabel = computed" in js and "（已修改）" in js, True)
 check("启动时拉预设列表", "await this.loadPresets();" in js, True)
 check("删除预设要确认", "删除预设「" in js, True)
 check("预设样式在", ".preset-row {" in css and ".preset-current {" in css
       and ".preset-item {" in css and ".preset-detail {" in css, True)
+
+# ---- 预设绑定角色：身份跟着角色走（DEVELOPMENT §2.3 我的设定） ----
+# 一份预设可以被多个角色共用，所以绑定存在角色那侧（characters.profile_id），
+# 两个预设弹窗只负责显示"这条预设给了哪些角色"，改绑在「编辑角色」里
+check("两个预设弹窗都显示绑定角色",
+      html.count("presetBindLabel(p)") >= 1 and "presetBindLabel(picked)" in html, True)
+check("列表里有绑定那一行", 'class="preset-item-bind"' in html and ".preset-item-bind {" in css, True)
+check("绑定文案函数在（没绑就是「未绑定」）",
+      "presetBindLabel(p) {" in js and '"未绑定"' in js, True)
+check("角色弹窗里有身份预设下拉",
+      'v-model="charModal.form.profile_id"' in html
+      and '<option :value="null">不绑定（不用预设）</option>' in html, True)
+check("下拉列出所有预设", 'v-for="p in profilePresets" :key="p.id" :value="p.id"' in html, True)
+check("绑定项与角色字段分开", ".field-bind {" in css and 'class="field field-bind"' in html, True)
+# profile_id 只能加在弹窗表单里：右侧面板的 charForm 用的是同一个 emptyCharForm()，
+# 多带一个 null 就等于"一保存角色设定就把身份预设解绑"
+_char_form = js[js.index("export const emptyCharForm = () =>"):js.index("export const emptyCharModal = () =>")]
+check("面板表单不带 profile_id", "profile_id" in _char_form, False)
+check("弹窗表单带 profile_id", "profile_id: null" in js, True)
+check("打开角色弹窗时带上绑定", "profile_id: c.profile_id ?? null" in js, True)
+check("打开角色弹窗时确保预设已加载",
+      "if (!this.profilePresets.length) this.loadPresets();" in js, True)
+# 校准规则：绑了预设就用它；没绑就不用预设（当前正用着预设时清空）；
+# 已经就是那一条则什么都不做（面板上临时手改过的内容要留住）；找不到预设时一律不动
+_sync = js[js.index("async syncCharacterProfile() {"):js.index("presetBindLabel(p) {")]
+check("打开会话时校准身份", "await this.syncCharacterProfile();" in js, True)
+_after_char = js[js.index("async afterCharacterChange() {"):]
+_after_char = _after_char[: _after_char.index("});")]
+check("改完角色设定（绑定可能变了）也校准",
+      "await this.syncCharacterProfile();" in _after_char, True)
+check("已经是这条预设就不再覆盖", "if (this.currentPresetId === bound.id) return;" in _sync, True)
+check("没绑且本来就没用预设就不动", "if (!this.currentPresetId) return;" in _sync, True)
+check("没绑时清空（不用预设）",
+      'values = { name: "", identity: "", appearance: "", avatar: "" };' in _sync, True)
+check("找不到那条预设时按“没绑”处理（保守，不乱清）",
+      "const bound = c.profile_id" in _sync
+      and "this.profilePresets.find((p) => p.id === c.profile_id)" in _sync, True)
+check("校准写的是当前配置",
+      'this.api(' in _sync and '"/api/profile"' in _sync and 'this.jsonOpts("PUT"' in _sync, True)
+check("导演模式（没有角色）不校准", "if (!c) return;" in _sync, True)
 
 # ---- 没选模型时的提示 ----
 check("启动时若没选模型会提示", "还没有选择模型，生成前请先在左边选一个" in js, True)

@@ -128,9 +128,21 @@
 - **挑选与看详情放在弹窗里，不在面板上下拉**：预设名字很可能重复（同一份设定的"聊天用/写作用"两版就叫一样的名字），下拉里一行字根本分不清是谁。弹窗里左边列表每项带身份摘要，右边把选中那条的头像、名字、身份、外观全摆出来。
 - **"载入"是立即生效**（写 `id=1`），不是"只填表单、还要再点保存"。这样面板那行"当前预设：X"永远等于"真正在生效的那份来自 X"，不会再出现"以为载入了其实没生效"。代价是它会覆盖当前配置，所以载入前若表单里有没保存的改动，先弹一次确认。
 - **删除收进编辑弹窗**：面板上不放不可逆的操作；删除时照旧有一次确认。
-- **面板那行只认"来源"**：编辑预设时改的是预设本身，当前配置不会跟着变，于是那行会显示"新名字（已修改）"——这是准确的：当下的配置已经不等于那条预设了。
+- **面板那行只认"来源"**：编辑预设时改的是预设本身。若改的正好是当前这份设定的来源那条预设，当前配置会跟着一起更新（否则那行会挂着"XX（已修改）"，看起来像用户自己把设定改坏了）；改的是别的预设则当前配置不受影响。
 
-注入方式是 system prompt 里的一段独立块（`# 与你对话的人`），紧跟角色设定之后；三项全空时整块不出现。**导演模式不注入、也不显示**用户头像与名字，面板里也不出现这个标签——那里没有"我是谁"这回事。
+**预设绑定角色：身份跟着角色走。** 绑定关系记在**角色那一侧**（`characters.profile_id` → `user_profile.id`，`NULL` = 不绑定），所以一份预设可以被多个角色共用，而改绑的入口就在「编辑角色」弹窗底部那一项下拉（`我的身份预设`，含"不绑定（不用预设）"）——绑定是"某个角色用哪份身份"，属于角色的属性，不该塞进预设的编辑界面；两个预设弹窗只**显示**这件事：左列表每项一行"角色：X、Y / 未绑定"，右详情多一行"绑定角色"。打开某个角色的会话时，按这个角色校准"当前使用的设定"：
+
+| 角色的绑定 | 校准结果 |
+|---|---|
+| 绑了预设 P，当前不是 P | 用 P 的内容覆盖 `id=1`，当前预设记为 P |
+| 绑了预设 P，当前已经是 P | 什么都不做（面板上临时手改过的内容在同角色内保留，不被反复冲掉） |
+| 没绑预设，当前正用着某条预设 | 清空 `id=1`（没绑就是不用预设），当前预设记为"未选择" |
+| 没绑预设，本来就没用预设 | 什么都不做（用户自己手填的身份留着） |
+| 找不到那条预设（还没加载出来 / 刚被删） | 什么都不做——宁可少切一次，也不能把身份清错 |
+
+于是同一个角色的所有会话共享同一份身份，切换角色就换成那个角色绑定的那份。校准只在**打开会话**与**改完角色设定**（含改绑定、删角色后刷新）两处发生；手动「载入预设」是临时覆盖，下次打开会话会按角色校正回来。锁定（探索模式）不影响这一项：锁的是角色的隐藏设定，而"我用哪份身份"是用户自己的东西。删除预设时引用它的角色自动解绑（`delete_preset()` 顺手把这一列清成 `NULL`，这一列没有 `ON DELETE` 级联）。
+
+注入方式是 system prompt 里的一段独立块（`# 与你对话的人`），紧跟角色设定之后；三项全空时整块不出现（打开一个"没绑预设"的角色的会话就是这种情况——那一轮生成里没有"我是谁"）。**导演模式不注入、也不显示**用户头像与名字，面板里也不出现这个标签——那里没有"我是谁"这回事。
 
 ### 2.4 世界设定
 
@@ -313,11 +325,12 @@ erDiagram
     CHARACTERS ||--o| MEMORIES : "scope_type=character"
     SESSIONS ||--o| MEMORIES : "scope_type=director 会话"
     CHARACTERS ||--o{ CHARACTER_IMAGES : "对话背景图（至多 5 张）"
+    USER_PROFILE ||--o{ CHARACTERS : "预设被角色绑定（profile_id）"
 ```
 
 `memories` 是按 scope 唯一的单行滚动摘要：一个角色（或一个自由会话）至多一条记忆记录，压缩时原地更新。
 
-`user_profile`（我的设定）与 `world`（世界设定）是两张**独立的全局单行表**，不与任何角色/会话建立外键：它们对所有会话生效，因此画不进上面这张关系图。
+`user_profile`（我的设定）与 `world`（世界设定）是两张**独立的全局单行表**，不与任何角色/会话建立外键：它们对所有会话生效。唯一的例外是 `characters.profile_id` 指向 `user_profile` 里的某条**预设**（`id>1`）——那是"这个角色用哪份身份"，一份预设可以被多个角色同时引用（见 2.3）。
 
 ### 4.2 表结构
 
@@ -332,7 +345,8 @@ CREATE TABLE characters (
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
     avatar       TEXT NOT NULL DEFAULT '',  -- 自定义头像的 data URL；空串 = 用姓名首字占位
-    locked       INTEGER NOT NULL DEFAULT 0 -- 1 = 探索模式：后三个字段对用户隐藏且不可改
+    locked       INTEGER NOT NULL DEFAULT 0, -- 1 = 探索模式：后三个字段对用户隐藏且不可改
+    profile_id   INTEGER REFERENCES user_profile(id) -- 绑定的"我的设定"预设（NULL = 不绑定），见 2.3
 );
 
 CREATE TABLE user_profile (          -- 我的设定：id=1 当前使用，id>1 是预设
@@ -413,9 +427,9 @@ CREATE INDEX idx_character_images ON character_images(character_id, position, id
 - **`app_settings` 单行表存运行时设置 + 界面偏好**：模型选择写进数据库，切换后重启仍生效；`config.yaml` 的模型仅作首次初始化默认值。压缩用的模型也在此表，可随时单独更换。**界面偏好（`disable_thinking`）与模型选择同表**：好处是"读设置"只查一行、不必再查第二张表；代价是以后每加一个偏好都要加列，届时要按下面那条例外流程做一次性维护。
 - **`sessions.title_auto` 而非比对标题字符串**：会话是否还能被自动命名由独立字段记录，不用 `title == '新会话'` 这种魔法值判断——用户完全可能把会话真命名为"新会话"。创建会话时未填标题才置 1，用户重命名即置 0，因此每个会话至多被自动命名一次，且永不覆盖用户的手动命名。
 - **`world.terms` 用一列 JSON，而不是另开一张词条表**：词库是"整体读写、有序、可增删"的列表，没有"按名词单独查询"的需求，一次 UPDATE 就能整体保存；读写的形状规则集中在一处（`_parse_terms` / `write_world`），空名词行也在那里统一丢弃。解析失败（手改过库）时退回空列表：词库只是锦上添花，不该让整次生成失败。
-- **新功能优先开新表，而不是给已有表加列**：`CREATE TABLE IF NOT EXISTS` 对**已有库**也会把新表建出来，加列则不会（见下一条），所以加列会逼着用户删库重建，加表不会。世界设定就是照这条做的。
+- **新功能优先开新表，而不是给已有表加列**：`CREATE TABLE IF NOT EXISTS` 对**已有库**也会把新表建出来，加列则要额外登记一次迁移（见下一条），所以能开新表就开新表。世界设定就是照这条做的。
 - **`avatar` 存在角色表里而不是当文件存**：图片跟着数据库走，备份/恢复才等于"全部数据"。
-- **不做旧库补列**：`CREATE TABLE IF NOT EXISTS` 只建新表、不会改已存在的表，所以表结构一改，旧库就会缺列。开发阶段不做迁移——直接删掉 `data/` 重建即可（`init_db()` 只负责建表）。改表结构时不再写 `ALTER TABLE` 之类的兼容代码，也就没有"存量数据如何处置"这类分支要维护。**三次例外**都发生在「表结构本身挡路」时，做法都是先备份、再用一次性维护脚本：给 `characters` 加 `locked` 列（）；把 `user_profile` 的 `CHECK(id=1)` 去掉以便存预设（）；把 `app_prefs` 并入 `app_settings`（）。应用本身仍然没有任何迁移代码。
+- **加列必须登记，旧库靠 `_COLUMN_MIGRATIONS` 幂等补上**：`CREATE TABLE IF NOT EXISTS` 只建新表、不会改已存在的表，所以给已有表加的列，新库由 `SCHEMA` 直接建出来、旧库要在 `database._COLUMN_MIGRATIONS` 里登记一行（`_create_schema()` 启动时先 `PRAGMA table_info` 查缺哪列，缺了才 `ALTER TABLE … ADD COLUMN`）。**漏登记的后果是"老库上那一列永远不存在"**，于是删库重建还是唯一的补救办法。只登记加列——改类型 / 删列 / 改约束 SQLite 不支持，仍按 9.3 的重建流程走。目前登记的是 `characters.profile_id`（预设绑定，见 2.3）。
 
 ### 4.3 长期记忆的 scope 规则
 
@@ -797,10 +811,10 @@ def parse_output(mode: str, raw: str) -> tuple[str | None, str]:
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/characters` | 角色列表（含每个角色的会话数）；锁定角色不含那三个隐藏字段 |
-| POST | `/api/characters` | 创建角色：`{name, appearance, personality, speech_style, backstory, avatar, draft_id?}`；带 `draft_id` 时说明这份来自模型生成的草稿，**锁不锁定由草稿决定**（探索模式还会忽略请求体里那三个字段，以草稿为准） |
+| POST | `/api/characters` | 创建角色：`{name, appearance, personality, speech_style, backstory, avatar, profile_id?, draft_id?}`；带 `draft_id` 时说明这份来自模型生成的草稿，**锁不锁定由草稿决定**（探索模式还会忽略请求体里那三个字段，以草稿为准）。`profile_id` 是绑定的"我的设定"预设（见 2.3），不传就是不绑定 |
 | POST | `/api/characters/generate` | 让模型生成角色：`{hint?, mode}`，`mode` 为 `open`/`explore`。返回 `{draft_id, mode, locked, ...}`——开放模式回全部五项，探索模式**只回姓名与外观**（另三项留在服务端草稿里，前端拿不到）。生成失败（连不上 Ollama / 模型没给出姓名）返回 502 |
 | GET | `/api/characters/{id}` | 角色详情；锁定时不含那三个隐藏字段 |
-| PUT | `/api/characters/{id}` | 更新角色设定；**锁定时忽略**那三个字段（只更新姓名/外观/头像），避免整体提交的表单把它们清空 |
+| PUT | `/api/characters/{id}` | 更新角色设定；**锁定时忽略**那三个字段（只更新姓名/外观/头像），避免整体提交的表单把它们清空。`profile_id` 用 `model_fields_set` 区分三种意图：**没带这一项 = 不改绑定**（右侧面板保存角色设定时提交的表单里就没有它，不能被当成解绑）、显式 `null` = 解绑、`id>1` = 绑定该预设；不是已存在的预设返回 400。绑定**不跟着锁定走**（锁的是角色的隐藏设定，"我用哪份身份"是用户自己的） |
 | POST | `/api/characters/{id}/unlock` | 公开角色设定：永久取消锁定（单向，没有反向操作），返回完整角色 |
 | DELETE | `/api/characters/{id}` | 删除角色（记忆删除，会话保留但失效，背景图级联删除） |
 | GET | `/api/characters/{id}/backgrounds` | 该角色的对话背景图 `{images, max}`；不随角色列表下发 |
@@ -861,10 +875,10 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 | GET | `/api/gen-settings` | 生成要求表单定义与默认值 `{fields, defaults}`，前端据此动态渲染面板表单；自由文本字段带 `max`（字数上限），前端据此设 `maxlength` 与右下角计数 |
 | GET | `/api/profile` | 用户本人的设定 `{name, identity, appearance, avatar}` |
 | PUT | `/api/profile` | 整体覆盖保存（表单就是整体提交的）；全部可选、空串表示不填；头像沿用角色的白名单校验 |
-| GET | `/api/profile/presets` | 已保存的预设列表（新的在前），每项含头像 |
-| POST | `/api/profile/presets` | 把当前表单存成一条**新**预设；名字为空返回 400 |
-| PUT | `/api/profile/presets/{id}` | 用弹窗里的表单**覆盖**已有预设（「编辑预设…」）；`id<=1` 或不存在返回 404 |
-| DELETE | `/api/profile/presets/{id}` | 删除一条预设（`id<=1` 是当前设定本身，返回 404） |
+| GET | `/api/profile/presets` | 已保存的预设列表（新的在前），每项含头像 + `characters`（绑定了这条预设的角色 `[{id, name}]`，见 2.3；只用于显示"这条预设给了哪些角色"，改绑在角色那侧） |
+| POST | `/api/profile/presets` | 把当前表单存成一条**新**预设；名字为空返回 400。新预设默认不绑定任何角色 |
+| PUT | `/api/profile/presets/{id}` | 用弹窗里的表单**覆盖**已有预设（「编辑预设…」）；`id<=1` 或不存在返回 404。不影响绑定关系 |
+| DELETE | `/api/profile/presets/{id}` | 删除一条预设（`id<=1` 是当前设定本身，返回 404）；引用它的角色一并解绑 |
 | GET | `/api/world` | 世界设定 `{name, description, rules, terms:[{term, meaning}]}`（全局一份，见 2.4） |
 | PUT | `/api/world` | 整体覆盖保存；四项全可选；文本 strip 与"丢掉名词为空的行"在 `database.write_world` 里统一做，返回保存后的结果（前端据此刷新表单，空词条会自己消失） |
 | GET | `/api/limits` | 各输入框的字数上限表（`app/limits.py` 的 `LIMITS`）。前端设 `maxlength` 与实时计数用，**数字只写在这一处** |
@@ -905,6 +919,7 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 - **角色新建/编辑弹窗（`.modal.char-modal`）**：与消息编辑弹窗同宽（780px）——它要同时放生成区、头像、背景缩略图和五个设定框，560px 下每个设定框只有两行高，写一段背景故事就得来回滚。弹窗内的 `input`/`textarea` 由 `.modal.char-modal .field ...` 单独给足高度（文本框 104px 起、背景故事 148px 起，`rows` 也相应提到 4/6）；**刻意只作用于弹窗**，右侧面板里同样的 `.field` 不跟着变——那里是 330px 的窄栏，框太高反而看不到全貌。
 - **编辑弹窗（居中固定）**：点"编辑"按钮弹出全屏遮罩、居中显示的对话框（`.modal.edit-modal`，宽 **780px**，窄窗口下被 `max-width: calc(100vw - 40px)` 收住），宽度固定，不跟着消息长短变化，也不会把该条消息与上下文一起挤走。两个输入框最小高度 140px，打开与输入时按内容自动撑高（弹窗内上限 420px，超出后框内滚动）。点遮罩或按 Esc 取消，不额外弹确认框。注意编辑框的 `textarea` 必须显式声明样式——全局 `textarea` 规则已收窄到 `.input-row`，不写就会退化成浏览器默认的细边框小字号多行框。**两处排版陷阱**：变体宽度必须写成 `.modal.edit-modal`（否则被文件后部的基础 `.modal` 覆盖），操作行的按键要 `flex: none`（否则窄宽度下中文会被挤成一个字一行）。**字段区包在 `.modal-body` 里**（弹窗里唯一可滚动的一层），`.edit-actions` 与 `.modal-actions` 留在它外面钉在弹窗底部。
 - **角色弹窗里的对话背景（`.bg-pick`）**：缩略图行（`.bg-thumb`，92×62，**可拖动排序**：左上角序号、右上角 ✕ 逐张删除、底部 `‹`/`›` 前移后移，两端置灰）+ 虚线"＋"格（`.bg-add`，尺寸与缩略图一致），满了就不显示添加格；计数用服务端返回的上限 `bgMax`。多选一次可加多张，超出余量的会被忽略并提示。一次处理多张大图时按钮变为"处理中…"并禁用，且每张之间让出主线程，界面不至于卡死。缩略图内的 `<img>` 必须 `draggable="false"`，否则原生图片拖拽会接管指针、外部 div 的 `dragstart` 收不到事件。
+- **预设绑定角色的界面分两处**（规则见 2.3）：**改绑**只在「编辑角色」弹窗底部那一项 `.field-bind` 下拉里（`我的身份预设`，选项是"不绑定（不用预设）" + 各预设名）；它与上面的姓名/外观/性格/背景用一条虚线隔开——那不是角色设定本身，而是"我用哪份身份"。**显示**在两个预设弹窗里：左列表每项第三行 `.preset-item-bind`（"角色：X、Y"或"角色：未绑定"）、右详情多一行"绑定角色"（编辑预设弹窗里那行还写明"在「编辑角色」里选"）。打开会话与保存角色设定后由 `syncCharacterProfile()` 校准"当前使用的设定"，它走的就是 `PUT /api/profile`——与「载入预设」共用 `applyPreset()` 那条"立即生效"的路径。**`profile_id` 只加在 `charModal.form` 里，不加进 `emptyCharForm()`**：右侧面板的 `charForm` 用的是同一个工厂函数，多带一个 `null` 就等于"一保存角色设定就把绑定解绑"。
 - **头像裁剪弹窗（叠加层）**：选完图片通过校验后弹出，`z-index` 高于角色弹窗（`.crop-mask` 1200 > `.modal-mask` 1000），所以它叠在角色编辑之上而不是替换它。内含固定方形取景框（280px，`overflow: hidden`，框内所见即所得）+ 缩放滑杆 + 复位按钮；图片用 `transform: translate() scale()` 定位，`max-width: none` 必写（否则会被压回容器宽度、裁剪换算全错），并设 `touch-action: none` 让触屏拖动不被页面滚动抢走、`draggable="false"` 避免原生图片拖拽接管指针。Esc 优先关它而不是底下的角色弹窗。取景框边界用 **2px `outline`（强调蓝）** 画出——白底图片若没有这圈线，框边就与弹窗白底糊在一起、看不出裁到哪里；用 `outline` 而不是 `border` 是因为全局 `box-sizing: border-box` 会让 border 把可见区从 280px 压到 276px，而换算按 280px 算，框内所见与实际裁剪就会差几像素。仅当取样区域小于输出边长时，弹窗里才出现一行"会被放大、可能偏糊"的提示。
 - **消息区**：滚动容器（`.chat`）之外有一层背景（`.chat-bg`，`contain` 居中），所以滚消息时背景不动；导演模式/未选会话/角色已删除时不渲染。**有 ≥1 张背景时**底部中央浮一个 `‹ n / 总 ›` 胶囊，右端还有「关闭背景」键（关掉后文案变「显示背景」）；单张时两个翻页键置灰，并给消息区补下边距让位。**聊天与沉浸两种模式**下消息两侧各有头像列（`.msg-side` + `.avatar.lg`，64px 方形）：assistant 的列在气泡左侧、user 的列在气泡右侧（DOM 里后者排在 `bubble-wrap` 之后，靠 `.msg.user` 的 `justify-content: flex-end` 顶到右边）；用户那一列只在至少设了名字或头像时渲染（`showUserSide`），否则会留一个空白列。头像是自定义图片时用 `<img>` 铺满并 `object-fit: cover` 裁切，没上传则回落到名字首字。**导演模式没有名字也没有头像列**。气泡正上方是 `.msg-head` 一行：**说话人名字 + 发送时间**（`.msg-name` + `.msg-time`，user 侧整行靠右、与气泡右边缘对齐）；导演模式两边都没名字，那一行就只剩时间。两侧的顺序是**镜像**的：模型消息是「名字 + 时间」、用户消息是「时间 + 名字」（`flex-direction: row-reverse`）。气泡到头像的间距两侧统一 12px（两条规则写在一起，不会漏掉某一侧）。消息不显示「已编辑」角标（`messages.edited` 字段照常写，只是不渲染）。时间取 `created_at` 的时分秒，流式占位那条还没有 `created_at`，所以它不显示时间。头像放大到 64px 后，短消息那一行的高度会被头像撑到 64px，消息间距随之变大——这是放大头像的必然代价，不是排版错误。`scenario` 渲染为独立斜体块并带"情境"小标签。气泡宽度由外层 `bubble-wrap` 单独约束（`min(80%, 680px)`），内层 `.bubble` 只写 `max-width: 100%`——两层都写百分比会二次收缩，短消息会被强行折行。**两侧气泡是同一种白底 + 同一条边框**：用户消息原来用强调色实底，长段文字读起来比白底累，也和助手那一侧不像同一个界面；现在只靠"靠左还是靠右"与下方缺角的方向（`border-bottom-left/right-radius: 4px`）区分是谁说的。已归档消息折叠为"已归档 N 条（已存入记忆）"，点击展开。
 - **消息操作**：hover 消息显示操作条——复制 / 编辑 / 删除（单条或"删除此处之后"）/ 重新生成（用户消息与 assistant 消息都有）。这四个键**自带文字，不再加悬停提示**（重复且噪音）；气泡本身也不再绑双击进编辑（"看不见的入口"与旁边的「编辑」按钮重复）。删除选项用一个绝对定位的小菜单承载，**点其他任意位置或按 Esc 即关闭**（文档级 click/keydown 监听 + 按钮与菜单上的 `stopPropagation`）。角色已删除的会话只可查看，"重新生成"按钮不再渲染（输入框本就在 `orphanActive` 时禁用），避免点下去才发现不能生成。
@@ -929,7 +944,7 @@ event: error     data: {"message": "Ollama 连接失败"}   # 中断时发送并
 ### 7.3 前端技术约定
 
 - **Vue 3 + Vite 构建**：源码在 `frontend/`（`index.html` 是入口、`src/` 放脚本与样式），`npm run build` 产物落到 `app/static/`（`index.html` + `assets/` 带哈希文件名），由 FastAPI 直接托管。**产物提交进仓库**，所以运行应用不需要 Node；`start.bat` 检测到 `frontend/node_modules` 与 Node 时会先顺手重建一次。
-- **拆成单文件组件后的文件布局**：`src/store.js` 只是 **barrel**（19 行：import 各领域模块并 re-export，组件里的 `import { store } from "../store.js"` 不用改）；逻辑按领域分在 `src/store/` 下：`state.js`（唯一的 reactive 状态 + `setChatBox`）、`helpers.js`（纯常量与纯函数）、`api.js`（请求封装 / SSE / 初始化 / 模型与思考开关 / 侦听器与生命周期）、`session.js`、`chat.js`、`search.js`、`panel.js`、`character.js`、`profile.js`、`ui.js`；`src/composables/` 放与具体界面无关的复用逻辑（目前只有弹窗关闭判定的 `maskClose.js`）。`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（标签栏 + 5 个 `.panel-tab-pane` 外壳 + 底部保存区，85 行）/ `panes/` 下的 5 个标签页内容 / `modals/` 下的 7 个弹窗（角色 / 新建会话 / 确认 / 编辑消息 / 裁剪 / 编辑预设 / 载入预设）。**"一次只显示一个标签"的 v-if/v-show 留在 Panel.vue**，pane 组件只负责内容——这样切换逻辑与 `panel-tab-pane` 结构都在一处，测试断言与样式都不受影响。
+- **拆成单文件组件后的文件布局**：`src/store.js` 只是 **barrel**（19 行：import 各领域模块并 re-export，组件里的 `import { store } from "../store.js"` 不用改）；逻辑按领域分在 `src/store/` 下：`state.js`（唯一的 reactive 状态 + `setChatBox`）、`helpers.js`（纯常量与纯函数）、`api.js`（请求封装 / SSE / 初始化 / 模型与思考开关 / 侦听器与生命周期）、`session.js`、`chat.js`、`search.js`、`panel.js`、`character.js`、`profile.js`、`ui.js`；`src/composables/` 放与具体界面无关的复用逻辑（弹窗关闭判定的 `maskClose.js`、悬停提示指令的 `hint.js`）。`src/App.vue` 只留布局骨架（`.main` / `.work` / `.work-main` 三层容器）与生命周期；`src/components/` 按界面区域分：`SideBar` / `TopBar` / `ChatArea` / `MessageItem` / `InputBar` / `Panel`（标签栏 + 5 个 `.panel-tab-pane` 外壳 + 底部保存区，85 行）/ `panes/` 下的 5 个标签页内容 / `modals/` 下的 7 个弹窗（角色 / 新建会话 / 确认 / 编辑消息 / 裁剪 / 编辑预设 / 载入预设）。**"一次只显示一个标签"的 v-if/v-show 留在 Panel.vue**，pane 组件只负责内容——这样切换逻辑与 `panel-tab-pane` 结构都在一处，测试断言与样式都不受影响。
 - **store 的依赖是星形的**：每个领域模块只 `import { store } from "./state.js"`（外加自己用到的 helpers 与 vue 的具名导出），**彼此不互相 import**，所以结构上不可能出现循环依赖；跨领域调用一律走 `store.xxx`（运行时才解析）。状态集中在 `state.js`（"有哪些状态"只看一个文件），行为按功能分文件（"做什么"按领域找）。**`let` 声明的可变私有状态留在唯一使用它的那个模块里**（如 `cropImage` 在 `character.js`）——它不能被 import：ESM 不允许给导入的绑定赋值（打包器会报 `ASSIGN_TO_IMPORT`）。
 - **组件怎么拿状态**：每个组件 `<script setup>` 里 `import { store } from "../store.js"`，用 `const { … } = toRefs(store)` 把**自己模板用到**的成员暴露成 setup 绑定，方法再用 `const { … } = store` 解构（函数不是响应式的）。这样**模板里的表达式与原文件逐字一致**——不需要给几百个引用加 `store.` 前缀，拆分因此可以逐行对照；同时依赖仍是显式的：看组件开头就知道它用了哪些状态。漏声明的后果是模板拿到 `undefined`（列表为空、按钮点了没反应），所以 `tests/test_app_js.py` 有一条守卫逐个组件比对"模板引用到的 store 成员 ⊆ 该文件声明过的绑定"。
 - **不使用 Pinia**：单一 store 对象 + 组合式 API 足够这个体量，省一个依赖。
@@ -1076,10 +1091,11 @@ data_dir: ./data                  # 数据库目录，直接指定
 - **生成要求的字段只在 `app/prompts.py` 的 `FIELDS` / `DEFAULT_SETTINGS` 定义**，表单、提示词渲染、会话级 JSON 都从这里来；会话里遗留的旧键既不渲染也不提交，下次保存自然消失。
 - **模式定义只在前端 `store/helpers.js` 的 `MODES`**（标签与"是否需要角色"），后端只认 key 字符串。
 - 提示词里的段落名（`# 世界设定`、`# 与你对话的人`…）与文档、代码保持一致，便于对照排查。
+- **"不传 = 不改"的可选字段靠 `model_fields_set` 区分"没带这一项"与"显式传 null"**：右侧面板保存角色设定时提交的是面板表单，里面**没有** `profile_id`，若把"没带"当成 `None`，一保存角色就会把身份预设解绑（见 6.1）。凡"整体提交的表单 + 个别只在别处维护的字段"都照这个来。
 
 ### 9.3 数据与兼容
 
-- **加表可以，加列要付代价**：`CREATE TABLE IF NOT EXISTS` 对已有库也会建表，所以优先"新功能开新表"；加列不会补到旧库上，必须配一次性迁移脚本或删库重建。
+- **加表可以，加列要登记**：`CREATE TABLE IF NOT EXISTS` 对已有库也会建表，所以优先"新功能开新表"；给已有表加列时，在 `database._COLUMN_MIGRATIONS` 里登记一行（启动时幂等补上，见 4.2），只支持加列。改类型 / 删列 / 改约束才需要重建表或删库重建。
 - **改约束要重建表**（如 `CHECK`）：走"建新表 → `INSERT … SELECT` 映射旧值 → `DROP` → `RENAME`"，并在 `PRAGMA foreign_keys=OFF` 下的**单事务**里完成，避免外键级联删掉子表数据；完事跑一遍 `PRAGMA foreign_key_check`。
 - **库文件不见了要能自愈**：`database.ensure_db()` 在每次 `connect()` 前检查，文件缺失或 0 字节就重建（含三张单行表的初始行）——运行中删掉 `data/` 不该让整个界面变成"连不上后端"。
 - **偏好与设置同表**：`app_settings` 单行表装模型选择与界面偏好；`config.yaml` 的值只是首次初始化的默认值，运行时以数据库为准。

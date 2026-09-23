@@ -29,7 +29,7 @@ run_case("keep-inner-punct", _clean("雨夜,书店", 12), "雨夜,书店")
 
 
 # ---- 建表 ----
-# 不做旧库补列（开发阶段直接删库重建），这里只确认 SCHEMA 能在空库上直接建起来
+# 老库补列走 _COLUMN_MIGRATIONS（见文件末尾的用例），这里先确认 SCHEMA 能在空库上直接建起来
 from app.database import SCHEMA  # noqa: E402
 
 # 用工作区里的临时目录而不是 tempfile.TemporaryDirectory()：系统临时目录在受限沙箱下
@@ -51,6 +51,8 @@ try:
     assert "title_auto" in {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
     columns = {r[1] for r in con.execute("PRAGMA table_info(characters)")}
     assert {"avatar", "locked"} <= columns, f"characters 缺字段：{sorted(columns)}"
+    # 「我的设定」绑定：一份预设可以被多个角色共用，所以这一列在角色侧（DEVELOPMENT §2.3）
+    assert "profile_id" in columns, f"characters 缺 profile_id：{sorted(columns)}"
     settings_columns = {r[1] for r in con.execute("PRAGMA table_info(app_settings)")}
     assert "disable_thinking" in settings_columns, f"app_settings 缺字段：{sorted(settings_columns)}"
     con.close()
@@ -100,5 +102,38 @@ try:
         con.close()
 finally:
     shutil.rmtree(tmp2, ignore_errors=True)
+
+
+# ---- 老库补列：新增列必须能被已有库补上（DEVELOPMENT §4.2 数据与兼容） ----
+# 建表是 CREATE TABLE IF NOT EXISTS：老库的表已经在了，新列不会自己长出来。
+# 这里造一个"老结构"的 characters（没有 profile_id）再 init_db，确认列被补上且老数据还在。
+tmp3 = Path(__file__).resolve().parent.parent / ".test_naming_tmp3"
+shutil.rmtree(tmp3, ignore_errors=True)
+tmp3.mkdir()
+try:
+    con = sqlite3.connect(tmp3 / db.DB_FILENAME)
+    con.executescript(
+        "CREATE TABLE characters (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+        "created_at TEXT NOT NULL, updated_at TEXT NOT NULL);"
+    )
+    con.execute("INSERT INTO characters(name, created_at, updated_at) VALUES('老角色','t','t')")
+    con.commit()
+    con.close()
+    db.init_db(str(tmp3), "默认模型", "")
+    con = db.connect()
+    try:
+        assert "profile_id" in {r[1] for r in con.execute("PRAGMA table_info(characters)")}
+        rows = con.execute("SELECT name, profile_id FROM characters").fetchall()
+        assert [(r["name"], r["profile_id"]) for r in rows] == [("老角色", None)], rows
+    finally:
+        con.close()
+    # 幂等：再补一次不该报错（列已存在就该跳过）
+    con = db.connect()
+    try:
+        db._apply_column_migrations(con)
+    finally:
+        con.close()
+finally:
+    shutil.rmtree(tmp3, ignore_errors=True)
 
 print("naming._clean 与建表用例全部通过")

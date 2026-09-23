@@ -18,6 +18,7 @@
             <span class="preset-item-text">
               <span class="preset-item-name">{{ p.name }}</span>
               <span class="preset-item-sub">{{ p.identity || "（没填身份）" }}</span>
+              <span class="preset-item-bind">角色：{{ presetBindLabel(p) }}</span>
             </span>
           </button>
         </div>
@@ -58,6 +59,9 @@
           </div>
         </label>
         <p v-if="presetModal.saveError" class="avatar-error">{{ presetModal.saveError }}</p>
+        <!-- 绑定只能在角色那侧改：一份预设可以给多个角色用，所以"哪些角色用它"
+             是角色的属性而不是预设的属性，这里只显示 -->
+        <p class="hint">绑定角色：{{ presetBindLabel(picked) }}。在「编辑角色」里选这个角色用哪份预设。</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -72,7 +76,7 @@
 </template>
 
 <script setup>
-import { toRefs } from "vue";
+import { computed, toRefs } from "vue";
 import { store } from "../../store.js";
 import { useMaskClose } from "../../composables/maskClose.js";
 
@@ -84,6 +88,11 @@ const {
   profilePresets,
 } = toRefs(store);
 
+// 正在编辑的这条（只用来显示它绑定了哪些角色）
+const picked = computed(() =>
+  store.profilePresets.find((p) => p.id === store.presetModal.id) || null
+);
+
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {
   clearAvatar,
@@ -93,6 +102,7 @@ const {
   isNear,
   len,
   pickAvatar,
+  presetBindLabel,
   savePresetModal,
 } = store;
 

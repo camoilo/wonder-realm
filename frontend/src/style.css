@@ -1386,6 +1386,20 @@ mark.search-hit.current {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 列表第三行：这条预设绑定了哪些角色（"身份跟着角色走"，见 DEVELOPMENT §2.3） */
+.preset-item-bind {
+  font-size: 11px;
+  color: var(--accent-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 角色弹窗里那一项绑定下拉：它不属于角色设定本身（是"我用哪份身份"），
+   用一条虚线跟上面的姓名/外观/性格隔开 */
+.field-bind {
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
 .preset-detail { flex: 1 1 auto; min-width: 0; }
 .preset-detail dl { margin: 10px 0 0; }
 .preset-detail dt {

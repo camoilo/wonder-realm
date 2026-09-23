@@ -275,6 +275,8 @@ Object.assign(store, {
   openCharacterModal(c = null) {
     store.avatarError = ""; // 换一个角色就清掉上一次的提示
     store.bgError = "";
+    // 绑定下拉要列出所有预设：没加载过（或一条都没有）就顺手拉一次
+    if (!store.profilePresets.length) store.loadPresets();
     if (c) {
       store.charModal = {
         ...emptyCharModal(),
@@ -288,6 +290,7 @@ Object.assign(store, {
           backstory: c.backstory || "",
           avatar: c.avatar || "",
           backgrounds: [], // 背景图不随角色列表下发，下面单独取
+          profile_id: c.profile_id ?? null, // 这个角色绑定的「我的设定」预设
         },
         locked: !!c.locked,
       };
@@ -408,6 +411,8 @@ Object.assign(store, {
     // 角色可能刚被保存或删除，背景图跟着刷新（没有角色就清空）
     if (store.activeChar) await store.loadBackgrounds(store.activeChar.id);
     else store.resetBackgrounds();
+    // 绑定可能刚改过：把"我的身份"重新对齐到当前角色（见 DEVELOPMENT §2.3 我的设定）
+    await store.syncCharacterProfile();
   },
 });
 

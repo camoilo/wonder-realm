@@ -4,10 +4,13 @@ import httpx
 from .. import character_gen
 from ..character_gen import HIDDEN_FIELDS, public_character
 from ..config import get_config
-from ..database import get_db, now
+from ..database import get_db, now, read_profile_by_id
 from ..schemas import BACKGROUND_MAX_COUNT, BackgroundsIn, CharacterCreateIn, CharacterIn, GenerateIn
 
 router = APIRouter(prefix="/api")
+
+# 请求体里没提 profile_id 时的占位：与 None（显式解绑）区分开
+UNSET = object()
 
 
 def _get_character(db, cid: int):
@@ -15,6 +18,22 @@ def _get_character(db, cid: int):
     if not row:
         raise HTTPException(404, "角色不存在")
     return row
+
+
+def _profile_binding(body) -> object:
+    """从请求体里取出「我的设定」的绑定：UNSET = 这一项不用动。
+
+    绑定必须在角色侧改（见 DEVELOPMENT §2.3 我的设定）：一个角色至多一份身份，
+    一份预设可以被多个角色共用。这里只认已存在的预设，id<=1 是"当前设定"本身，不是预设。
+    """
+    if "profile_id" not in body.model_fields_set:
+        return UNSET
+    pid = body.profile_id
+    if pid is None:
+        return None
+    if pid <= 1 or read_profile_by_id(pid) is None:
+        raise HTTPException(400, "要绑定的「我的设定」预设不存在")
+    return pid
 
 
 @router.get("/characters")
@@ -67,6 +86,7 @@ def create_character(body: CharacterCreateIn, db=Depends(get_db)):
     draft = character_gen.take_draft(body.draft_id) if body.draft_id else None
     if body.draft_id and draft is None:
         raise HTTPException(400, "这次生成的结果已经失效，请重新生成")
+    binding = _profile_binding(body)
 
     if draft and draft["mode"] == "explore":
         # 探索模式：三个隐藏字段以草稿为准，请求体里那几个空串一律不算数
@@ -78,8 +98,8 @@ def create_character(body: CharacterCreateIn, db=Depends(get_db)):
         locked = 0
 
     cur = db.execute(
-        "INSERT INTO characters(name, appearance, personality, speech_style, backstory, avatar, locked, created_at, updated_at) "
-        "VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO characters(name, appearance, personality, speech_style, backstory, avatar, locked, profile_id, "
+        "created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
         (
             body.name.strip(),
             body.appearance.strip(),
@@ -88,6 +108,7 @@ def create_character(body: CharacterCreateIn, db=Depends(get_db)):
             fields["backstory"],
             body.avatar,
             locked,
+            None if binding is UNSET else binding,
             now(),
             now(),
         ),
@@ -104,6 +125,7 @@ def get_character(cid: int, db=Depends(get_db)):
 @router.put("/characters/{cid}")
 def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
     row = _get_character(db, cid)
+    binding = _profile_binding(body)
     if row["locked"]:
         # 锁定时只允许改公开字段：请求体里那三个字段（前端压根没有值，是空串）
         # 一律忽略，否则面板一保存就把隐藏设定清空了
@@ -126,6 +148,9 @@ def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
                 cid,
             ),
         )
+    # 绑定不跟着锁定走：锁的是角色的隐藏设定，而"我用哪份身份"是用户自己的东西
+    if binding is not UNSET:
+        db.execute("UPDATE characters SET profile_id=? WHERE id=?", (binding, cid))
     db.commit()
     return public_character(_get_character(db, cid))
 

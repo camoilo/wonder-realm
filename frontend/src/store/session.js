@@ -64,6 +64,8 @@ Object.assign(store, {
       store.activeSessionId = id;
       store.activeByMode[session.mode] = id;
       store.messages = await store.api(`/api/sessions/${id}/messages`);
+      // "我的身份"跟着角色走：这个角色绑了哪份预设就套用哪份（没绑就不用预设）
+      await store.syncCharacterProfile();
       // 背景图单独取（只有聊天与沉浸两种模式有）
       if (session.character_id) await store.loadBackgrounds(session.character_id);
       else store.resetBackgrounds();

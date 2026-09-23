@@ -41,6 +41,11 @@ class CharacterIn(BaseModel):
     speech_style: str = Field(default="", max_length=LIMITS["speech_style"])
     backstory: str = Field(default="", max_length=LIMITS["backstory"])
     avatar: str = ""
+    # 这个角色用哪份「我的设定」预设（user_profile.id）。None = 不绑定。
+    # 取值必须靠 model_fields_set 区分"没带这一项"和"显式传 null"：右侧面板保存角色设定时
+    # 提交的是面板表单（不含这一项），若把"没带"当成解绑，一保存角色就把绑定清掉了
+    # （见 routes/characters.py 与 DEVELOPMENT §2.3 我的设定）
+    profile_id: int | None = None
 
     @field_validator("avatar")
     @classmethod

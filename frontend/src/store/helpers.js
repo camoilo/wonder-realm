@@ -182,7 +182,9 @@ export const emptyGenerator = () => ({
 export const emptyCharModal = () => ({
   visible: false,
   editingId: null,
-  form: emptyCharForm(),
+  // profile_id 只加在弹窗表单里（不加进 emptyCharForm）：右侧面板那个 charForm 也用它，
+  // 而面板是整体提交的，多带一个 null 就等于"一保存角色设定就把身份预设解绑"
+  form: { ...emptyCharForm(), profile_id: null },
   gen: emptyGenerator(),
   locked: false,
   // 保存失败要在弹窗里说：底部错误条只在会话打开时渲染，新建角色时它根本不在

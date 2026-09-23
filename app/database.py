@@ -17,7 +17,12 @@ CREATE TABLE IF NOT EXISTS characters (
     avatar       TEXT NOT NULL DEFAULT '',
     -- 探索模式：1 = 性格/语言风格/背景故事对用户隐藏且不可改（接口也不下发），
     -- 点击「公开角色设定」后永久置 0。见 character_gen.py 与 DEVELOPMENT §2.2 角色设定
-    locked       INTEGER NOT NULL DEFAULT 0
+    locked       INTEGER NOT NULL DEFAULT 0,
+    -- 这个角色用哪份「我的设定」预设（user_profile.id），NULL = 不绑定。
+    -- 绑定关系**放在角色这一侧**：一条预设可以被多个角色共用（多对一就够了），
+    -- 读法是"身份跟着角色走"（见 DEVELOPMENT §2.3 我的设定）。
+    -- 被引用的预设删掉时由 delete_preset() 把这一列清成 NULL，不会留悬空引用
+    profile_id   INTEGER REFERENCES user_profile(id)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -122,11 +127,29 @@ def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+# 建表用的是 CREATE TABLE IF NOT EXISTS：**老库不会自动长出新列**，所以给已有表新增列时必须
+# 在这里登记一次，否则老库上这一列永远不存在（新库由 SCHEMA 直接建出来）。
+# 只登记"加列"，改类型/删列 SQLite 也不支持——那种情况按 4.2 的例外流程重建。
+_COLUMN_MIGRATIONS = {
+    "characters": {"profile_id": "INTEGER REFERENCES user_profile(id)"},
+}
+
+
+def _apply_column_migrations(con) -> None:
+    """缺哪列补哪列。幂等：已存在的列一律不动。"""
+    for table, columns in _COLUMN_MIGRATIONS.items():
+        have = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns.items():
+            if name not in have:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
 def _create_schema() -> None:
-    """建表 + 三张单行表的初始行。幂等（IF NOT EXISTS / INSERT OR IGNORE），可反复调用。"""
+    """建表 + 补列 + 三张单行表的初始行。幂等（IF NOT EXISTS / INSERT OR IGNORE），可反复调用。"""
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    _apply_column_migrations(con)
     con.execute(
         "INSERT OR IGNORE INTO app_settings(id, model, memory_model, updated_at) VALUES(1, ?, ?, ?)",
         (_DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL, now()),
@@ -142,7 +165,7 @@ def _create_schema() -> None:
 
 
 def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -> None:
-    """建库建表。不做旧库补列：开发阶段直接删掉 data/ 重建即可（见 DEVELOPMENT 4.2）。"""
+    """建库建表（含给老库补列，见 _COLUMN_MIGRATIONS）。"""
     global DB_PATH, _DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL
     _DEFAULT_MODEL = default_model
     _DEFAULT_MEMORY_MODEL = default_memory_model
@@ -271,15 +294,25 @@ _PRESET_COLS = "id, name, identity, appearance, avatar, updated_at"
 
 
 def list_presets() -> list[dict]:
-    """已保存的预设，新的排前面。id=1 是当前设定，不算预设。"""
+    """已保存的预设，新的排前面。id=1 是当前设定，不算预设。
+
+    每条附一个 `characters`：绑定了这条预设的角色（`[{"id", "name"}]`，按 id 升序）。
+    弹窗里要显示"这条预设给了哪些角色"，所以在同一个响应里一次给全，前端不必再拼。
+    """
     con = connect()
     try:
         rows = con.execute(
             f"SELECT {_PRESET_COLS} FROM user_profile WHERE id>1 ORDER BY updated_at DESC, id DESC"
         ).fetchall()
+        bound: dict[int, list[dict]] = {}
+        for r in con.execute(
+            "SELECT id, name, profile_id FROM characters "
+            "WHERE profile_id IS NOT NULL ORDER BY id"
+        ):
+            bound.setdefault(r["profile_id"], []).append({"id": r["id"], "name": r["name"]})
     finally:
         con.close()
-    return [dict(r) for r in rows]
+    return [{**dict(r), "characters": bound.get(r["id"], [])} for r in rows]
 
 
 def add_preset(values: dict) -> dict:
@@ -336,11 +369,16 @@ def update_preset(preset_id: int, values: dict) -> dict | None:
 
 
 def delete_preset(preset_id: int) -> bool:
-    """删除一条预设。id<=1 一律拒绝——那是当前设定本身，不是预设。"""
+    """删除一条预设。id<=1 一律拒绝——那是当前设定本身，不是预设。
+
+    顺手把绑定了它的角色解绑（置 NULL）：这一列没有 ON DELETE 级联，
+    留着悬空 id 的话角色会一直"指着一份不存在的设定"。
+    """
     if preset_id <= 1:
         return False
     con = connect()
     try:
+        con.execute("UPDATE characters SET profile_id=NULL WHERE profile_id=?", (preset_id,))
         cur = con.execute("DELETE FROM user_profile WHERE id=?", (preset_id,))
         con.commit()
         return cur.rowcount > 0

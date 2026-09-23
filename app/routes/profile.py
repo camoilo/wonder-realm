@@ -41,7 +41,11 @@ def update_profile(body: ProfileIn):
 
 @router.get("/profile/presets")
 def get_presets():
-    """已保存的预设（新的在前）。每项就是一份完整设定，含头像。"""
+    """已保存的预设（新的在前）。每项就是一份完整设定（含头像）+ 绑定了它的角色。
+
+    `characters` 只用来显示"这条预设给了哪些角色"；改绑定在角色那侧
+    （`PUT /api/characters/{id}` 带 profile_id），见 DEVELOPMENT §2.3 我的设定。
+    """
     return list_presets()
 
 

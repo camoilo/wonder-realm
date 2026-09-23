@@ -122,6 +122,61 @@ con.commit()
 con.close()
 check("没有预设时列表为空", client.get("/api/profile/presets").json(), [])
 
+# ---- 5. 预设绑定角色（characters.profile_id）----
+# 一份预设可以给多个角色用，绑定记在角色那侧；读法是"身份跟着角色走"（DEVELOPMENT §2.3）
+from app.routes import characters as character_routes  # noqa: E402
+
+app.include_router(character_routes.router)
+
+p_a = client.post("/api/profile/presets", json={"name": "侠客", "identity": "行走江湖"}).json()
+p_b = client.post("/api/profile/presets", json={"name": "学生", "identity": "高二"}).json()
+c1 = client.post("/api/characters", json={"name": "阿岚"}).json()
+c2 = client.post("/api/characters", json={"name": "小满"}).json()
+check("新建角色默认不绑定", (c1["profile_id"], c2["profile_id"]), (None, None))
+
+r = client.put(f"/api/characters/{c1['id']}", json={"name": "阿岚", "profile_id": p_a["id"]})
+check("给角色绑定预设", r.json()["profile_id"], p_a["id"])
+client.put(f"/api/characters/{c2['id']}", json={"name": "小满", "profile_id": p_a["id"]})
+
+by_id = {p["id"]: p for p in client.get("/api/profile/presets").json()}
+check("一条预设可以绑多个角色",
+      [c["name"] for c in by_id[p_a["id"]]["characters"]], ["阿岚", "小满"])
+check("没被绑的预设显示为空", by_id[p_b["id"]]["characters"], [])
+check("角色列表也带绑定",
+      {c["name"]: c["profile_id"] for c in client.get("/api/characters").json()},
+      {"阿岚": p_a["id"], "小满": p_a["id"]})
+
+# 面板保存角色设定时提交的是面板表单（不含 profile_id）——那不能被当成"解绑"
+r = client.put(f"/api/characters/{c1['id']}", json={"name": "阿岚改", "appearance": "黑衣"})
+check("不改绑定就不动它（列表表单没带这一项）", r.json()["profile_id"], p_a["id"])
+r = client.put(f"/api/characters/{c1['id']}", json={"name": "阿岚改", "profile_id": None})
+check("显式传 null 才是解绑", r.json()["profile_id"], None)
+
+check("绑定不存在的预设被拒",
+      client.put(f"/api/characters/{c1['id']}",
+                 json={"name": "阿岚", "profile_id": 999}).status_code, 400)
+check("不能绑到 id=1（那是当前设定，不是预设）",
+      client.put(f"/api/characters/{c1['id']}",
+                 json={"name": "阿岚", "profile_id": 1}).status_code, 400)
+# 锁定只锁角色的隐藏设定，不影响"我用哪份身份"（直接把角色置为锁定的探索模式）
+con = database.connect()
+con.execute("UPDATE characters SET locked=1 WHERE id=?", (c2["id"],))
+con.commit()
+con.close()
+r = client.put(f"/api/characters/{c2['id']}",
+               json={"name": "小满", "profile_id": p_b["id"], "personality": "不该被写进去"})
+check("锁定状态也能改绑定", r.json()["profile_id"], p_b["id"])
+check("锁定状态仍然不写隐藏字段", r.json().get("personality"), None)
+
+# 删掉预设：引用了它的角色要一起解绑，不能留下悬空 id
+check("删除被引用的预设 200", client.delete(f"/api/profile/presets/{p_b['id']}").status_code, 200)
+check("删预设后角色自动解绑",
+      [c["profile_id"] for c in client.get("/api/characters").json() if c["id"] == c2["id"]],
+      [None])
+check("删预设后绑定列表也清空",
+      {p["id"]: p["characters"] for p in client.get("/api/profile/presets").json()},
+      {p_a["id"]: []})
+
 shutil.rmtree(tmp, ignore_errors=True)
 print()
 if FAILED:
