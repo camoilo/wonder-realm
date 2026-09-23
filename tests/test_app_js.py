@@ -418,19 +418,22 @@ check("切换会话时把定义带进面板表单",
 check("定义也进 emptyCharForm（面板与新角色表单都用它）",
       "attr_defs: []," in js, True)
 
-# 浮层：可收纳、覆盖在消息之上、只在选中会话且有属性时出现
-check("浮层组件挂在对话区、且在滚动容器之外",
+# 浮层：可收纳、贴在对话区顶部、只在选中会话且有属性时出现
+check("浮层组件挂在消息列表里（sticky 自己占位）",
       'components/AttrPanel.vue' in VUE_ORDER
-      and html.index("<AttrPanel />") < html.index('<main class="chat"'), True)
-check("浮层绝对定位覆盖在消息之上", ".attr-panel {" in css
-      and "position: absolute;" in css and "z-index: 300;" in css, True)
-check("浮层可收纳（标题行可点、收起后给摘要）",
-      'class="attr-toggle"' in html and "attrsCollapsed = !attrsCollapsed" in html
-      and "attr-summary" in html and ".attr-panel.collapsed" in css, True)
+      and html.index("<AttrPanel />") < html.index('v-for="m in displayMessages"'), True)
+check("浮层用 sticky 贴在对话区顶部", ".attr-panel {" in css
+      and "position: sticky;" in css and "z-index: 300;" in css and "align-self: center;" in css, True)
+check("浮层可收纳（收起时只是一个图标，展开才有标题与内容）",
+      'class="attr-icon"' in html and "attrsCollapsed = false" in html
+      and 'class="attr-toggle"' in html and ".attr-icon {" in css
+      and ".attr-panel.collapsed" in css, True)
 check("浮层只在选中会话 + 聊天/沉浸 + 有值时出现",
       "showAttrPanel = computed" in js and "if (!this.activeSession || this.isDirectorMode) return false;" in js
-      and 'class="chat" :class="{ \'has-attrs\': showAttrPanel }"' in html, True)
-check("浮层出现时给消息让出收起态的高度", ".chat.has-attrs { padding-top: 46px; }" in css, True)
+      and "v-if=\"showAttrPanel\"" in html, True)
+# 让位不靠量高度：sticky 自己就占位（早先按实测高度让位，展开时仍压住第一条消息 51px）
+check("不再靠量高度让位（sticky 自己占位）",
+      "attrPanelH" in js or "ResizeObserver" in js, False)
 check("文字型直接显示文字、百分比型渲染进度条",
       'v-if="a.type === \'percent\'"' in html and 'class="attr-bar-fill"' in html
       and "attrPercent(a) + '%'" in html and 'class="attr-value"' in html, True)

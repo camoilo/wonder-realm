@@ -38,7 +38,7 @@ export const store = reactive({
       charModal: emptyCharModal(),
       // 附加属性编辑里的就地提示（"给「好感」选个类型"这种），与 presetError 同一个路子
       attrError: "",
-      // 对话页顶部那个属性浮层是否收起（见 DEVELOPMENT §2.6）
+      // 对话页顶部那个属性浮层是否收起（展开态显示详细内容，收起态只有一个图标）
       attrsCollapsed: false,
       newSessionModal: { visible: false, characterId: null, worldId: null, title: "" },
       renaming: false,

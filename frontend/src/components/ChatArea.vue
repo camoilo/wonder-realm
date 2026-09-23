@@ -2,10 +2,11 @@
 <div class="chat-area">
       <!-- 背景层放在滚动容器外面，这样滚动消息时背景是静止的 -->
       <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
-      <!-- 附加属性浮层：同样在滚动容器外面，所以它固定在对话页顶部、覆盖在消息之上 -->
-      <AttrPanel />
-      <main class="chat" :class="{ 'has-attrs': showAttrPanel }" ref="chatBox">
+      <main class="chat" ref="chatBox">
       <div class="chat-inner">
+        <!-- 附加属性浮层：sticky，所以它自己在内容流里占位（不遮消息），
+             往下滚时贴在对话区顶部、消息从它下面穿过，见 DEVELOPMENT §2.6 -->
+        <AttrPanel />
         <div v-if="!activeSession" class="empty">
           <div class="empty-icon">&#9998;</div>
           <p>从左侧选择或创建一个会话</p>
@@ -55,7 +56,6 @@ const {
   chatBgUrl,
   displayMessages,
   showArchived,
-  showAttrPanel,
   streamText,
   streaming,
   thinkPhase,

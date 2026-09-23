@@ -395,9 +395,7 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-/* 浮层出现时给消息区让出收起态那一条的高度：这样静止时不会有消息被永久压住，
-   滚动时消息照样从浮层下面穿过（用户要的就是"覆盖在消息之上"），见 DEVELOPMENT §2.6 */
-.chat.has-attrs { padding-top: 46px; }
+/* 浮层自己占位（sticky），所以消息区不需要额外的顶部让位 */
 .chat-inner > .empty { flex: 1; }
 
 .empty {
@@ -1507,15 +1505,18 @@ mark.search-hit.current {
   font-size: 13.5px;
 }
 
-/* 顶部浮层：**覆盖在消息之上**（不占布局），所以挂在滚动容器外面、绝对定位。
-   它是"可收纳"的：点标题行收起，收起后只剩一颗小胶囊 */
+/* 顶部浮层：**sticky** —— 静止时它是内容流里的一项（天然把消息往下推，谁也不遮），
+   往下滚时贴住对话区顶部、消息从它下面穿过，也就是"位于顶部、覆盖在消息之上"。
+   z-index 300 高于消息、低于弹窗遮罩（1000）；align-self 让它按内容宽度居中而不是被
+   拉满整个 860px 栏宽。这样不必量高度，也就不依赖 rAF / ResizeObserver 的回调时机 */
 .attr-panel {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 300; /* 高于消息、低于弹窗遮罩（1000） */
-  max-width: min(560px, calc(100% - 32px));
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  align-self: center;
+  width: max-content;
+  max-width: min(560px, 100%);
+  margin-bottom: 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.94);
@@ -1540,11 +1541,28 @@ mark.search-hit.current {
 }
 .attr-toggle:hover { background: #f0f2f6; }
 .attr-caret { font-size: 11px; }
-/* 收起态就是一颗胶囊：更圆、更矮，只有标题行与一行摘要 */
+/* 收起态就是一颗粒子大小的图标按钮（不显示标题与摘要，摘要只在展开时才有意义） */
 .attr-panel.collapsed {
-  border-radius: 999px;
-  padding: 1px 4px;
+  border-radius: 50%;
+  padding: 0;
 }
+.attr-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--accent-dark);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.attr-icon:hover { background: #f0f2f6; }
 .attr-summary {
   flex: 1;
   min-width: 0;
