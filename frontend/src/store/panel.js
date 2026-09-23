@@ -4,6 +4,7 @@
 // 所以不存在循环依赖；跨领域的调用都走 store.xxx（运行时才解析）。
 import { store } from "./state.js";
 import { computed } from "vue";
+import { flashHint } from "../composables/hint.js";
 import { revertTimers } from "./helpers.js";
 
 Object.assign(store, {
@@ -129,9 +130,14 @@ Object.assign(store, {
     if (window.innerWidth <= 640) store.panelTab = tab;
     else store.togglePanel(tab);
   },
-  // 手机端底部弹层的总开关：更多菜单里的"面板"行（rail 在弹层内部，弹层没开时点不到，
-  // 必须有一个弹层之外的入口）。开关时顺手收起更多菜单，避免两个浮层叠着
+  // 手机端底部弹层的总开关：rail 在弹层内部、弹层没开时点不到，必须有弹层之外的入口。
+  // 开关时顺手收起更多菜单，避免两个浮层叠着。没有会话时面板没有内容可开
+  // （Panel 按 v-if="activeSession" 渲染），点了只会冒出个空遮罩，所以直接提示、不打开
   toggleMobilePanel() {
+    if (!store.activeSession) {
+      flashHint("请先选择或创建一个会话");
+      return;
+    }
     store.mobilePanelOpen = !store.mobilePanelOpen;
     store.mobileMoreOpen = false;
   },

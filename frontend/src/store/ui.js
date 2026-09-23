@@ -86,14 +86,20 @@ Object.assign(store, {
   },
 });
 
-const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+// matchMedia 只在浏览器存在：Node 纯逻辑测试（tests/test_*.mjs）import 时没有 window，
+// 退回 null。applyTheme 只在浏览器里被调用（initTheme/setTheme 来自 App.vue），到那时总有
+const prefersDark = typeof window !== "undefined"
+  ? window.matchMedia("(prefers-color-scheme: dark)")
+  : null;
 
 function applyTheme(mode) {
-  const dark = mode === "dark" || (mode === "auto" && prefersDark.matches);
+  const dark = mode === "dark" || (mode === "auto" && !!prefersDark && prefersDark.matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
-// auto 模式下系统偏好变了就即时跟随，不用重新加载
-prefersDark.addEventListener("change", () => {
-  if (store.theme === "auto") applyTheme("auto");
-});
+// auto 模式下系统偏好变了就即时跟随，不用重新加载（Node 下没有 matchMedia，跳过）
+if (prefersDark) {
+  prefersDark.addEventListener("change", () => {
+    if (store.theme === "auto") applyTheme("auto");
+  });
+}

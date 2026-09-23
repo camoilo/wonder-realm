@@ -625,6 +625,7 @@ _shared_m = re.search(r"\.mode-tip,\s*\.hint-tip\s*\{([^}]*)\}", css)
 _shared_tip = _shared_m.group(1) if _shared_m else ""
 _hint_css = css_rule(".hint-tip")
 check("介绍浮层绝对定位（不改变布局）", "position: absolute;" in _tip, True)
+check("介绍浮层朝上弹（下方是会话列表，向下会遮住会话）", "bottom: calc(100% + 6px);" in _tip, True)
 check("介绍浮层不吃鼠标（否则自己把自己关掉）", "pointer-events: none;" in _shared_tip, True)
 check("浮层的父层可作定位参照", "position: relative;" in css_block(".mode-tabs"), True)
 
@@ -1007,7 +1008,9 @@ check("手机断点下图标栏横排到弹层顶部",
 check("遮罩在根组件（任一浮层打开就显示）",
       'v-if="mobileMask" class="mobile-mask"' in html and '@click="closeMobileLayers"' in html, True)
 check("遮罩桌面隐藏、手机显示",
-      ".mobile-mask,\n.mobile-search-btn," in css and ".mobile-mask { display: block; }" in css, True)
+      ".mobile-mask,\n.mobile-search-btn," in css
+      and ".mobile-mask {\n    position: fixed;\n    inset: 0;" in css
+      and "z-index: 900;" in css and "display: block;" in css, True)
 # store 的移动端状态与方法
 for _key in ("mobileSideOpen", "mobilePanelOpen", "mobileMoreOpen", "mobileSearchOpen"):
     check(f"store 有 {_key}", f"{_key}: false," in store_js, True)
@@ -1017,15 +1020,21 @@ check("closeMobileLayers 在", "closeMobileLayers() {" in store_js, True)
 _tb = dict(zip(VUE_ORDER, vue_sources))["components/TopBar.vue"]
 check("汉堡在手机断点打开抽屉", "@click=\"toggleSide\"" in _tb and "toggleSide() {" in _tb, True)
 check("放大镜与更多入口在", 'mobile-search-btn' in _tb and 'mobile-more-btn' in _tb, True)
+# 面板有顶栏直达入口（不再只藏在更多菜单里）+ 弹层固定高度（标签切换不跳变）
+check("顶栏有面板直达按钮", 'class="icon-btn mobile-panel-btn"' in _tb
+      and "toggleMobilePanel" in _tb and "mobilePanelOpen" in _tb, True)
+check("弹层手机端固定高度", "height: 65vh;" in _mobile, True)
 check("折叠搜索条在（只保留输入/清空/计数，↑↓ 不重复）",
       'class="mobile-search"' in _tb and "mobileSearchOpen" in _tb, True)
 check("更多菜单收纳模型/思考/主题", 'class="mobile-more"' in _tb
       and "mobile-model" in _tb and "mobile-think" in _tb and "mobile-theme" in _tb, True)
 check("更多菜单共用主题切换", "THEME_UI[theme].label" in _tb, True)
-# 底部弹层的入口：弹层没开时 rail 在屏外点不到，必须走更多菜单的"面板"行
-check("更多菜单有面板入口", "mobile-panel-btn" in _tb and "toggleMobilePanel" in _tb, True)
-check("toggleMobilePanel 在 store（开弹层并收起更多菜单）",
-      "toggleMobilePanel() {" in store_js and "store.mobilePanelOpen = !store.mobilePanelOpen;" in store_js, True)
+# 底部弹层的入口：面板走顶栏直达按钮；更多菜单里不再放"面板"行（避免重复入口）
+check("更多菜单不再有面板行（面板走顶栏直达）",
+      'mobile-panel-btn' in _tb and "面板：{{ mobilePanelOpen" not in _tb, True)
+check("toggleMobilePanel 在 store（无会话时提示、不开空遮罩）",
+      "toggleMobilePanel() {" in store_js and "store.mobilePanelOpen = !store.mobilePanelOpen;" in store_js
+      and "flashHint" in store_js, True)
 # 手机端进入会话后抽屉自动收回（openSession 里置 false）
 check("openSession 后手机端关抽屉", "store.mobileSideOpen = false;" in store_js, True)
 # 面板：手机端 mobile-open 绑定 + 图标点击走 onRailClick（只切页）
@@ -1037,7 +1046,17 @@ check("图标点击在手机断点只切页", "onRailClick(tab) {" in store_js
 check("沉浸输入两栏改上下堆叠",
       ".input-row { flex-direction: column; align-items: stretch; }" in _mobile, True)
 check("发送键放大到 44px", "height: 44px;" in _mobile, True)
-check("消息区去头像列", ".msg-side { display: none; }" in _mobile, True)
+check("底部辅助按键收纳（⋯ 展开才显示背景切换/继续/跳底）",
+      ".aux-toggle {" in _mobile
+      and ".inputbar:not(.aux-open) .jump-btn," in _mobile, True)
+check("收纳态情境一起收进⋯（只留话语框＋发送键）",
+      ".inputbar:not(.aux-open) .scenario-field { display: none; }" in _mobile, True)
+check("情境栏不再有独立折叠（统一由⋯收纳键控制）",
+      "scen-fold" not in _input_bar and "scenOpen" not in _input_bar, True)
+check("消息区头像恢复（40px）", ".msg-side { display: flex; }" in _mobile
+      and ".msg-side .avatar.lg { width: 40px; height: 40px;" in _mobile, True)
+check("附加属性浮层手机端收拢", ".attr-panel { font-size: 13px;" in _mobile
+      and ".attr-body { gap: 5px;" in _mobile, True)
 check("气泡放宽近全宽", ".bubble-wrap { max-width: 100%; }" in _mobile, True)
 check("消息操作条手机常显（没有 hover）", ".msg-actions { opacity: 1; }" in _mobile, True)
 check("弹窗手机全屏化", ".modal {\n    width: 100%;" in _mobile

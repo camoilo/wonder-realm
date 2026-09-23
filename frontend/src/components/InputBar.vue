@@ -1,5 +1,5 @@
 <template>
-<footer class="inputbar" v-if="activeSession">
+<footer class="inputbar" :class="{'aux-open': auxOpen}" v-if="activeSession">
       <div class="input-inner">
         <div v-if="orphanActive" class="notice">该会话绑定的角色已删除，仅可查看历史记录</div>
         <div v-if="error" class="error">
@@ -8,8 +8,10 @@
           <button class="dismiss" @click="error = ''">&times;</button>
         </div>
         <div class="input-row">
-          <!-- 沉浸模式：情境（可选）与话语（必选）分两栏并排，与消息编辑弹窗同一套概念。
-               情境那栏只在沉浸模式出现，其它模式保持原来的单框 -->
+          <!-- 沉浸模式：情境（可选）与话语（必填）分两栏并排，与消息编辑弹窗同一套概念。
+               情境那栏只在沉浸模式出现，其它模式保持原来的单框。
+               手机断点整个情境栏由统一收纳键（⋯）控制显隐：收起来时输入区只留话语框＋发送键，
+               展开收纳才显示情境栏（见手机断点的 .inputbar:not(.aux-open) .scenario-field 规则） -->
           <div v-if="isImmersiveMode" class="input-field scenario-field">
             <span class="input-field-label">情境说明（可选）</span>
             <div class="counted">
@@ -54,6 +56,9 @@
                     v-hint="'基于上一条回复继续生成（相当于发送“继续”）'"
                     @click="continueGeneration">继续</button>
             <div class="send-row">
+              <!-- 手机端：背景切换/继续/跳底/情境（沉浸）这些辅助内容收进"⋯"里，桌面断点该按钮隐藏 -->
+              <button class="aux-toggle" :class="{on: auxOpen}" v-hint="auxOpen ? '收起辅助操作' : '展开辅助操作'"
+                      :aria-label="auxOpen ? '收起辅助操作' : '展开辅助操作'" :aria-pressed="auxOpen" @click="auxOpen = !auxOpen">&#8943;</button>
               <button v-if="streaming" class="stop-btn" @click="stop">
                 <span class="stop-square"></span>停止
               </button>
@@ -68,8 +73,11 @@
 </template>
 
 <script setup>
-import { toRefs } from "vue";
+import { ref, toRefs } from "vue";
 import { store } from "../store.js";
+
+// 手机端辅助操作（背景切换/继续/跳底/情境）的收纳开关；桌面断点该按钮被 CSS 隐藏，此值无副作用
+const auxOpen = ref(false);
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {

@@ -62,6 +62,23 @@ function hide(el) {
   hintText.value = "";
 }
 
+// 程序化提示（v-hint 之外的一次性反馈，如无会话时点面板键）：顶栏下方居中，
+// 1.8 秒后自动消失。复用 App.vue 那个全局浮层，不新增 DOM
+let flashTimer = null;
+export function flashHint(text) {
+  if (flashTimer) clearTimeout(flashTimer);
+  current = null;
+  hintText.value = text;
+  hintStyle.value = {
+    left: "50%",
+    top: "calc(64px + var(--sat))",
+    transform: "translateX(-50%)",
+  };
+  flashTimer = setTimeout(() => {
+    if (hintText.value === text) hintText.value = "";
+  }, 1800);
+}
+
 // 滚动或改窗口大小时位置就过时了，直接收起来（比跟着挪更不打扰）
 function hideAll() {
   if (!current) return;

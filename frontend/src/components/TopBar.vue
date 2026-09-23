@@ -48,10 +48,15 @@
                 v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
                 @click="cycleTheme">{{ themeIcon() }}</button>
       </div>
-      <!-- 手机端两个入口：放大镜（折叠搜索条）+ 更多（⋮，收纳模型/思考/主题）。
+      <!-- 手机端三个入口：放大镜（折叠搜索条）+ 面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
            桌面断点由 CSS 隐藏 -->
       <button class="icon-btn mobile-search-btn" aria-label="搜索当前会话" @click="toggleSearch">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+      </button>
+      <button class="icon-btn mobile-panel-btn" :class="{on: mobilePanelOpen}"
+              v-hint="'打开右侧面板'" aria-label="打开右侧面板"
+              :aria-pressed="mobilePanelOpen" @click="toggleMobilePanel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
       </button>
       <button class="icon-btn mobile-more-btn" aria-label="更多设置" @click="toggleMore">&#8942;</button>
       <!-- 折叠搜索条：点放大镜展开，占顶栏一整行 -->
@@ -85,10 +90,6 @@
         <div class="more-row">
           <span class="more-label">主题</span>
           <button class="ghost-btn mobile-theme" @click="cycleTheme">{{ themeIcon() }} {{ THEME_UI[theme].label }}</button>
-        </div>
-        <div class="more-row">
-          <span class="more-label">面板</span>
-          <button class="ghost-btn mobile-panel-btn" @click="toggleMobilePanel">面板：{{ mobilePanelOpen ? "开" : "关" }}</button>
         </div>
       </div>
     </header>

@@ -207,7 +207,8 @@ html, body {
 .mode-tab:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 悬浮提示（深色小卡片）：两种提示共用这一套视觉——
-   .mode-tip 是模式按钮那一排整行下方的介绍，.hint-tip 是 v-hint 指令给单个元素弹的提示。
+   .mode-tip 是模式按钮那一排整行**上方**的介绍（下方是会话列表，向下会遮住会话），
+   .hint-tip 是 v-hint 指令给单个元素弹的提示。
    pointer-events: none 是必须的：否则鼠标移向浮层时会先触发原元素的 mouseleave，
    浮层自己把自己关掉，看起来像在闪。 */
 .mode-tip,
@@ -226,7 +227,7 @@ html, body {
   position: absolute;
   left: 10px;
   right: 10px;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   z-index: 40;
 }
 /* 单个元素的提示：fixed 定位在目标下方（空间不够自动翻到上方），层级高于弹窗遮罩，
@@ -1332,6 +1333,9 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 }
 .jump-btn:hover { background: var(--hover); border-color: var(--accent); color: var(--accent-dark); }
 
+/* 手机端"＋"收纳键：桌面断点不需要收纳，直接隐藏（外观与 jump-btn 同款，见手机断点里的规则） */
+.aux-toggle { display: none; }
+
 /* ---------- 右侧面板（第三栏，与对话区并排而非覆盖） ---------- */
 /* 面板 = 内容区（.panel-box，可收起）+ 竖排图标栏（.panel-rail，常驻）。
    收起时只留最右那条竖排图标，点图标滑出对应面板、再点当前图标收起 */
@@ -2345,10 +2349,11 @@ mark.search-hit.current {
 .confirm-text { margin: 4px 0 6px; font-size: 14px; line-height: 1.6; }
 
 /* ---------- 移动端适配（断点策略见 MOBILE_ADAPTATION.md §2） ---------- */
-/* 手机三个浮层（抽屉 / 底部面板 / 更多菜单）共用的遮罩与两个顶栏入口，桌面端一律不显示 */
+/* 手机三个浮层（抽屉 / 底部面板 / 更多菜单）共用的遮罩与三个顶栏入口，桌面端一律不显示 */
 .mobile-mask,
 .mobile-search-btn,
 .mobile-more-btn,
+.mobile-panel-btn,
 .mobile-search,
 .mobile-more { display: none; }
 
@@ -2392,8 +2397,16 @@ body { overscroll-behavior: none; }
   .sidebar.mobile-open { transform: translateX(0); }
   .sidebar-inner { width: min(80vw, 320px); }
 
-  /* ---- 三个浮层共用的遮罩（层级 900：在抽屉 901 / 弹层 902 / 菜单 910 之下，弹窗 1000 之下） ---- */
-  .mobile-mask { display: block; }
+  /* ---- 三个浮层共用的遮罩：全屏 fixed，盖住聊天区但低于抽屉 901 / 弹层 902 / 菜单 910 ----
+       基础定位写在桌面隐藏组里（display:none 时属性不生效但保留），手机断点只负责显示。
+       注意 position/inset 必须有——否则遮罩是文档流里一个 0 高的元素，点不到也关不掉 */
+  .mobile-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 900;
+    display: block;
+  }
 
   /* ---- 右侧面板 → 底部弹层：默认藏在屏外，mobile-open 时滑出 ---- */
   .panel {
@@ -2403,6 +2416,8 @@ body { overscroll-behavior: none; }
     bottom: 0;
     top: auto;
     width: 100%;
+    /* 高度固定（不再随标签内容伸缩）：五个标签页切换时弹层尺寸稳定不跳变 */
+    height: 65vh;
     max-height: 88vh;
     flex-direction: column;
     border-left: none;
@@ -2445,7 +2460,8 @@ body { overscroll-behavior: none; }
   .toolbar .think-btn,
   .toolbar .theme-toggle { display: none; }
   .mobile-search-btn,
-  .mobile-more-btn {
+  .mobile-more-btn,
+  .mobile-panel-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2456,6 +2472,8 @@ body { overscroll-behavior: none; }
     font-size: 16px;
   }
   .mobile-search-btn svg { width: 18px; height: 18px; }
+  .mobile-panel-btn svg { width: 18px; height: 18px; }
+  .mobile-panel-btn.on { color: var(--accent); }
 
   /* 折叠搜索条：占顶栏一整行 */
   .mobile-search { flex-basis: 100%; display: flex; }
@@ -2503,19 +2521,52 @@ body { overscroll-behavior: none; }
   .stop-btn,
   .continue-btn,
   .jump-btn,
+  .aux-toggle,
   .bg-switch { height: 44px; }
   .jump-btn { width: 44px; }
+  /* 底部辅助内容收纳：⋯ 展开后显示背景切换/继续/跳底/情境（沉浸），
+     收起时只留话语输入框与发送键——收纳态输入区保持"一个输入框＋一个发送键" */
+  .aux-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .aux-toggle.on { background: var(--hover); border-color: var(--accent); color: var(--accent-dark); }
+  .inputbar:not(.aux-open) .bg-switch,
+  .inputbar:not(.aux-open) .continue-btn,
+  .inputbar:not(.aux-open) .jump-btn,
+  .inputbar:not(.aux-open) .scenario-field { display: none; }
 
-  /* ---- 消息区：去头像列、气泡放宽、操作条常显（手机上没有 hover） ---- */
+  /* ---- 消息区：头像缩小保留（64px 太大收成 40px）、气泡放宽、操作条常显（手机上没有 hover） ---- */
   .chat { padding: 12px 10px; }
   .msg { gap: 8px; margin-bottom: 12px; }
-  .msg-side { display: none; }
+  .msg-side { display: flex; }
+  .msg-side .avatar.lg { width: 40px; height: 40px; font-size: 17px; border-radius: 8px; }
   .bubble-wrap { max-width: 100%; }
   .bubble { font-size: 14px; padding: 9px 12px; }
   .msg-actions { opacity: 1; }
 
-  /* 附加属性浮层：收起态图标放大到 44px 热区 */
+  /* 附加属性浮层：收起态图标放大到 44px 热区；展开态收拢（字号/间距/条高一起收紧） */
   .attr-icon { width: 44px; height: 44px; }
+  .attr-panel { font-size: 13px; margin-bottom: 8px; }
+  .attr-toggle { padding: 6px 12px; font-size: 12.5px; }
+  .attr-body { gap: 5px; padding: 2px 12px 10px; }
+  .attr-item { gap: 8px; min-height: 18px; }
+  .attr-name { max-width: 34%; }
+  .attr-bar { height: 8px; min-width: 64px; }
+  .attr-num { flex: 0 0 42px; font-size: 12.5px; }
 
   /* ---- 弹窗全屏化 ---- */
   .modal-mask { padding: 0; }
