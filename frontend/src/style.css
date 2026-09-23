@@ -1514,35 +1514,35 @@ mark.search-hit.current {
   top: 0;
   z-index: 300;
   align-self: center;
-  /* 展开态是一块**正经的面板**：宽度对齐消息气泡那一列（`bubble-wrap` 的 max 也是 680px），
-     字号与消息一致 —— 它显示的是"角色此刻的状态"，不该比气泡小一号 */
+  /* 展开态的宽度：**取中间值**。太窄（第一版按内容宽度缩成 255px）读起来像一条信息条；
+     与消息气泡一样宽（680px）又太铺张。480px 约等于消息列的六成，与卡片式的信息块相称 */
   width: 100%;
-  max-width: min(680px, 100%);
+  max-width: min(480px, 100%);
   margin-bottom: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
   backdrop-filter: blur(2px);
-  font-size: 14.5px;
+  font-size: 14px;
 }
 .attr-toggle {
   display: flex;
   align-items: center;
   gap: 7px;
   width: 100%;
-  padding: 9px 16px;
+  padding: 8px 14px;
   border: none;
   border-radius: var(--radius);
   background: none;
   color: var(--accent-dark);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
 }
 .attr-toggle:hover { background: #f0f2f6; }
-.attr-caret { font-size: 12px; }
+.attr-caret { font-size: 11.5px; }
 /* 收起态只有一颗图标：宽度跟着图标走（上面那条定宽只服务展开态） */
 .attr-panel.collapsed {
   width: max-content;
@@ -1569,14 +1569,14 @@ mark.search-hit.current {
 .attr-body {
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  padding: 4px 16px 16px;
+  gap: 10px;
+  padding: 4px 14px 14px;
 }
 .attr-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 22px;
+  gap: 10px;
+  min-height: 21px;
 }
 .attr-name {
   flex: 0 0 auto;
@@ -1597,24 +1597,24 @@ mark.search-hit.current {
 /* 百分比型：横向进度条 + 右侧数值 */
 .attr-bar {
   flex: 1;
-  min-width: 120px;
-  height: 13px;
-  border-radius: 7px;
+  min-width: 96px;
+  height: 12px;
+  border-radius: 6px;
   background: #e6e9f0;
   overflow: hidden;
 }
 .attr-bar-fill {
   display: block;
   height: 100%;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--accent);
   transition: width 0.25s ease;
 }
 .attr-num {
-  flex: 0 0 54px;
+  flex: 0 0 50px;
   text-align: right;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13.5px;
   font-variant-numeric: tabular-nums;
 }
 
