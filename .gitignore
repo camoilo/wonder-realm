@@ -39,6 +39,11 @@ backups/
 frontend/node_modules/
 .npm-cache/
 
+# ---------- 桌面端（Electron 外壳，见 DEVELOPMENT §3.3） ----------
+# electron 运行时 200MB+，按 desktop/package.json + package-lock.json 装出来即可，不入库。
+# 下载慢时用镜像：ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install --prefix desktop
+desktop/node_modules/
+
 # ---------- 配置与密钥 ----------
 # 本地覆盖用的配置与密钥不入库；config.yaml 本身是仓库的一部分，保留
 .env

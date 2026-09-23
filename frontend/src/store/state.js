@@ -39,6 +39,16 @@ export const store = reactive({
       mobileMoreOpen: false,
       mobileSearchOpen: false,
       theme: "light", // 当前主题 light / dark；"选一个存本地"见 store/ui.js 的 setTheme
+      // 桌面端（Electron 壳，见 DEVELOPMENT §7.4）：壳在 preload 里注入 window.dshDesktop，
+      // 网页端（含手机浏览器）没有它 —— 于是桌面专属的那两个键根本不会渲染
+      isDesktop: false,
+      // 壳把窗口缩成手机尺寸时为 true：页面按窄屏断点走手机布局，桌面专属键隐藏
+      desktopPhoneView: false,
+      desktopConfigOpen: false, // 顶栏「配置」弹出的小面板（推送局域网开关 + 地址）
+      lanEnabled: false,        // 后端"推送局域网"开关（读 /api/settings 带回）
+      lanBusy: false,
+      lanUrl: "",               // 局域网地址（壳按网卡算出来给的，用于复制）
+      lanCopied: false,
       charForm: emptyCharForm(),
       charLocked: false,
       charModal: emptyCharModal(),

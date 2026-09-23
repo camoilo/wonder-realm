@@ -1,9 +1,16 @@
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .. import ollama_client
-from ..database import get_db, now, read_settings, write_disable_thinking
+from ..database import (
+    get_db,
+    now,
+    read_settings,
+    write_disable_thinking,
+    write_lan_enabled,
+)
 from ..limits import LIMITS
+from ..net import is_loopback
 from ..prompts import DEFAULT_SETTINGS, FIELDS
 from ..schemas import SettingsIn
 
@@ -28,9 +35,13 @@ def get_settings():
 
 
 @router.put("/settings")
-async def update_settings(body: SettingsIn, db=Depends(get_db)):
-    if body.model is None and body.memory_model is None and body.disable_thinking is None:
+async def update_settings(body: SettingsIn, request: Request, db=Depends(get_db)):
+    if (body.model is None and body.memory_model is None
+            and body.disable_thinking is None and body.lan_enabled is None):
         raise HTTPException(400, "没有需要更新的字段")
+    # "推送局域网"只允许在本机改：手机端（哪怕已经被放行）不该能开关这道闸门（见 §8.3）
+    if body.lan_enabled is not None and not is_loopback(request.client):
+        raise HTTPException(403, "只有这台电脑上能改「推送局域网」")
     # 只在真要改模型名时才去查已安装列表：list_models() 会逐模型查能力，
     # 单纯切"思考模式"不该白跑这一圈
     if body.model is not None or body.memory_model is not None:
@@ -56,6 +67,8 @@ async def update_settings(body: SettingsIn, db=Depends(get_db)):
         db.commit()
     if body.disable_thinking is not None:
         write_disable_thinking(body.disable_thinking)
+    if body.lan_enabled is not None:
+        write_lan_enabled(body.lan_enabled)
     return read_settings()
 
 

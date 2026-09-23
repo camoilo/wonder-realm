@@ -1,0 +1,14 @@
+{
+  "name": "ollama-agent-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "多模式对话机器人的电脑端外壳（Electron）：同一个后端 + 同一份网页，多一个「配置」与「手机视图」",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "selftest": "electron . --selftest"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

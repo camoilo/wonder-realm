@@ -47,6 +47,46 @@
         <button class="theme-toggle" :class="'theme-' + theme"
                 v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
                 @click="cycleTheme">{{ themeIcon() }}</button>
+        <!-- 桌面端（Electron 壳）专属：配置（推送局域网）+ 收纳成手机视图。
+             网页端与手机浏览器没有 window.dshDesktop，这两个键根本不渲染；手机视图下也隐藏
+             （见 DEVELOPMENT §7.4） -->
+        <template v-if="isDesktop && !desktopPhoneView">
+          <button class="icon-btn desktop-btn" :class="{on: desktopConfigOpen}"
+                  v-hint="'配置（局域网推送、手机访问地址）'" aria-label="配置"
+                  :aria-expanded="desktopConfigOpen" @click="toggleDesktopConfig">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round">
+              <circle cx="12" cy="12" r="3.4"/>
+              <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.2 2.2M16.5 16.5l2.2 2.2M18.7 5.3l-2.2 2.2M7.5 16.5l-2.2 2.2"/>
+            </svg>
+          </button>
+          <button class="icon-btn desktop-btn" v-hint="'收纳成手机视图（再点恢复）'"
+                  aria-label="收纳成手机视图" @click="togglePhoneView">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/>
+            </svg>
+          </button>
+        </template>
+      </div>
+      <!-- 「配置」弹出的小面板：推送局域网开关 + 手机访问地址（复制） -->
+      <div v-if="isDesktop && desktopConfigOpen" class="desktop-config">
+        <div class="dc-row">
+          <span class="dc-label">推送局域网</span>
+          <button class="dc-switch" :class="{on: lanEnabled}" :disabled="lanBusy"
+                  role="switch" :aria-checked="lanEnabled" aria-label="推送局域网" @click="toggleLan">
+            <span class="dc-knob"></span>
+          </button>
+        </div>
+        <p class="hint">{{ lanEnabled
+          ? "手机和平板可以打开下面的地址使用（同一 WiFi）"
+          : "只有这台电脑能访问；要在手机上用就打开它" }}</p>
+        <div class="dc-row">
+          <span class="dc-url">{{ lanUrl || "（没取到局域网地址）" }}</span>
+          <button class="ghost-btn dc-copy" :disabled="!lanUrl" @click="copyLanUrl">{{ lanCopied ? "已复制" : "复制" }}</button>
+        </div>
+        <p class="hint">打不开时先确认手机在同一 WiFi，并让 Windows 防火墙放行入站 17800（README 里有命令）。</p>
+        <p class="hint">应用没有账号体系：在公共网络里建议把上面这个开关关掉。</p>
       </div>
       <!-- 手机端三个入口：放大镜（折叠搜索条）+ 面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
            桌面断点由 CSS 隐藏 -->
@@ -96,7 +136,7 @@
 </template>
 
 <script setup>
-import { toRefs } from "vue";
+import { onBeforeUnmount, onMounted, toRefs } from "vue";
 import { store, MODES } from "../store.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
@@ -104,8 +144,15 @@ const {
   activeSession,
   currentModel,
   currentModelSupportsThinking,
+  desktopConfigOpen,
+  desktopPhoneView,
   disableThinking,
   initError,
+  isDesktop,
+  lanBusy,
+  lanCopied,
+  lanEnabled,
+  lanUrl,
   limits,
   mobileMoreOpen,
   mobilePanelOpen,
@@ -155,9 +202,28 @@ function toggleMore() {
   store.mobileSearchOpen = false;
 }
 
+// 「配置」面板：点别处或按 Esc 关掉（与删除菜单、提示浮层同一套习惯）
+function onDocClick(e) {
+  if (!store.desktopConfigOpen) return;
+  if (e.target.closest && e.target.closest(".desktop-config, .desktop-btn")) return;
+  store.closeDesktopConfig();
+}
+function onDocKeydown(e) {
+  if (e.key === "Escape") store.closeDesktopConfig();
+}
+onMounted(() => {
+  document.addEventListener("click", onDocClick);
+  document.addEventListener("keydown", onDocKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onDocClick);
+  document.removeEventListener("keydown", onDocKeydown);
+});
+
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {
   clearSearch,
+  copyLanUrl,
   isNear,
   len,
   saveRename,
@@ -165,7 +231,10 @@ const {
   searchPrev,
   startRename,
   switchModel,
+  toggleDesktopConfig,
+  toggleLan,
   toggleMobilePanel,
+  togglePhoneView,
   toggleThinking,
 } = store;
 </script>

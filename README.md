@@ -68,6 +68,7 @@
 | 依赖管理 | uv |
 | 前端 | Vue 3 + Vite 构建（源码在 `frontend/`，产物提交在 `app/static/`）+ 原生 CSS |
 | 流式输出 | SSE（`fetch` + `ReadableStream` 手动解析） |
+| 电脑端（可选） | Electron 外壳（`desktop/`）：同一个后端 + 同一份网页，另加"配置 / 手机视图"两个键 |
 
 设计取舍与实现细节见 [DEVELOPMENT.md](./DEVELOPMENT.md)。
 
@@ -206,19 +207,39 @@ npm run dev            # http://127.0.0.1:5173，/api 自动代理到 17800
 - 被压缩归档的消息默认折叠为"已归档 N 条"，点击可展开查看原文
 - 切换模式 Tab 只换左侧列表与当前会话：聊天模式与沉浸模式的会话互不显示，各自记住上次打开的那条
 
+## 电脑端（Electron 外壳）
+
+除了"开浏览器用"，也可以把它当**电脑端应用**用：界面与网页版**完全一样**，只多两个键。
+
+```bat
+npm install --prefix desktop      :: 只需一次（下载 Electron 运行时，约 100MB）
+start_desktop.bat                 :: 以后双击这个就行
+```
+
+下载慢的话加个国内镜像：`set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 再执行上面那条 `npm install`。
+
+多出来的两个键在顶栏右侧：
+
+- **⚙ 配置**：一个「推送局域网」开关（开/关**立即生效**，不用重启），下面给出手机要打开的局域网地址（可一键复制）与防火墙提示。**默认是关的**——要在手机上用就先把它打开。
+- **📱 手机视图**：点一下把**窗口缩成手机大小**，界面立刻变成手机上那套单栏布局（左栏抽屉、右面板底部弹出、辅助键收进「⋯」）；这时两个桌面键会隐藏，再点一次（或按 `F9`）恢复原来的窗口大小。想预览手机上的效果、或就在电脑上小窗用，都很方便。
+
+手机上的用法与网页版完全一致：手机连同一个 WiFi，打开「配置」里那个地址即可（后端、数据、界面都是同一份）。详细的连不上排查见下面「手机 / 局域网访问」。
+
+> 现在这版外壳复用项目里的 Python 环境；**打包成"别人机器上免装 Python"的安装包**（PyInstaller + electron-builder）是下一步的计划，见 DEVELOPMENT §10.9。
+
 ## 手机 / 局域网访问
 
 **手机上也能用**：窄屏下界面自动变成单栏——左栏收成**抽屉**（点左上 `☰` 滑出）、右侧面板改成**从底部弹出**（点顶栏的四宫格图标）、底部那些辅助键（背景切换 / 继续 / 跳底 / 情境）统一收进 **「⋯」**，悬停提示改成点击显示。功能一样是全的（三种模式、角色/世界/我的设定、记忆、生成要求都在）。
 
 手机连电脑上这份应用：
 
-1. 电脑与手机连**同一个 WiFi**；确认 `config.yaml` 里 `server.host` 是 `0.0.0.0`（默认值），改过就**重启应用**才生效；
-2. 查电脑的局域网 IP：命令行执行 `ipconfig`，看「无线局域网适配器 WLAN」下的 **IPv4 地址**（形如 `192.168.1.23`）；
-3. 手机浏览器打开 `http://<那个IP>:17800`——看到的是**同一份数据**（会话、角色、设定全都在这台电脑上，手机只是浏览器）；
+1. 电脑与手机连**同一个 WiFi**；
+2. **打开"推送局域网"**：电脑端（Electron）点顶栏的 ⚙ 配置 → 打开开关；如果用的是网页版/命令行，执行 `uv run run.py --lan`（或启动后 `curl` 调一次 `PUT /api/settings`）。**默认是关的**，这是安全默认值；
+3. 手机浏览器打开 `http://<电脑IP>:17800`——看到的是**同一份数据**（会话、角色、设定全都在这台电脑上，手机只是浏览器）。电脑端「配置」面板里直接给出这个地址，可一键复制；
 4. 打不开多半是防火墙：用**管理员** PowerShell 放行入站 17800（一次就够）：
    `netsh advfirewall firewall add rule name="OllamaAgent 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`
 
-**不想让局域网访问**：把 `server.host` 改回 `127.0.0.1` 并重启，再删掉上面那条规则（`… delete rule name="OllamaAgent 局域网访问 17800"`）。手机自适应布局与这个开关**互不影响**。
+**不想让局域网访问**：把「推送局域网」开关关掉（立即生效，不用重启、也不用删防火墙规则）；想连端口都不对外，再把 `server.host` 改回 `127.0.0.1` 并重启，最后可删掉上面那条规则（`… delete rule name="OllamaAgent 局域网访问 17800"`）。手机自适应布局与这个开关**互不影响**。
 
 **安全提醒**：应用**没有账号体系**，同一网络里能访问这个端口的人都能读写你的会话。只在可信的家庭/办公网络开放，公共 WiFi 请改回 `127.0.0.1`。
 
@@ -292,7 +313,7 @@ data_dir: ./data                  # 数据库目录
 
 ## 测试
 
-十一个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py`、`test_attrs.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
+十二个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py`、`test_attrs.py`、`test_lan_gate.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
 
 ```powershell
 uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
@@ -305,6 +326,7 @@ uv run python tests/test_profile.py        # 我的设定的预设 + 角色绑�
 uv run python tests/test_context.py        # 记忆阈值必须留在 num_ctx 窗口内
 uv run python tests/test_world.py          # 世界设定：名称不进提示词、世界预设与角色/会话绑定
 uv run python tests/test_attrs.py          # 附加属性：[ATTR] 块解析、注入口径、落库与编辑接口
+uv run python tests/test_lan_gate.py       # 局域网闸门：本机放行、关掉时局域网 403、只有本机能改开关
 uv run python tests/test_prompts.py        # 提示词内容：聊天模式只写说出口的话、段落顺序
 
 node tests/test_search.mjs                 # 会话内搜索的标记/计数/跳转（需先 cd frontend && npm install）
@@ -320,8 +342,10 @@ ollama_agent/
 ├── README.md               # 本文件
 ├── config.yaml             # 运行配置
 ├── pyproject.toml          # 依赖声明（uv.lock 锁定版本）
-├── run.py                  # 启动入口
+├── run.py                  # 启动入口（--no-browser 给桌面端，--lan/--no-lan 切"推送局域网"）
 ├── start.bat               # 双击启动：起服务并自动开浏览器（GBK 编码，适配中文控制台）
+├── start_desktop.bat       # 双击启动电脑端（Electron 外壳，需先 npm install --prefix desktop）
+├── desktop/                # 电脑端外壳：main.js / preload.js（依赖装到 desktop/node_modules，不入库）
 ├── app/
 │   ├── main.py             # FastAPI 实例、静态托管、启动自检
 │   ├── config.py           # 配置加载与默认值
@@ -381,7 +405,7 @@ Ollama 没启动或端口不对。执行 `ollama list` 确认能正常返回，�
 服务端口在 `config.yaml` 的 `server.port`，默认 **17800**（刻意避开其他项目常用的 8000/8080）。用旧书签访问 8000 会连不上，改成 `http://127.0.0.1:17800` 即可，`start.bat`不受影响。
 
 **手机连不上（打不开 `http://192.168.x.x:17800`）**
-依次查：① 手机与电脑在同一个 WiFi（公司/学校网络常禁止设备互访，换手机热点试）；② `config.yaml` 的 `server.host` 是 `0.0.0.0`，而且**改完重启过应用**；③ Windows 防火墙放行了入站 TCP 17800（管理员 PowerShell 执行上文「手机 / 局域网访问」里那条 `netsh` 命令）；④ IP 抄错了——在电脑上重新 `ipconfig` 取「无线局域网适配器 WLAN」的 IPv4 地址。
+依次查：① 手机与电脑在同一个 WiFi（公司/学校网络常禁止设备互访，换手机热点试）；② **「推送局域网」开关是不是开着**（电脑端顶栏 ⚙ 配置；命令行用户用 `run.py --lan`）——它默认关，这是最常见的原因；③ Windows 防火墙放行了入站 TCP 17800（管理员 PowerShell 执行上文那条 `netsh` 命令）；④ 地址抄错了——电脑端「配置」面板里给出的那个地址最准（也可以自己在电脑上 `ipconfig` 取 IPv4）。
 
 **数据库误删了 / 想回到几天前的状态**
 去 `backups/` 里挑一份时间合适的备份，按上面"数据与备份"里的恢复步骤换回去即可（每次启动都会自动备一份，保留最近 14 天）。

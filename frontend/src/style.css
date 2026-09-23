@@ -1336,6 +1336,80 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 /* 手机端"＋"收纳键：桌面断点不需要收纳，直接隐藏（外观与 jump-btn 同款，见手机断点里的规则） */
 .aux-toggle { display: none; }
 
+/* ---------- 桌面端（Electron 壳）的两样东西：配置 + 手机视图（见 DEVELOPMENT §7.4） ---------- */
+/* 这两个键只在壳里渲染（网页端与手机浏览器没有 window.dshDesktop），手机视图下也隐藏 */
+.desktop-btn { flex: none; }
+.desktop-btn.on { color: var(--accent-dark); border-color: var(--accent); background: #eef2ff; }
+/* 「配置」小面板：挂在顶栏右下方，层级高于消息与浮层、低于弹窗遮罩（1000） */
+.desktop-config {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 14px;
+  z-index: 600;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.dc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dc-label { font-size: 13.5px; color: var(--text); }
+/* 开关：一条轨道 + 一个圆钮，纯 CSS（不用 checkbox，省得两套样式打架） */
+.dc-switch {
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #e6e9f0;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.dc-switch.on { background: var(--accent); border-color: var(--accent); }
+.dc-switch:disabled { opacity: 0.6; cursor: not-allowed; }
+.dc-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.dc-switch.on .dc-knob { transform: translateX(20px); }
+.dc-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--text);
+  background: #f4f6fa;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.dc-copy { flex: none; padding: 6px 10px; font-size: 12.5px; }
+/* 深色主题下这两处浅底要跟着变量走，否则白花花一块 */
+html[data-theme="dark"] .dc-url { background: #23262e; }
+html[data-theme="dark"] .dc-switch { background: #3a3f4a; }
+html[data-theme="dark"] .desktop-btn.on { background: #26304a; }
+
 /* ---------- 右侧面板（第三栏，与对话区并排而非覆盖） ---------- */
 /* 面板 = 内容区（.panel-box，可收起）+ 竖排图标栏（.panel-rail，常驻）。
    收起时只留最右那条竖排图标，点图标滑出对应面板、再点当前图标收起 */

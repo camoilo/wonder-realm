@@ -4,11 +4,13 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import ollama_client
 from .config import get_config
-from .database import init_db, read_settings
+from .database import init_db, lan_enabled, read_settings
+from .net import is_loopback
 from .routes import (
     characters,
     chat,
@@ -24,9 +26,35 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("ollama_agent")
 
 
+def _lan_forbidden(path: str):
+    """局域网来源被闸门拦下时的回应。
+
+    接口请求回 JSON（前端好显示），页面请求回一段人话——手机浏览器直接打开时，
+    看到"电脑端没有开启局域网访问"比一串 403 JSON 明白得多。
+    """
+    message = "电脑端当前没有开启局域网访问（在电脑端的「配置」里打开）"
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": message}, status_code=403)
+    return HTMLResponse(
+        "<!doctype html><meta charset='utf-8'>"
+        "<title>未开启局域网访问</title>"
+        "<div style='font-family:system-ui;padding:40px;line-height:1.8'>"
+        "<h2>未开启局域网访问</h2>"
+        f"<p>{message}</p>"
+        "<p style='color:#888'>如果你就是这台电脑的使用者，请在本机浏览器里打开 "
+        "http://127.0.0.1:17800 并点击顶栏的「配置」。</p></div>",
+        status_code=403,
+    )
+
+
 def create_app():
     cfg = get_config()
-    init_db(cfg["data_dir"], cfg["ollama"]["model"], cfg["memory"].get("model", ""))
+    init_db(
+        cfg["data_dir"],
+        cfg["ollama"]["model"],
+        cfg["memory"].get("model", ""),
+        cfg.get("server", {}).get("lan", False),
+    )
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -54,6 +82,18 @@ def create_app():
         resp = await call_next(request)
         resp.headers["Cache-Control"] = "no-store"
         return resp
+
+    @app.middleware("http")
+    async def lan_gate(request, call_next):
+        """局域网闸门：开关关掉时非本机来源一律 403，本机永远放行（见 §8.3）。
+
+        为什么放在应用层而不是"改监听地址 + 重启"：桌面端的配置按钮要能**立即**开关，
+        而重启后端会打断正在进行的生成。监听地址仍由 `config.yaml server.host` 决定
+        （默认 0.0.0.0）：端口对外开放，但放不放行由这道闸门说了算。
+        """
+        if not lan_enabled() and not is_loopback(request.client):
+            return _lan_forbidden(request.url.path)
+        return await call_next(request)
 
     app.include_router(characters.router)
     app.include_router(settings.router)

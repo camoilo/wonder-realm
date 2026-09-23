@@ -78,6 +78,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
     -- 界面偏好也收在这一张表里（见 DEVELOPMENT §9.6 界面约定）。
     -- 代价：以后每加一个偏好都要加列，届时要按 4.2 的例外流程做一次性维护
     disable_thinking INTEGER NOT NULL DEFAULT 0,
+    -- 是否允许局域网来源访问（见 §8.3）：0 = 只有本机可用（默认，安全优先）。
+    -- 监听地址可能是 0.0.0.0（端口对外开放），放不放行由这道开关在应用层决定
+    lan_enabled      INTEGER NOT NULL DEFAULT 0,
     updated_at       TEXT NOT NULL
 );
 
@@ -129,6 +132,7 @@ DB_FILENAME = "chatbot.db"
 # init_db 时记下来的默认值：运行中库文件被删掉要重建时，得用同一份默认值补 app_settings
 _DEFAULT_MODEL = ""
 _DEFAULT_MEMORY_MODEL = ""
+_DEFAULT_LAN = False
 
 
 def db_file(data_dir) -> Path:
@@ -151,6 +155,8 @@ _COLUMN_MIGRATIONS = {
     },
     "sessions": {"world_id": "INTEGER REFERENCES worlds(id)"},
     "messages": {"attrs": "TEXT NOT NULL DEFAULT '[]'"},
+    # app_settings 是单行设置表：每加一个偏好就在这里登记一次
+    "app_settings": {"lan_enabled": "INTEGER NOT NULL DEFAULT 0"},
 }
 
 # 老库里的旧表名 → 新表名。改名的理由：这两张表装的都是"当前那份 + 若干预设"，
@@ -186,8 +192,9 @@ def _create_schema() -> None:
     con.executescript(SCHEMA)
     _apply_column_migrations(con)
     con.execute(
-        "INSERT OR IGNORE INTO app_settings(id, model, memory_model, updated_at) VALUES(1, ?, ?, ?)",
-        (_DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL, now()),
+        "INSERT OR IGNORE INTO app_settings(id, model, memory_model, lan_enabled, updated_at) "
+        "VALUES(1, ?, ?, ?, ?)",
+        (_DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL, 1 if _DEFAULT_LAN else 0, now()),
     )
     # "我的设定"也是那个主体的一行：缺了就补一行空白的，读的时候不必到处判 None
     con.execute(
@@ -199,11 +206,21 @@ def _create_schema() -> None:
     con.close()
 
 
-def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -> None:
-    """建库建表（含老库改名与补列，见 _TABLE_RENAMES / _COLUMN_MIGRATIONS）。"""
-    global DB_PATH, _DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL
+def init_db(
+    data_dir: str,
+    default_model: str,
+    default_memory_model: str = "",
+    default_lan: bool = False,
+) -> None:
+    """建库建表（含老库改名与补列，见 _TABLE_RENAMES / _COLUMN_MIGRATIONS）。
+
+    `default_lan` 只在**首次建库**时写进 `app_settings.lan_enabled`（见 §8.3）：
+    与模型选择一样，配置里那个值只作首次默认，之后以库里的为准。
+    """
+    global DB_PATH, _DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL, _DEFAULT_LAN
     _DEFAULT_MODEL = default_model
     _DEFAULT_MEMORY_MODEL = default_memory_model
+    _DEFAULT_LAN = default_lan
     path = Path(data_dir)
     path.mkdir(parents=True, exist_ok=True)
     DB_PATH = path / DB_FILENAME
@@ -703,14 +720,44 @@ def read_settings() -> dict:
     con = connect()
     try:
         row = con.execute(
-            "SELECT model, memory_model, disable_thinking FROM app_settings WHERE id=1"
+            "SELECT model, memory_model, disable_thinking, lan_enabled "
+            "FROM app_settings WHERE id=1"
         ).fetchone()
     finally:
         con.close()
     if not row:
-        return {"model": "", "memory_model": "", "disable_thinking": False}
+        return {
+            "model": "", "memory_model": "", "disable_thinking": False, "lan_enabled": False,
+        }
     return {
         "model": row["model"],
         "memory_model": row["memory_model"],
         "disable_thinking": bool(row["disable_thinking"]),
+        "lan_enabled": bool(row["lan_enabled"]),
     }
+
+
+def lan_enabled() -> bool:
+    """是否允许局域网来源访问（见 DEVELOPMENT §8.3）。
+
+    与 `thinking_disabled()` 同一个路子：集中读一处，闸门中间件每次请求都问它。
+    **默认关**：监听地址可能是 0.0.0.0（端口对外开放），但非本机来源要这道闸门放行。
+    """
+    con = connect()
+    try:
+        row = con.execute("SELECT lan_enabled FROM app_settings WHERE id=1").fetchone()
+    finally:
+        con.close()
+    return bool(row["lan_enabled"]) if row else False
+
+
+def write_lan_enabled(enabled: bool) -> None:
+    con = connect()
+    try:
+        con.execute(
+            "UPDATE app_settings SET lan_enabled=?, updated_at=? WHERE id=1",
+            (1 if enabled else 0, now()),
+        )
+        con.commit()
+    finally:
+        con.close()

@@ -94,6 +94,8 @@ Object.assign(store, {
       const s = await store.api("/api/settings");
       store.currentModel = s.model;
       store.disableThinking = !!s.disable_thinking;
+      // 局域网开关也在这份设置里（见 §8.3）：桌面端的「配置」面板据此显示当前状态
+      store.lanEnabled = !!s.lan_enabled;
     } catch (e) {
       // 设置读不到（例如库文件被删）不该带走整个初始化：下面的角色/会话照常拉
       failed.push({ label: "设置", msg: e.message });

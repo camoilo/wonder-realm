@@ -213,3 +213,5 @@ class SettingsIn(BaseModel):
     memory_model: str | None = None
     # 界面上的"思考模式"开关；None 表示这次不改它
     disable_thinking: bool | None = None
+    # 是否允许局域网来源访问（见 §8.3）；None 表示这次不改它。只有本机能改
+    lan_enabled: bool | None = None

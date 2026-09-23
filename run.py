@@ -1,5 +1,6 @@
 import logging
 import socket
+import sys
 import threading
 import webbrowser
 from pathlib import Path
@@ -43,6 +44,11 @@ def startup_backup(cfg: dict) -> Path | None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # --no-browser：给桌面端（Electron）用——它自己开窗口，不要再弹一个系统浏览器。
+    # --lan / --no-lan：设置"推送局域网"开关（写进库，立即生效，不用改 config 再重启）。
+    # 桌面端有顶栏「配置」按钮，这两个参数是给不带桌面端的命令行用户留的路子（见 §8.3）
+    args = sys.argv[1:]
+    no_browser = "--no-browser" in args
     cfg = get_config()
     host = cfg["server"]["host"]
     port = cfg["server"]["port"]
@@ -54,10 +60,22 @@ if __name__ == "__main__":
     # 放在 uvicorn.run() 之前：留下的是上次运行结束时的库，而不是本次启动刚建过表的。
     startup_backup(cfg)
 
+    if "--lan" in args or "--no-lan" in args:
+        # init_db 是幂等的（建表/补列/补单行），这里先建好再改设置，
+        # 之后 uvicorn 里那次 create_app 再跑一遍不会有副作用
+        database.init_db(
+            cfg["data_dir"], cfg["ollama"]["model"], cfg["memory"].get("model", ""),
+            cfg.get("server", {}).get("lan", False),
+        )
+        database.write_lan_enabled("--lan" in args)
+        print("推送局域网：" + ("已开启" if "--lan" in args else "已关闭"))
+
     if port_in_use(browser_host, port):
-        print(f"端口 {port} 已在监听，服务应该已在运行，直接打开浏览器：{url}")
-        webbrowser.open(url)
+        print(f"端口 {port} 已在监听，服务应该已在运行：{url}")
+        if not no_browser:
+            webbrowser.open(url)
     else:
-        print(f"启动中，稍后自动打开浏览器：{url}")
-        open_browser_later(url)
+        print(f"启动中：{url}" + ("" if no_browser else "（稍后自动打开浏览器）"))
+        if not no_browser:
+            open_browser_later(url)
         uvicorn.run("app.main:app", host=host, port=port)

@@ -981,6 +981,34 @@ check("用户气泡改成白底 + 边框",
 check("用户气泡不再用强调色实底",
       "var(--user-bubble)" in css or "color: #fff;" in _bub, False)
 
+# ---- 桌面端（Electron 壳）专属界面（DEVELOPMENT §7.4） ----
+# 同一份前端：壳在 preload 里注入 window.dshDesktop，于是多出"配置 / 手机视图"两个键；
+# 网页端与手机浏览器没有这个对象，那两个键根本不渲染
+check("挂载前先认壳的标记（第一屏不闪桌面键）",
+      "initDesktop()" in js and "initDesktop" in re.search(
+          r'import \{([^}]*)\} from "./store.js"', main_js).group(1), True)
+_desktop = dict(zip(VUE_ORDER, vue_sources))["components/TopBar.vue"]
+check("两个桌面键都只在自己的标记下渲染",
+      html.count('v-if="isDesktop && !desktopPhoneView"') == 1
+      and 'class="icon-btn desktop-btn"' in _desktop, True)
+check("配置面板内容齐全（开关 / 地址 / 复制）",
+      'class="dc-switch"' in _desktop and 'class="dc-url"' in _desktop
+      and "copyLanUrl" in _desktop and "lanEnabled" in _desktop, True)
+check("开关写的是后端设置里的 lan_enabled",
+      'jsonOpts("PUT", { lan_enabled: !this.lanEnabled })' in js
+      and "this.lanEnabled = !!s.lan_enabled;" in js, True)
+check("初始状态从 /api/settings 读回来",
+      "this.disableThinking = !!s.disable_thinking;" in js
+      and "this.lanEnabled = !!s.lan_enabled;" in js, True)
+check("手机视图交给壳去缩窗口，页面只跟着隐藏桌面键",
+      "window.dshDesktop.togglePhoneView()" in js and "api.onPhoneView(" in js
+      and "this.desktopPhoneView = !!on;" in js, True)
+# 层级：属性浮层 300 < 桌面配置面板 600 < 弹窗遮罩 1000（见 9.6 的浮层层级表）
+check("配置面板层级在浮层与弹窗之间",
+      ".desktop-config {" in css and "z-index: 600;" in css
+      and css.index("z-index: 600;") < css.index(".modal-mask {"), True)
+check("桌面键与配置面板的样式在", ".desktop-btn {" in css and ".dc-switch.on .dc-knob {" in css, True)
+
 # ---- 移动端适配（DEVELOPMENT §7.1 / §9.6：三断点 + 抽屉/底部弹层 + 触屏约定） ----
 _mobile = css[css.index("@media (max-width: 640px) {"):]
 check("viewport 带 viewport-fit（刘海屏 safe-area 生效）", "viewport-fit=cover" in html, True)

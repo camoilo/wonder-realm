@@ -13,8 +13,10 @@ import "./store/panel.js";
 import "./store/character.js";
 import "./store/presets.js";
 import "./store/attrs.js";
+import "./store/desktop.js";
 import "./store/ui.js";
 import { MODES } from "./store/helpers.js";
+import { initDesktop } from "./store/desktop.js";
 import { setChatBox } from "./store/state.js";
 
-export { MODES, disposeApp, initApp, registerWatchers, setChatBox, store, watchDefs };
+export { MODES, disposeApp, initApp, initDesktop, registerWatchers, setChatBox, store, watchDefs };

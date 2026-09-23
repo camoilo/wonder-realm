@@ -29,7 +29,13 @@ DEFAULTS = {
     "character_gen": {"timeout": 600},
     "chat": {"history_max_messages": 60},
     "naming": {"model": "", "max_chars": 12, "min_user_chars": 8},
-    "server": {"host": "127.0.0.1", "port": 17800},
+    "server": {
+        "host": "127.0.0.1",
+        "port": 17800,
+        # 首次建库时"推送局域网"（允许非本机来源）的默认值，见 DEVELOPMENT §8.3。
+        # 之后以数据库的 app_settings.lan_enabled 为准（默认关，桌面端配置按钮随时改）
+        "lan": False,
+    },
     "data_dir": str(ROOT / "data"),
     "backup": {"dir": str(ROOT / "backups"), "days": 14, "on_startup": True},
 }
