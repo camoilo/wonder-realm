@@ -47,7 +47,9 @@ function writePrefs(patch) {
 }
 
 function log(msg) {
-  const line = `[desktop] ${new Date().toISOString()} ${msg}`;
+  // 本地时间，跟后端那些日志一个口径；带 [desktop] 前缀以便和"后端: …"区分开
+  const stamp = new Date().toLocaleString("zh-CN", { hour12: false });
+  const line = `[desktop] ${stamp} ${msg}`;
   console.log(line);
   try {
     fs.appendFileSync(path.join(app.getPath("userData"), "desktop.log"), line + "\n");
@@ -138,7 +140,8 @@ function setPhoneView(on) {
     if (desktopBounds) win.setBounds(desktopBounds);
   }
   win.webContents.send("desktop:phone-view", phoneView);
-  writePrefs({ phoneView, bounds: win.getBounds() });
+  // 自检不动用户的偏好：它只是量一下尺寸，不该让下次启动真的进手机视图
+  if (!SELFTEST) writePrefs({ phoneView, bounds: win.getBounds() });
   return phoneView;
 }
 

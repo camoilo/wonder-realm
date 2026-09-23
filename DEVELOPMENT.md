@@ -211,6 +211,10 @@ flowchart LR
 **页面侧只有两样东西是"壳专属"**：顶栏的「配置」与「手机视图」两个键，靠 preload 注入的 `window.dshDesktop` 判定（`isDesktop`）——网页端与手机浏览器没有这个对象，于是它们根本不渲染（见 7.1）。
 **"推送局域网"不走壳**：它是后端 `app_settings.lan_enabled`（默认关），页面上的开关就是 `PUT /api/settings`，立即生效、不重启后端（见 8.3）。壳只提供"地址"和"手机视图"这两件后端做不到的事。
 
+**壳的日志与偏好**都在 `app.getPath("userData")`（Windows：`%APPDATA%\ollama-agent-desktop\`，目录名取自 `desktop/package.json` 的 `name`）：
+- `desktop.log`：壳自己做的事以 `[desktop] 本地时间 …` 开头，**后端的 stdout/stderr 也一并混进来**（前缀 `后端:` / `后端(err):`）——所以窗口没开出来、或打开后一片空白时，原因（Python traceback、端口占用、Ollama 没起来）都在这一个文件里。只追加、不轮转（一次启动几 KB，可忽略）。
+- `desktop.json`：窗口尺寸与上次是不是手机视图。**自检（`--selftest`）刻意不写它**，否则"量一下尺寸"会把用户下次启动真的带进手机视图。
+
 自检：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径（preload 桥接、手机视图是否真的把 `innerWidth` 缩进 640px），全程不弹窗，用于改完壳之后确认没坏。开发期复用项目 `.venv` 里的 Python；**打包分发**（PyInstaller 收后端 + 安装包）留到 v2，见 10.9。
 
 ### 3.4 启动流程与 Ollama 自启
