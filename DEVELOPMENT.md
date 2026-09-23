@@ -645,7 +645,7 @@ data_dir: ./data                  # 直接指定
 - **守卫反向验证**：故意删被保护的东西确认报红（"碰巧通过"≠"抓得住"）
 - 界面改动要真渲染证据：dev（Vue 警告开）+ 生产产物各跑一遍，控制台零 warning/error；涉及函数名/导入/绑定**只跑构建会漏**
 - 探针：`MutationObserver` 挂载（`--virtual-time-budget` 下定时器抢跑）；每步等状态稳定；收尾只执行一次（否则不空闲、浏览器不退）；查倍数用"接口条数−DOM 数"
-- 环境：Windows 控制台 GBK，别打印 `✕` `‹` `›`；沙箱 Vite 构建/npm install（缓存放工作区）/headless Chrome 需放宽权限
+- 环境：Windows 控制台 GBK，别打印 `✕` `‹` `›`；**`.bat` 一律 CRLF**（裸 LF 会让 cmd 按字节偏移错位解析，把半行中文当命令执行，且报错指向莫名其妙的位置）；沙箱 Vite 构建/npm install（缓存放工作区）/headless Chrome 需放宽权限
 - **只杀自己启动的浏览器**：探针 `Start-Process -PassThru` 拿 PID、`-Wait` 等退出，清理只 `taskkill /PID /T`；**绝不按进程名/启动时间筛 chrome**（会连用户浏览器渲染进程一起杀）
 - 改后端要重启应用（无 `--reload`）；改前端重新构建 + 刷新
 
