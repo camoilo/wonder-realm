@@ -5,15 +5,29 @@ import re
 # [SCENARIO]/[DIALOG]）——目的是让一次用词偏差不至于把整条消息打成纯文本。
 SCENARIO_TAGS = ("SCENARIO", "SCENERY", "SCENE", "NARRATION", "SETTING", "CONTEXT")
 DIALOG_TAGS = ("DIALOG", "DIALOGUE", "SPEECH", "TALK")
+# 附加属性块（见 DEVELOPMENT §2.6）：同一套宽容，模型写 [STATUS]/[STATE] 也认
+ATTR_TAGS = ("ATTR", "ATTRS", "ATTRIBUTE", "ATTRIBUTES", "STATUS", "STATE")
 _ALL_TAGS = SCENARIO_TAGS + DIALOG_TAGS
 
 _TAG = r"[\[【]\s*(?:" + "|".join(_ALL_TAGS) + r")\s*[\]】]"
+_ATTR_TAG = r"[\[【]\s*(?:" + "|".join(ATTR_TAGS) + r")\s*[\]】]"
 
 # 一段 = 标记 + 到下一个标记（或结尾）为止的内容；不要求标记独占一行
 SEGMENT = re.compile(
     r"[\[【]\s*(" + "|".join(_ALL_TAGS) + r")\s*[\]】]\s*(.*?)(?=\n?" + _TAG + r"|$)",
     re.S | re.I,
 )
+
+# 属性块：从标记起到"下一个已知标记"或结尾。允许模型多写一个 [/ATTR] 收尾（顺手删掉）
+_ATTR_SEGMENT = re.compile(
+    r"[\[【]\s*(?:" + "|".join(ATTR_TAGS) + r")\s*[\]】]\s*(.*?)(?=\n?" + _TAG + r"|$)",
+    re.S | re.I,
+)
+_ATTR_CLOSE = re.compile(r"[\[【]\s*/\s*(?:" + "|".join(ATTR_TAGS) + r")\s*[\]】]", re.I)
+
+# 一行属性：名称 + 分隔符 + 值。分隔符宽容到全角冒号、半角冒号与等号；
+# 名称里**不许出现标点与空白**，这样"好：我这就去"这类台词不会被误当成属性行
+_ATTR_LINE = re.compile(r"^([^:：=，。!！?？\s]{1,20}?)\s*[:：=]\s*(.*)$")
 
 MULTI = "MULTI"  # director 落库标记：content 存带标记全文，前端分段渲染
 
@@ -42,6 +56,68 @@ def _pieces(text: str) -> list[tuple[str, str]]:
     tail = text[last:].strip()
     if tail:
         out.append(("dialog", tail))
+    return out
+
+
+def split_attrs(raw: str) -> tuple[str, str]:
+    """把附加属性块从输出里摘出来：返回 (去掉属性块的正文, 属性块内容)。
+
+    **必须先摘再解析正文**：`_pieces` 会把标记之外的裸文本当成台词，属性块若留着，
+    "好感：42" 就会当成角色说的话漏进气泡里。位置不敏感（取最后一个属性块），
+    因为提示词要求它放在最后、但模型偶尔会插在中间。
+
+    块里"最后一条属性行"之后的内容会**还回正文**——一次位置偏差不该静默吞掉一句话。
+    认不出标记就原样返回：宁可属性拿不到，也不能吞掉正文。
+    """
+    text = raw or ""
+    last = None
+    for m in _ATTR_SEGMENT.finditer(text):
+        last = m
+    if last is None:
+        return text, ""
+    inner = _ATTR_CLOSE.sub("", last.group(1))
+    lines = inner.splitlines()
+    keep = 0
+    for i, line in enumerate(lines):
+        if _ATTR_LINE.match(line.strip().lstrip("-•*").strip()):
+            keep = i + 1
+    block = "\n".join(lines[:keep])
+    salvaged = "\n".join(line for line in lines[keep:] if line.strip())
+    head = text[: last.start()] + text[last.end():]
+    if salvaged:
+        head = f"{head.rstrip()}\n{salvaged}" if head.strip() else salvaged
+    return head, block
+
+
+def parse_attrs(block: str, defs) -> list[dict]:
+    """属性块 + 定义 → `[{name, type, value}]`。
+
+    只认定义里有的名字（定义是唯一依据，模型自己编的条目丢掉）；定义里有、模型没写的
+    那条**不在这里补**——补值需要"上一轮的值"，那是调用方的事（见 generation.py）。
+    百分比型从值里抠第一个数字并夹到 0-100；文字型直接取整行。
+    """
+    wanted = {d["name"]: d for d in (defs or [])}
+    out = []
+    for line in (block or "").splitlines():
+        line = line.strip().lstrip("-•*").strip()
+        if not line:
+            continue
+        m = _ATTR_LINE.match(line)
+        if not m:
+            continue
+        name = m.group(1).strip().strip("【】[]").strip()
+        d = wanted.get(name)
+        if d is None:
+            continue
+        value = m.group(2).strip()
+        if d["type"] == "percent":
+            num = re.search(r"-?\d+(?:\.\d+)?", value)
+            if not num:
+                continue
+            value = max(0.0, min(100.0, float(num.group(0))))
+        elif not value:
+            continue
+        out.append({"name": name, "type": d["type"], "value": value})
     return out
 
 

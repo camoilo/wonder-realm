@@ -157,7 +157,19 @@ export const emptyCharForm = () => ({
   // 对话区背景图（data URL 数组）。放在表单里是必须的：新建角色时还没有 id、
   // 没法立即上传，而且面板是整体提交的，漏了它就会把背景一次性清空。
   backgrounds: [],
+  // 附加属性定义（[{name, type, hint}]，见 DEVELOPMENT §2.6）。同样放进表单：
+  // 右侧面板是整体提交的，漏了它就会把定义清空
+  attr_defs: [],
 });
+
+// 附加属性的两种类型。新加的一行**不给默认类型**（type 空串 = 还没选）：
+// 需求是"名称必须填、类型必须选"，所以由界面挡着让用户明确选一次
+export const ATTR_TYPES = [
+  { value: "text", label: "文字型" },
+  { value: "percent", label: "百分比型" },
+];
+
+export const emptyAttrDef = () => ({ name: "", type: "", hint: "" });
 
 // 探索模式下对用户隐藏、也不允许改写的三个字段（与后端 character_gen.HIDDEN_FIELDS 一致）
 export const LOCKED_FIELDS = ["personality", "speech_style", "backstory"];

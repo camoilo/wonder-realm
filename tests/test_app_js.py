@@ -166,15 +166,23 @@ for _rel, _src in zip(VUE_ORDER, vue_sources):
 # 组件分散在三层目录里（components/、panes/、modals/），store.js 的相对深度各不相同：
 # 多写一层 `../` 时打包器才会报 "Could not resolve"，静态守卫（模板标识符、构建产物）全都看不见。
 # 这里把每条相对 import 解析成路径核对一遍，省一次"构建才发现"。
+# 注意两件事：正则要写 `(\.[^"]+)` 而不是 `(\./[^"]+)`——后者只匹配 `./x`，多层 `../../x`
+# 会被静默跳过（这条守卫第一版就踩了这个坑，等于空转）；另外要先去掉注释，注释里举例写的
+# `from "../store.js"` 不是真的 import（store.js 的说明注释里就有这么一句）。
+def _code_only(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"//[^\n]*", "", text)
+
+
 _bad_imports = []
 for _rel, _src in zip(VUE_ORDER, vue_sources):
     _base = (frontend / "src" / _rel).parent
-    for _spec in re.findall(r'from\s+"(\./[^"]+)"', _src):
+    for _spec in re.findall(r'from\s+"(\.[^"]+)"', _code_only(_src)):
         if not (_base / _spec).resolve().exists():
             _bad_imports.append(f"{_rel} -> {_spec}")
 for _f in store_files + [frontend / "src/main.js"]:
     _base = _f.parent
-    for _spec in re.findall(r'from\s+"(\./[^"]+)"', _f.read_text(encoding="utf-8")):
+    for _spec in re.findall(r'from\s+"(\.[^"]+)"', _code_only(_f.read_text(encoding="utf-8"))):
         if not (_base / _spec).resolve().exists():
             _bad_imports.append(f"{_f.name} -> {_spec}")
 check("相对 import 都指到真实文件", _bad_imports, [])
@@ -320,15 +328,16 @@ check("选中标签用强调色边框区分",
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量（含底部输入区两栏、我的设定三项、两种预设弹窗各三项、世界设定三项与词条两项）",
-      counters, 33)
+check("计数提示数量（含底部输入区两栏、我的设定三项、两种预设弹窗各三项、世界设定三项与词条两项、附加属性两项）",
+      counters, 35)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
-# 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）；会话内搜索框是
-# 界面过滤器、不落库，也不该占一个上限，所以单独放行
+# 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆、数字框除外——数字框用 min/max）；
+# 会话内搜索框是界面过滤器、不落库，也不该占一个上限，所以单独放行
 free_boxes = []
 for tag, attrs in re.findall(r"<(input|textarea)([^>]*)>", html, flags=re.S):
-    if tag == "input" and any(k in attrs for k in ('type="file"', 'type="radio"', 'type="range"')):
+    if tag == "input" and any(k in attrs for k in (
+            'type="file"', 'type="radio"', 'type="range"', 'type="number"')):
         continue
     if "search-input" in attrs:
         continue
@@ -379,6 +388,74 @@ check("user 侧那一行仍靠右（由 bubble-wrap 的 align-items 决定）",
       ".msg.user .bubble-wrap { align-items: flex-end; }" in css, True)
 check("有时间格式化方法", "timeOf(m)" in js and "fullTimeOf(m)" in js, True)
 check("时间取 created_at 的时分秒", 's.slice(11, 19)' in js, True)
+
+# ---- 附加属性（角色的动态状态，见 DEVELOPMENT §2.6） ----
+# 定义在角色设定标签页里编辑，值随每条消息落库；顶部浮层显示最新一份，气泡里不显示
+check("角色设定标签页里挂上定义编辑器",
+      'components/AttrEditor.vue' in VUE_ORDER and "<AttrEditor :form=\"charForm\" />" in html, True)
+check("定义编辑器三项齐全（名称 / 类型 / 解释）",
+      ">名称</span>" in html and ">类型</span>" in html and ">解释</span>" in html
+      and "attr_defs" in html, True)
+check("类型下拉有占位与两种类型",
+      '<option value="">选择类型…</option>' in html
+      and '<option v-for="t in ATTR_TYPES"' in html, True)
+check("类型必须在界面上选（占位项为空值）", 'class="attr-line select' in css
+      or ".attr-line select.empty" in css, True)
+check("定义可增可删、到上限置灰",
+      '@click="addAttr(form)"' in html and '@click="removeAttr(form, i)"' in html
+      and ':disabled="form.attr_defs.length >= limits.attr_max"' in html, True)
+# 需求："名称必须填、类型必须选"——名称为空的行保存时丢弃（同词条），
+# 填了名称却没选类型要挡下来
+check("保存前校验必须选类型",
+      "validateAttrDefs(form)" in js and "选个类型（文字型或百分比型）" in js, True)
+check("保存前丢掉没命名的行", "cleanAttrDefs(form)" in js
+      and "filter((d) => d.name.trim() && d.type)" in js, True)
+check("面板保存带着清理后的定义",
+      "charPayload.attr_defs = this.cleanAttrDefs(this.charForm);" in js, True)
+# 面板表单是整体提交的：漏了 attr_defs 就会在保存角色设定时把定义清空（与 avatar 同一个坑）
+check("切换会话时把定义带进面板表单",
+      "attr_defs: (c.attr_defs || []).map((d) => ({ ...d }))" in js, True)
+check("定义也进 emptyCharForm（面板与新角色表单都用它）",
+      "attr_defs: []," in js, True)
+
+# 浮层：可收纳、覆盖在消息之上、只在选中会话且有属性时出现
+check("浮层组件挂在对话区、且在滚动容器之外",
+      'components/AttrPanel.vue' in VUE_ORDER
+      and html.index("<AttrPanel />") < html.index('<main class="chat"'), True)
+check("浮层绝对定位覆盖在消息之上", ".attr-panel {" in css
+      and "position: absolute;" in css and "z-index: 300;" in css, True)
+check("浮层可收纳（标题行可点、收起后给摘要）",
+      'class="attr-toggle"' in html and "attrsCollapsed = !attrsCollapsed" in html
+      and "attr-summary" in html and ".attr-panel.collapsed" in css, True)
+check("浮层只在选中会话 + 聊天/沉浸 + 有值时出现",
+      "showAttrPanel = computed" in js and "if (!this.activeSession || this.isDirectorMode) return false;" in js
+      and 'class="chat" :class="{ \'has-attrs\': showAttrPanel }"' in html, True)
+check("浮层出现时给消息让出收起态的高度", ".chat.has-attrs { padding-top: 46px; }" in css, True)
+check("文字型直接显示文字、百分比型渲染进度条",
+      'v-if="a.type === \'percent\'"' in html and 'class="attr-bar-fill"' in html
+      and "attrPercent(a) + '%'" in html and 'class="attr-value"' in html, True)
+check("百分比条样式在", ".attr-bar {" in css and ".attr-bar-fill {" in css, True)
+# 显示的是**最近一条带属性的消息**，不是最新一条消息：用户刚发完言那条没有属性，
+# 取最新一条会让浮层闪空
+check("浮层取最近一条带属性的消息",
+      "latestAttrs = computed" in js and "for (let i = this.messages.length - 1; i >= 0; i--)" in js
+      and "if (attrs && attrs.length) return attrs;" in js, True)
+
+# 编辑面板：能改属性，但属性不出现在消息与气泡里
+check("编辑弹窗里有属性一节（仅聊天与沉浸）",
+      "showAttrInEditor" in html and ">附加属性</span>" in html, True)
+check("百分比型用数字框、文字型用输入框",
+      'v-if="a.type === \'percent\'" v-model="a.value" type="number"' in html
+      and ':maxlength="limits.attr_value"' in html, True)
+check("编辑弹窗按角色定义铺开属性行",
+      "attrs: this.showAttrInEditor ? this.attrRowsFor(m) : []" in js
+      and "attrRowsFor(message) {" in js, True)
+check("保存编辑时一起提交属性（空值不提交）",
+      "payload.attrs = this.editForm.attrs" in js
+      and 'filter((a) => String(a.value).trim() !== "")' in js, True)
+check("SSE done 带回的属性直接进消息列表",
+      "attrs: d.attrs || []," in js, True)
+check("气泡与消息组件完全不碰属性", "attrs" in dict(zip(VUE_ORDER, vue_sources))["components/MessageItem.vue"], False)
 
 # ---- 我的设定（用户资料） ----
 check("有我的设定标签", ">我的设定<span" in html, True)

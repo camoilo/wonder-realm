@@ -395,6 +395,9 @@ html, body {
   display: flex;
   flex-direction: column;
 }
+/* 浮层出现时给消息区让出收起态那一条的高度：这样静止时不会有消息被永久压住，
+   滚动时消息照样从浮层下面穿过（用户要的就是"覆盖在消息之上"），见 DEVELOPMENT §2.6 */
+.chat.has-attrs { padding-top: 46px; }
 .chat-inner > .empty { flex: 1; }
 
 .empty {
@@ -1448,6 +1451,151 @@ mark.search-hit.current {
   cursor: pointer;
 }
 .term-del:hover { color: var(--error-text); border-color: var(--border); background: #fff; }
+
+/* ---------- 附加属性（角色的动态状态，见 DEVELOPMENT §2.6） ---------- */
+/* 定义编辑器：一行一条（名称 / 类型 / 解释），与词条同一个交互套路 */
+.attr-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+.attr-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+.attr-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 名称 / 类型 / 解释三个小标签等宽，几行才对得齐 */
+.attr-label {
+  flex: 0 0 34px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+.attr-line select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+/* 还没选类型时下拉字色变浅：一眼能看出这一行还缺什么 */
+.attr-line select.empty { color: var(--text-soft); }
+.attr-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+}
+
+/* 顶部浮层：**覆盖在消息之上**（不占布局），所以挂在滚动容器外面、绝对定位。
+   它是"可收纳"的：点标题行收起，收起后只剩一颗小胶囊 */
+.attr-panel {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300; /* 高于消息、低于弹窗遮罩（1000） */
+  max-width: min(560px, calc(100% - 32px));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(2px);
+  font-size: 12.5px;
+}
+.attr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--accent-dark);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.attr-toggle:hover { background: #f0f2f6; }
+.attr-caret { font-size: 11px; }
+/* 收起态就是一颗胶囊：更圆、更矮，只有标题行与一行摘要 */
+.attr-panel.collapsed {
+  border-radius: 999px;
+  padding: 1px 4px;
+}
+.attr-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-weight: 400;
+}
+.attr-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px 10px 9px;
+}
+.attr-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.attr-name {
+  flex: 0 0 auto;
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+}
+.attr-value { flex: 1; min-width: 0; color: var(--text); }
+/* 百分比型：横向进度条 + 右侧数值 */
+.attr-bar {
+  flex: 1;
+  min-width: 0;
+  height: 8px;
+  border-radius: 5px;
+  background: #e6e9f0;
+  overflow: hidden;
+}
+.attr-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.attr-num {
+  flex: 0 0 40px;
+  text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------- 右侧面板的标签页 ---------- */
 /* 三个分区一次只显示一块（标签页）。

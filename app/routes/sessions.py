@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..character_gen import public_character
 from ..database import get_db, now, read_world_by_id
 from ..schemas import SessionIn, SessionPatch
+from .messages import message_payload
 
 router = APIRouter(prefix="/api")
 
@@ -158,4 +159,4 @@ def get_messages(sid: int, db=Depends(get_db)):
     rows = db.execute(
         "SELECT * FROM messages WHERE session_id=? ORDER BY id", (sid,)
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [message_payload(r) for r in rows]

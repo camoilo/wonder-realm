@@ -210,6 +210,8 @@ const watchDefs = {
           backstory: c.backstory || "",
           // 必须带上：面板是整体提交的，漏了它就会在保存角色设定时把头像一个不剩地清掉
           avatar: c.avatar || "",
+          // 附加属性定义同理：漏了它保存一次角色设定就把定义清空了（见 DEVELOPMENT §2.6）
+          attr_defs: (c.attr_defs || []).map((d) => ({ ...d })),
           // 背景图不随角色下发，由 loadBackgrounds() 填充
           backgrounds: [],
         };

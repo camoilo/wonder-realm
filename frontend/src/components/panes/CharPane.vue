@@ -83,9 +83,12 @@
   <p class="hint">这三项照常参与生成，但不会显示，可以在对话中慢慢了解。</p>
   <button class="ghost-btn" @click="unlockCharacter('panel')">公开角色设定</button>
 </div>
+<!-- 附加属性定义（见 DEVELOPMENT §2.6）：锁定的角色也能有——锁的是那三项隐藏设定 -->
+<AttrEditor :form="charForm" />
 </template>
 
 <script setup>
+import AttrEditor from "../AttrEditor.vue";
 import { toRefs } from "vue";
 import { store } from "../../store.js";
 

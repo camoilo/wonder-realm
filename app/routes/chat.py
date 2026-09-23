@@ -22,9 +22,9 @@ async def chat(sid: int, body: ChatIn):
         )
         user_id = cur.lastrowid
         con.commit()
-        msgs, model, mode, options = prepare_generation(con, sid)
+        msgs, model, mode, options, defs = prepare_generation(con, sid)
     finally:
         con.close()
     return generation_response(
-        sid, msgs, model, mode, options, meta={"message_id": user_id}
+        sid, msgs, model, mode, options, meta={"message_id": user_id}, defs=defs
     )

@@ -12,6 +12,7 @@ import "./store/search.js";
 import "./store/panel.js";
 import "./store/character.js";
 import "./store/presets.js";
+import "./store/attrs.js";
 import "./store/ui.js";
 import { MODES } from "./store/helpers.js";
 import { setChatBox } from "./store/state.js";

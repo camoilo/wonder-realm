@@ -2,7 +2,9 @@
 <div class="chat-area">
       <!-- 背景层放在滚动容器外面，这样滚动消息时背景是静止的 -->
       <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
-      <main class="chat" ref="chatBox">
+      <!-- 附加属性浮层：同样在滚动容器外面，所以它固定在对话页顶部、覆盖在消息之上 -->
+      <AttrPanel />
+      <main class="chat" :class="{ 'has-attrs': showAttrPanel }" ref="chatBox">
       <div class="chat-inner">
         <div v-if="!activeSession" class="empty">
           <div class="empty-icon">&#9998;</div>
@@ -39,6 +41,7 @@
 <script setup>
 import { onMounted, ref, toRefs } from "vue";
 import { setChatBox, store } from "../store.js";
+import AttrPanel from "./AttrPanel.vue";
 import MessageItem from "./MessageItem.vue";
 
 // 对话滚动容器交给 store（滚动/回底那些方法在那边用）
@@ -52,6 +55,7 @@ const {
   chatBgUrl,
   displayMessages,
   showArchived,
+  showAttrPanel,
   streamText,
   streaming,
   thinkPhase,

@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS characters (
     profile_id   INTEGER REFERENCES user_profiles(id),
     -- 同理：这个角色用哪份**世界**预设（worlds.id，NULL = 不绑定）。
     -- 一份世界预设同样可以被多个角色共用（见 DEVELOPMENT §2.4 世界设定）
-    world_id     INTEGER REFERENCES worlds(id)
+    world_id     INTEGER REFERENCES worlds(id),
+    -- 附加属性**定义**（角色的动态状态：好感 / 心情 / 表情…）。JSON 数组
+    -- [{"name","type","hint"}]，type 取 "text" / "percent"。照 worlds.terms 的先例用一列
+    -- JSON：它是"整体读写、有序、可增删"的一份小列表，没有按条查询的需求（见 §2.6）
+    attr_defs    TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -48,6 +52,9 @@ CREATE TABLE IF NOT EXISTS messages (
     role       TEXT NOT NULL CHECK(role IN ('user','assistant')),
     content    TEXT NOT NULL,
     scenario   TEXT,
+    -- 这条消息带回来的附加属性值：JSON 数组 [{"name","type","value"}]（见 §2.6）。
+    -- **自带名称与类型**：定义改了、或那条属性被删了，历史消息照样能渲染出来
+    attrs      TEXT NOT NULL DEFAULT '[]',
     archived   INTEGER NOT NULL DEFAULT 0,
     edited     INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
@@ -140,8 +147,10 @@ _COLUMN_MIGRATIONS = {
     "characters": {
         "profile_id": "INTEGER REFERENCES user_profiles(id)",
         "world_id": "INTEGER REFERENCES worlds(id)",
+        "attr_defs": "TEXT NOT NULL DEFAULT '[]'",
     },
     "sessions": {"world_id": "INTEGER REFERENCES worlds(id)"},
+    "messages": {"attrs": "TEXT NOT NULL DEFAULT '[]'"},
 }
 
 # 老库里的旧表名 → 新表名。改名的理由：这两张表装的都是"当前那份 + 若干预设"，
@@ -419,6 +428,90 @@ def delete_preset(preset_id: int) -> bool:
         return cur.rowcount > 0
     finally:
         con.close()
+
+
+# ---- 附加属性：定义在 characters.attr_defs、值在 messages.attrs（见 DEVELOPMENT §2.6） ----
+
+ATTR_TYPES = ("text", "percent")
+ATTR_PERCENT_MAX = 100.0
+
+
+def _clean_attr_def_list(items) -> list[dict]:
+    """规范化一份定义列表（读与写共用：两边形状必须一致）。名称为空的行丢弃——
+    界面上刚点出来、还没填的空行不该让整次保存失败。"""
+    out = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        kind = str(item.get("type") or "").strip()
+        if not name or kind not in ATTR_TYPES:
+            continue
+        out.append({"name": name, "type": kind, "hint": str(item.get("hint") or "").strip()})
+    return out
+
+
+def parse_attr_defs(raw) -> list[dict]:
+    """角色的属性定义（那列 JSON）→ `[{name, type, hint}]`。
+
+    认不出的条目直接丢掉：定义是后续一切（提示词、解析、渲染）的唯一依据，
+    宁可少一条，也不能出现"半条定义"把注入与解析带偏。
+    """
+    try:
+        data = json.loads(raw or "[]")
+    except (ValueError, TypeError):
+        return []
+    return _clean_attr_def_list(data) if isinstance(data, list) else []
+
+
+def clean_attr_defs(items) -> str:
+    """写入前的定义列内容。"""
+    return json.dumps(_clean_attr_def_list(items), ensure_ascii=False)
+
+
+def _attr_value(kind: str, value):
+    """一个属性值 → 存进去用的形状。百分比型夹到 0-100 的数字，文字型是短字符串。"""
+    if kind == "percent":
+        if isinstance(value, bool) or value is None:
+            return None
+        try:
+            number = float(str(value).strip().rstrip("%"))
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, min(ATTR_PERCENT_MAX, number))
+    text = str(value or "").strip()
+    return text or None
+
+
+def _clean_attr_list(items) -> list[dict]:
+    """规范化一份属性值列表：空值的那条不写进来（"没设置"就不该出现在展示与注入里）。"""
+    out = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        kind = str(item.get("type") or "").strip()
+        if not name or kind not in ATTR_TYPES:
+            continue
+        value = _attr_value(kind, item.get("value"))
+        if value is None:
+            continue
+        out.append({"name": name, "type": kind, "value": value})
+    return out
+
+
+def parse_attrs(raw) -> list[dict]:
+    """消息那列 JSON → `[{name, type, value}]`。"""
+    try:
+        data = json.loads(raw or "[]")
+    except (ValueError, TypeError):
+        return []
+    return _clean_attr_list(data) if isinstance(data, list) else []
+
+
+def clean_attrs(items) -> str:
+    """写入前的属性值列内容（与 `parse_attrs` 对称）。"""
+    return json.dumps(_clean_attr_list(items), ensure_ascii=False)
 
 
 # ---- 世界设定：id=1 是当前世界、id>1 是世界预设（见 DEVELOPMENT §2.4 世界设定） ----

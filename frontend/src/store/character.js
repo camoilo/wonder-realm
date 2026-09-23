@@ -391,7 +391,11 @@ Object.assign(store, {
     }
   },
   async saveCharacterDrawer() {
+    // 附加属性定义先校验再提交：填了名字却没选类型要挡下来（需求："类型必须选"），
+    // 否则那一条会被后端当成"没命名"静默丢掉
+    if (!store.validateAttrDefs(store.charForm)) return;
     const { backgrounds, ...charPayload } = store.charForm;
+    charPayload.attr_defs = store.cleanAttrDefs(store.charForm);
     try {
       const cid = store.activeSession.character.id;
       await store.api(`/api/characters/${cid}`, store.jsonOpts("PUT", charPayload));

@@ -278,34 +278,94 @@ def _user_block(profile) -> str:
     )
 
 
+def _attr_num(value) -> str:
+    """百分比值去掉没意义的小数尾巴：42.0 → 42，42.5 → 42.5。"""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return str(int(number)) if number == int(number) else f"{number:g}"
+
+
+def _attrs_state_block(defs, values) -> str:
+    """角色的当前状态（附加属性）。没有定义就整块不出现（功能没启用）。
+
+    值取**上一条消息**带回来的那一份（见 §2.6）：这条消息之前没有带属性的消息时，
+    这里逐条写"暂无记录"，让模型给出合理的初始值——而不是把整块去掉（那样它就没
+    格式可循了）。放在记忆之后、回复要求之前：越靠后，模型遵循得越好。
+    """
+    if not defs:
+        return ""
+    got = {v["name"]: v for v in (values or [])}
+    lines = []
+    for d in defs:
+        v = got.get(d["name"])
+        if v is None:
+            shown = "（暂无记录，请按剧情给一个合理的初始值）"
+        elif d["type"] == "percent":
+            shown = f"{_attr_num(v['value'])}（百分比型，0-100 的整数）"
+        else:
+            shown = f"{v['value']}（文字型，一句简短的话）"
+        lines.append(f"{d['name']}：{shown}" + (f"（{d['hint']}）" if d["hint"] else ""))
+    return (
+        "# 角色的当前状态（附加属性）\n"
+        + "\n".join(lines)
+        + "\n以上是上一轮结束时角色的状态，这轮在此基础上继续；没有变化就保持原值，"
+        "有变化时给出新值（百分比型可以小幅增减）。\n\n"
+    )
+
+
+def _attrs_rule(defs) -> str:
+    """输出规则里那一段：要求模型在正文之后输出 [ATTR] 块（见 §2.6）。
+
+    必须写明"用户看不到这个块"：聊天模式的规则是"只输出说出口的话"，不交代清楚的话，
+    模型会把属性当成台词的一部分念出来。
+    """
+    if not defs:
+        return ""
+    return (
+        "\n\n# 附加属性\n"
+        f"在正文之后另起一行，用一个 [ATTR] 块给出这些属性的当前值：{'、'.join(d['name'] for d in defs)}。\n"
+        "格式（[ATTR] 单独占一行，之后每行一个「属性名：值」）：\n"
+        "[ATTR]\n"
+        + "\n".join(f"{d['name']}：……" for d in defs)
+        + "\n这个块不是对话内容，用户看不到它，也不要把它写进台词、不要在正文里解释这些属性。"
+    )
+
+
 def build_chat_system(
-    character, memory_content: str, settings: dict, profile=None, world=None
+    character, memory_content: str, settings: dict, profile=None, world=None, attrs=None
 ) -> str:
     name = character["name"]
+    defs, values = attrs or ([], [])
     return (
         "你要完全扮演下面这个角色，与用户进行对话。\n\n"
         + _world_block(world)
         + _character_block(character)
         + _user_block(profile)
         + _memory_block(memory_content)
+        + _attrs_state_block(defs, values)
         + "# 回复要求\n"
         f"{render_chat_settings(settings)}\n\n"
         "# 输出规则\n"
         f"这个模式像手机发短信：每一轮只输出{name}**说出口的话**，读起来就是聊天记录本身。\n"
         "不要写动作、表情、语气提示或心理活动，也不要写旁白、场景描写与舞台说明。"
         "**尤其不要把动作放进括号里**"
+        + _attrs_rule(defs)
     )
 
 
 def build_immersive_system(
-    character, memory_content: str, settings: dict, profile=None, world=None
+    character, memory_content: str, settings: dict, profile=None, world=None, attrs=None
 ) -> str:
+    defs, values = attrs or ([], [])
     return (
         "你要扮演下面这个角色，与用户在同一个故事情境中互动。\n\n"
         + _world_block(world)
         + _character_block(character)
         + _user_block(profile)
         + _memory_block(memory_content)
+        + _attrs_state_block(defs, values)
         + "# 生成要求\n"
         f"{render_immersive_settings(settings)}\n\n"
         "# 导演指令\n"
@@ -317,6 +377,7 @@ def build_immersive_system(
         "[DIALOG]你扮演的角色说出的话\n"
         "标记只能用 [SCENARIO] 与 [DIALOG] 这两个词，不要写成 [SCENERY]、[SCENE] 或中文标记。\n"
         "两段都必须有内容：不要输出空标记，也不要在标记之外写任何文字。"
+        + _attrs_rule(defs)
     )
 
 
@@ -341,21 +402,22 @@ def build_director_system(memory_content: str, settings: dict, world=None) -> st
 
 
 def build_system_prompt(
-    session, character, memory_content: str, profile=None, world=None
+    session, character, memory_content: str, profile=None, world=None, attrs=None
 ) -> str:
     mode = session["mode"]
     settings = get_gen_settings(session)
     if mode == "chat" and character is not None:
         return build_chat_system(
-            character, memory_content, settings, profile, world
+            character, memory_content, settings, profile, world, attrs
         )
     if mode == "immersive" and character is not None:
         return build_immersive_system(
-            character, memory_content, settings, profile, world
+            character, memory_content, settings, profile, world, attrs
         )
     if mode == "director":
         # 导演模式不注入"我的设定"：那里没有"我是谁"，写故事的人不是故事里的角色。
-        # 但世界设定要注入：故事就发生在那个世界里
+        # 但世界设定要注入：故事就发生在那个世界里。
+        # 附加属性也不注入：那是"某个角色的状态"，导演模式里没有固定的角色
         return build_director_system(memory_content, settings, world)
     return "你是一个友好的中文对话助手，回答简洁自然。"
 
@@ -378,10 +440,12 @@ def _restore_history(mode: str, row) -> str:
 
 
 def build_messages(
-    session, character, memory_content: str, history_rows, profile=None, world=None
+    session, character, memory_content: str, history_rows, profile=None, world=None, attrs=None
 ) -> list[dict]:
     mode = session["mode"]
-    system = build_system_prompt(session, character, memory_content, profile, world)
+    system = build_system_prompt(
+        session, character, memory_content, profile, world, attrs
+    )
     limit = get_config()["chat"]["history_max_messages"]
     msgs = [{"role": "system", "content": system}]
     for r in history_rows[-limit:]:

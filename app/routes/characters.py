@@ -4,7 +4,7 @@ import httpx
 from .. import character_gen
 from ..character_gen import HIDDEN_FIELDS, public_character
 from ..config import get_config
-from ..database import get_db, now, read_profile_by_id, read_world_by_id
+from ..database import clean_attr_defs, get_db, now, read_profile_by_id, read_world_by_id
 from ..schemas import BACKGROUND_MAX_COUNT, BackgroundsIn, CharacterCreateIn, CharacterIn, GenerateIn
 
 router = APIRouter(prefix="/api")
@@ -95,6 +95,12 @@ def create_character(body: CharacterCreateIn, db=Depends(get_db)):
         raise HTTPException(400, "这次生成的结果已经失效，请重新生成")
     binding = _binding(body, "profile_id")
     world_binding = _binding(body, "world_id")
+    # 附加属性定义：没带这一项就不改（编辑角色弹窗里没有这个编辑器）
+    defs = (
+        clean_attr_defs([d.model_dump() for d in body.attr_defs])
+        if "attr_defs" in body.model_fields_set and body.attr_defs is not None
+        else None
+    )
 
     if draft and draft["mode"] == "explore":
         # 探索模式：三个隐藏字段以草稿为准，请求体里那几个空串一律不算数
@@ -107,7 +113,7 @@ def create_character(body: CharacterCreateIn, db=Depends(get_db)):
 
     cur = db.execute(
         "INSERT INTO characters(name, appearance, personality, speech_style, backstory, avatar, locked, "
-        "profile_id, world_id, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "profile_id, world_id, attr_defs, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             body.name.strip(),
             body.appearance.strip(),
@@ -118,6 +124,7 @@ def create_character(body: CharacterCreateIn, db=Depends(get_db)):
             locked,
             None if binding is UNSET else binding,
             None if world_binding is UNSET else world_binding,
+            defs if defs is not None else "[]",
             now(),
             now(),
         ),
@@ -136,6 +143,11 @@ def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
     row = _get_character(db, cid)
     binding = _binding(body, "profile_id")
     world_binding = _binding(body, "world_id")
+    defs = (
+        clean_attr_defs([d.model_dump() for d in body.attr_defs])
+        if "attr_defs" in body.model_fields_set and body.attr_defs is not None
+        else None
+    )
     if row["locked"]:
         # 锁定时只允许改公开字段：请求体里那三个字段（前端压根没有值，是空串）
         # 一律忽略，否则面板一保存就把隐藏设定清空了
@@ -158,11 +170,14 @@ def update_character(cid: int, body: CharacterIn, db=Depends(get_db)):
                 cid,
             ),
         )
-    # 绑定不跟着锁定走：锁的是角色的隐藏设定，而"我用哪份身份 / 哪个世界"是用户自己的东西
+    # 绑定不跟着锁定走：锁的是角色的隐藏设定，而"我用哪份身份 / 哪个世界 / 哪些状态属性"
+    # 是用户自己的东西
     if binding is not UNSET:
         db.execute("UPDATE characters SET profile_id=? WHERE id=?", (binding, cid))
     if world_binding is not UNSET:
         db.execute("UPDATE characters SET world_id=? WHERE id=?", (world_binding, cid))
+    if defs is not None:
+        db.execute("UPDATE characters SET attr_defs=? WHERE id=?", (defs, cid))
     db.commit()
     return public_character(_get_character(db, cid))
 

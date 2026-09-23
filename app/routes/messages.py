@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..database import connect, get_db, now
+from ..database import clean_attrs, connect, get_db, now, parse_attrs
 from ..generation import generation_response, load_generation_context, prepare_generation
 from ..schemas import MessageEdit
 
@@ -12,6 +12,17 @@ def _get_message(con, mid: int):
     if not row:
         raise HTTPException(404, "消息不存在")
     return row
+
+
+def message_payload(row) -> dict:
+    """一条消息的对外形状：把 attrs 那列 JSON 解析成数组（前端不该自己解 JSON）。
+
+    消息既从这里下发，也从 `/api/sessions/{id}/messages` 下发，所以解析只有这一处。
+    """
+    out = dict(row)
+    if "attrs" in out:
+        out["attrs"] = parse_attrs(out["attrs"])
+    return out
 
 
 def _touch_session(con, sid: int):
@@ -34,11 +45,15 @@ def edit_message(mid: int, body: MessageEdit, db=Depends(get_db)):
     if "scenario" in body.model_fields_set:
         sets.append("scenario=?")
         vals.append(body.scenario)
+    # 附加属性同理：没带这一项就是不改（别的调用方只改正文时不该被清空）
+    if "attrs" in body.model_fields_set and body.attrs is not None:
+        sets.append("attrs=?")
+        vals.append(clean_attrs([a.model_dump() for a in body.attrs]))
     vals.append(mid)
     db.execute(f"UPDATE messages SET {', '.join(sets)} WHERE id=?", vals)
     _touch_session(db, msg["session_id"])
     db.commit()
-    return dict(_get_message(db, mid))
+    return message_payload(_get_message(db, mid))
 
 
 @router.delete("/messages/{mid}")
@@ -72,7 +87,7 @@ async def regenerate(mid: int):
             # 主动停止生成后可能压根没有 assistant 消息，这条路径是唯一的补救入口。
             con.execute("DELETE FROM messages WHERE session_id=? AND id>?", (sid, mid))
         con.commit()
-        msgs, model, mode, options = prepare_generation(con, sid)
+        msgs, model, mode, options, defs = prepare_generation(con, sid)
     finally:
         con.close()
-    return generation_response(sid, msgs, model, mode, options)
+    return generation_response(sid, msgs, model, mode, options, defs=defs)

@@ -23,9 +23,21 @@
           </div>
         </label>
         <p v-if="editForm.contentHint" class="hint">{{ editForm.contentHint }}</p>
+        <!-- 附加属性（见 DEVELOPMENT §2.6）：只在这里可改，不显示在消息与气泡里。
+             文字型用输入框、百分比型用数字框；留空表示这条属性"没设置" -->
+        <div v-if="showAttrInEditor" class="edit-field">
+          <span class="edit-label">附加属性</span>
+          <div v-for="a in editForm.attrs" :key="a.name" class="attr-line">
+            <span class="attr-label">{{ a.name }}</span>
+            <input v-if="a.type === 'percent'" v-model="a.value" type="number"
+                   min="0" max="100" step="1" class="attr-input" placeholder="0-100，留空表示没设置">
+            <input v-else v-model="a.value" type="text" :maxlength="limits.attr_value"
+                   class="attr-input" placeholder="留空表示没设置">
+          </div>
+        </div>
       </div>
       <div class="edit-actions">
-        <span class="hint">仅影响后续生成的上下文，不修改已沉淀的记忆</span>
+        <span class="hint">仅影响后续生成的上下文，不修改已沉淀的记忆；附加属性会随消息保存</span>
         <div class="edit-btns">
           <button class="ghost-btn" @click="cancelEdit">取消</button>
           <button class="primary-btn"
@@ -47,6 +59,7 @@ const {
   editForm,
   editingId,
   limits,
+  showAttrInEditor,
 } = toRefs(store);
 
 // 模板用到的方法（函数不是响应式的，直接解构）

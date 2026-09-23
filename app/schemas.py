@@ -34,6 +34,40 @@ def _check_avatar(v: str) -> str:
     return v
 
 
+class AttrDef(BaseModel):
+    """附加属性的一条**定义**（挂在角色上，见 DEVELOPMENT §2.6）。
+
+    名称必填、类型必须二选一（`text` 文字型 / `percent` 百分比型）；解释可选，只进提示词，
+    用来告诉模型这个属性是什么意思、该怎么取值。
+    """
+
+    name: str = Field(default="", max_length=LIMITS["attr_name"])
+    type: str = "text"
+    hint: str = Field(default="", max_length=LIMITS["attr_hint"])
+
+    @field_validator("type")
+    @classmethod
+    def _check_type(cls, v: str) -> str:
+        if v not in ("text", "percent"):
+            raise ValueError("属性类型只能是 text 或 percent")
+        return v
+
+
+class AttrValue(BaseModel):
+    """一条**属性值**（挂在消息上）。名字与类型跟着值一起存，历史消息因此自解释。"""
+
+    name: str = Field(default="", max_length=LIMITS["attr_name"])
+    type: str = "text"
+    value: str | float | int | None = None
+
+    @field_validator("type")
+    @classmethod
+    def _check_type(cls, v: str) -> str:
+        if v not in ("text", "percent"):
+            raise ValueError("属性类型只能是 text 或 percent")
+        return v
+
+
 class CharacterIn(BaseModel):
     name: str = Field(min_length=1, max_length=LIMITS["name"])
     appearance: str = Field(default="", max_length=LIMITS["appearance"])
@@ -48,6 +82,9 @@ class CharacterIn(BaseModel):
     profile_id: int | None = None
     # 同理：这个角色用哪份**世界**预设（worlds.id）。None = 不绑定（见 §2.4 世界设定）
     world_id: int | None = None
+    # 附加属性定义（见 §2.6）。同样靠 model_fields_set 区分"没带 = 不改"：
+    # 编辑角色弹窗里不带它（那份表单没有这个编辑器），不能被当成"清空所有属性"
+    attr_defs: list[AttrDef] | None = Field(default=None, max_length=LIMITS["attr_max"])
 
     @field_validator("avatar")
     @classmethod
@@ -137,6 +174,9 @@ class MessageEdit(BaseModel):
     # 用户编辑情境时不该被迫补一句台词。真正的约束在路由里（正文与情境不能同时为空）
     content: str = Field(default="", max_length=LIMITS["message"])
     scenario: str | None = Field(default=None, max_length=LIMITS["scenario"])
+    # 附加属性值（编辑面板里可改，见 §2.6）。**没带这一项 = 不改**（与绑定同一套语义）：
+    # 别的调用方（例如只改正文）不该顺手把属性清空
+    attrs: list[AttrValue] | None = Field(default=None, max_length=LIMITS["attr_max"])
 
 
 class MemoryEdit(BaseModel):

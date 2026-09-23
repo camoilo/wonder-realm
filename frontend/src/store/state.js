@@ -3,10 +3,11 @@
 // 状态**集中在这里**（一个 reactive 对象），行为按领域分在 store/*.js 里：这样"有哪些状态"只有一个地方要看，
 // 而"做什么"按功能分文件。各领域模块只 import 这个文件。
 import { reactive } from "vue";
-import { BG_MAX_COUNT, CROP_MAX_ZOOM, CROP_VIEW_PX, MODES, emptyCharForm, emptyCharModal, emptyProfile, emptyWorld } from "./helpers.js";
+import { ATTR_TYPES, BG_MAX_COUNT, CROP_MAX_ZOOM, CROP_VIEW_PX, MODES, emptyCharForm, emptyCharModal, emptyProfile, emptyWorld } from "./helpers.js";
 
 export const store = reactive({
       MODES,
+      ATTR_TYPES,
       mode: "chat",
       models: [],
       currentModel: "",
@@ -35,6 +36,10 @@ export const store = reactive({
       charForm: emptyCharForm(),
       charLocked: false,
       charModal: emptyCharModal(),
+      // 附加属性编辑里的就地提示（"给「好感」选个类型"这种），与 presetError 同一个路子
+      attrError: "",
+      // 对话页顶部那个属性浮层是否收起（见 DEVELOPMENT §2.6）
+      attrsCollapsed: false,
       newSessionModal: { visible: false, characterId: null, worldId: null, title: "" },
       renaming: false,
       renameText: "",
@@ -47,6 +52,8 @@ export const store = reactive({
         contentLabel: "消息内容",
         contentPlaceholder: "",
         contentHint: "",
+        // 附加属性：从这条消息现有的值初始化（没有的按定义补空行，方便用户直接填）
+        attrs: [],
       },
       deleteMenuId: null,
       lastFailedUser: null,
@@ -87,6 +94,7 @@ export const store = reactive({
         memory: 2000, title: 40, user_name: 20, identity: 300, user_appearance: 600,
         world_name: 40, world_description: 2000, world_rules: 2000, world_term: 30,
         world_term_meaning: 150, world_terms_max: 30,
+        attr_name: 20, attr_hint: 200, attr_value: 100, attr_max: 8,
       },
       bgImages: [],
       bgIndex: 0,

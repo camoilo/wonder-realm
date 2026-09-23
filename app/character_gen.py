@@ -10,7 +10,7 @@ import uuid
 
 from . import ollama_client
 from .config import get_config
-from .database import connect
+from .database import connect, parse_attr_defs
 from .prompts import TEMPERATURE_LEVELS
 
 log = logging.getLogger("ollama_agent")
@@ -53,6 +53,8 @@ def public_character(row) -> dict:
     out = dict(row)
     locked = bool(out.get("locked"))
     out["locked"] = locked
+    # 两列 JSON 在这里统一解析成数组：角色出现在三个入口里，解析漏一处前端就会拿到字符串
+    out["attr_defs"] = parse_attr_defs(out.get("attr_defs"))
     if locked:
         for key in HIDDEN_FIELDS:
             out.pop(key, None)

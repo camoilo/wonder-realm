@@ -111,7 +111,9 @@ Object.assign(store, {
     store.error = "";
     store.lastFailedUser = null;
     store.beginStream();
-    store.messages.push({ id: "tmp-user", role: "user", content: text, scenario: scenario || null });
+    store.messages.push({
+      id: "tmp-user", role: "user", content: text, scenario: scenario || null, attrs: [],
+    });
     store.scrollBottom();
     let userId = null;
     let failed = false;
@@ -139,6 +141,8 @@ Object.assign(store, {
               role: "assistant",
               content: d.content,
               scenario: d.scenario,
+              // 属性一起带回来（后端解析好了）：不用为它再拉一次消息列表
+              attrs: d.attrs || [],
             });
           },
           error: (d) => {
@@ -195,6 +199,8 @@ Object.assign(store, {
       contentHint: isMulti
         ? "导演模式的消息用 [SCENARIO] 标记情境说明、[DIALOG] 标记对话，保留这两个标记即可继续分段显示。"
         : "",
+      // 附加属性：按角色的定义铺开，已有值填上（导演模式没有这一节，保持空数组）
+      attrs: store.showAttrInEditor ? store.attrRowsFor(m) : [],
     };
     // 打开后按内容把输入框撑到实际高度，长消息不会被塞进一个小框里
     nextTick(() => {
@@ -215,6 +221,16 @@ Object.assign(store, {
       payload.scenario = store.editForm.scenario.trim() || null; // 清空即不再显示情境块
     } else {
       payload.scenario = store.editForm.keepScenario || null;
+    }
+    // 附加属性只在聊天与沉浸模式出现；有这一节就整体提交（空值后端会丢掉）
+    if (store.showAttrInEditor) {
+      payload.attrs = store.editForm.attrs
+        .filter((a) => String(a.value).trim() !== "")
+        .map((a) => ({
+          name: a.name,
+          type: a.type,
+          value: a.type === "percent" ? Number(a.value) : String(a.value),
+        }));
     }
     try {
       const updated = await store.api(
