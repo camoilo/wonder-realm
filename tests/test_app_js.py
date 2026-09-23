@@ -424,6 +424,10 @@ check("浮层组件挂在消息列表里（sticky 自己占位）",
       and html.index("<AttrPanel />") < html.index('v-for="m in displayMessages"'), True)
 check("浮层用 sticky 贴在对话区顶部", ".attr-panel {" in css
       and "position: sticky;" in css and "z-index: 300;" in css and "align-self: center;" in css, True)
+# 展开态不能缩成一条小窄条：宽度对齐消息气泡那一列（用户反馈过"展开后还是很小"）
+check("展开态与消息气泡同宽（不是按内容宽度缩成窄条）",
+      "max-width: min(680px, 100%);" in css
+      and "width: max-content;" in css.split(".attr-panel.collapsed")[1][:120], True)
 check("浮层可收纳（收起时只是一个图标，展开才有标题与内容）",
       'class="attr-icon"' in html and "attrsCollapsed = false" in html
       and 'class="attr-toggle"' in html and ".attr-icon {" in css

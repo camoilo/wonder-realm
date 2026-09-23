@@ -1514,35 +1514,38 @@ mark.search-hit.current {
   top: 0;
   z-index: 300;
   align-self: center;
-  width: max-content;
-  max-width: min(560px, 100%);
-  margin-bottom: 10px;
+  /* 展开态是一块**正经的面板**：宽度对齐消息气泡那一列（`bubble-wrap` 的 max 也是 680px），
+     字号与消息一致 —— 它显示的是"角色此刻的状态"，不该比气泡小一号 */
+  width: 100%;
+  max-width: min(680px, 100%);
+  margin-bottom: 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
   backdrop-filter: blur(2px);
-  font-size: 12.5px;
+  font-size: 14.5px;
 }
 .attr-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 5px 10px;
+  padding: 9px 16px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: none;
   color: var(--accent-dark);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 .attr-toggle:hover { background: #f0f2f6; }
-.attr-caret { font-size: 11px; }
-/* 收起态就是一颗粒子大小的图标按钮（不显示标题与摘要，摘要只在展开时才有意义） */
+.attr-caret { font-size: 12px; }
+/* 收起态只有一颗图标：宽度跟着图标走（上面那条定宽只服务展开态） */
 .attr-panel.collapsed {
+  width: max-content;
   border-radius: 50%;
   padding: 0;
 }
@@ -1550,68 +1553,68 @@ mark.search-hit.current {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: none;
   color: var(--accent-dark);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 .attr-icon:hover { background: #f0f2f6; }
-.attr-summary {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-soft);
-  font-weight: 400;
-}
 .attr-body {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 2px 10px 9px;
+  gap: 11px;
+  padding: 4px 16px 16px;
 }
 .attr-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  min-height: 22px;
 }
 .attr-name {
   flex: 0 0 auto;
-  max-width: 30%;
+  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-soft);
 }
-.attr-value { flex: 1; min-width: 0; color: var(--text); }
+/* 文字型的值可以换行：一整句话要能看全，不许被挤成省略号 */
+.attr-value {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
 /* 百分比型：横向进度条 + 右侧数值 */
 .attr-bar {
   flex: 1;
-  min-width: 0;
-  height: 8px;
-  border-radius: 5px;
+  min-width: 120px;
+  height: 13px;
+  border-radius: 7px;
   background: #e6e9f0;
   overflow: hidden;
 }
 .attr-bar-fill {
   display: block;
   height: 100%;
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--accent);
   transition: width 0.25s ease;
 }
 .attr-num {
-  flex: 0 0 40px;
+  flex: 0 0 54px;
   text-align: right;
   color: var(--text);
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
