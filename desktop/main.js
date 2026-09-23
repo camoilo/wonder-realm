@@ -102,7 +102,9 @@ function startBackend() {
   });
 }
 
-function waitForBackend(timeoutMs = 30000) {
+function waitForBackend(timeoutMs = 120000) {
+  // 给得宽：后端起服务前会先确保 Ollama 可用（见 app/ollama_boot.py），
+  // 冷启动 Ollama 可能要几十秒——等不到就开窗口只会看到"打不开"
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const tick = () => {

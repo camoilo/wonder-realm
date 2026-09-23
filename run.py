@@ -8,6 +8,7 @@ from pathlib import Path
 import uvicorn
 
 from app import backup, database
+from app import ollama_boot
 from app.config import get_config
 
 log = logging.getLogger("ollama_agent")
@@ -76,6 +77,12 @@ if __name__ == "__main__":
             webbrowser.open(url)
     else:
         print(f"启动中：{url}" + ("" if no_browser else "（稍后自动打开浏览器）"))
+        # 先把 Ollama 弄起来再开浏览器：界面一加载就要拉模型列表，
+        # 不先等它的话首屏会闪一句"无法连接 Ollama"（见 DEVELOPMENT §3.4）
+        status = ollama_boot.ensure_ollama(
+            cfg["ollama"]["base_url"], cfg["ollama"].get("auto_start", True)
+        )
+        print(ollama_boot.report(status, cfg["ollama"]["base_url"]))
         if not no_browser:
             open_browser_later(url)
         uvicorn.run("app.main:app", host=host, port=port)

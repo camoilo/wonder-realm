@@ -82,6 +82,8 @@
 ollama pull qwen2.5:3b
 ```
 
+**不用特意先把它打开**：启动应用时会自动检测，没在运行就顺手帮你启动（`ollama serve`，不会跟着应用一起退出，你在别处接着用也没问题）。只有根本没装 Ollama 时才会提示你去装——那种情况下应用照样能打开，只是不能生成。
+
 确认服务在跑（Ollama 安装后会自动常驻）：
 
 ```powershell
@@ -313,7 +315,7 @@ data_dir: ./data                  # 数据库目录
 
 ## 测试
 
-十二个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py`、`test_attrs.py`、`test_lan_gate.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
+十三个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py`、`test_attrs.py`、`test_lan_gate.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
 
 ```powershell
 uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
@@ -327,6 +329,7 @@ uv run python tests/test_context.py        # 记忆阈值必须留在 num_ctx �
 uv run python tests/test_world.py          # 世界设定：名称不进提示词、世界预设与角色/会话绑定
 uv run python tests/test_attrs.py          # 附加属性：[ATTR] 块解析、注入口径、落库与编辑接口
 uv run python tests/test_lan_gate.py       # 局域网闸门：本机放行、关掉时局域网 403、只有本机能改开关
+uv run python tests/test_ollama_boot.py    # Ollama 自启：已在跑就不动、没跑才拉起、没装/远端/关掉都不自启
 uv run python tests/test_prompts.py        # 提示词内容：聊天模式只写说出口的话、段落顺序
 
 node tests/test_search.mjs                 # 会话内搜索的标记/计数/跳转（需先 cd frontend && npm install）
@@ -369,7 +372,7 @@ ollama_agent/
 ## 常见问题
 
 **顶栏提示"无法连接 Ollama"**
-Ollama 没启动或端口不对。执行 `ollama list` 确认能正常返回，必要时手动启动 Ollama。
+Ollama 没启动或端口不对。启动应用时会自动尝试拉起它（见「开始使用」第 1 步），所以先等几秒再点一下重试；仍不行就执行 `ollama list` 确认命令行能用，必要时手动 `ollama serve`。
 
 **顶栏提示"所选模型未安装"**
 上一次选的模型被删了，或换机器后模型没同步。在顶栏下拉框里重新选一个已安装的模型即可。

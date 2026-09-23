@@ -213,6 +213,23 @@ flowchart LR
 
 自检：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径（preload 桥接、手机视图是否真的把 `innerWidth` 缩进 640px），全程不弹窗，用于改完壳之后确认没坏。开发期复用项目 `.venv` 里的 Python；**打包分发**（PyInstaller 收后端 + 安装包）留到 v2，见 10.9。
 
+### 3.4 启动流程与 Ollama 自启
+
+`run.py` 的顺序：**留备份 → 探端口（已在监听就只开浏览器、不起第二个）→ 确保 Ollama 可用 → 开浏览器 → 起 uvicorn**。先确保 Ollama 再开浏览器是有意的：界面一加载就要拉模型列表，不等它就绪的话首屏会闪一句"无法连接 Ollama"。
+
+确保 Ollama（`app/ollama_boot.py`）的规则——**只做"没在跑就顺手拉起来"**，已经跑着的（用户可能还在别的客户端用它）一律不动：
+
+| 情形 | 结果 | 说明 |
+|---|---|---|
+| `/api/tags` 已能返回 200 | `running` | 什么都不做 |
+| 没在跑、是本机地址、允许自启 | 起 `ollama serve` 并轮询到就绪 | 最多等 30s；起的进程 **DETACHED**，关掉应用不影响它 |
+| 起了但 30s 没就绪 | `started-timeout` | 界面里仍会提示连不上，让人手动看一眼，而不是假装成功 |
+| `ollama` 命令不存在 | `skipped-missing` | **不让启动失败**，提示装 Ollama（界面里也有同样的提示） |
+| `base_url` 不在本机 | `skipped-remote` | 远端 Ollama 不是我们能启动的 |
+| `ollama.auto_start: false` | `skipped-disabled` | 配置里关掉 |
+
+**为什么放在 `run.py` 而不是各个 .bat 里**：桌面端外壳也是 spawn `run.py`，于是 bat / 命令行 / 桌面端三条入口共用同一份实现，行为不会走偏（日志在 bat 窗口与 `desktop.log` 里都能看到那一句）。
+
 ## 4. 数据模型
 
 ### 4.1 ER 关系
@@ -477,7 +494,7 @@ event: error  {"message"}                       # 中断发送并结束流
 ollama_agent/
 ├── DEVELOPMENT.md / README.md / .gitignore / config.yaml
 ├── pyproject.toml / uv.lock        # uv 管理：fastapi/uvicorn/httpx/pyyaml
-├── run.py                          # uv run run.py → 建库 → uvicorn.run；起后开浏览器
+├── run.py                          # uv run run.py → 建库 → 确保 Ollama → uvicorn.run；起后开浏览器
 │                                   #   --no-browser 给桌面端用；--lan/--no-lan 切"推送局域网"（8.3）
 ├── start.bat                       # 双击启动网页版（GBK 适配中文控制台）
 ├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3）
@@ -487,6 +504,7 @@ ollama_agent/
 │   ├── database.py    # SQLite 连接、建表、老库改造（改名/补列）
 │   ├── schemas.py     # Pydantic 模型
 │   ├── ollama_client.py  # ThinkFilter/chat_stream/chat_once/list_models
+│   ├── ollama_boot.py    # 启动时确保 Ollama 可用（没跑就拉起来，3.4）
 │   ├── prompts.py     # 三模式 prompt 组装、gen_settings 渲染、字段定义
 │   ├── parser.py      # 输出解析（5.2）
 │   ├── memory.py      # 记忆查询/压缩/scope（5.4）
@@ -517,6 +535,7 @@ ollama_agent/
 ollama:
   base_url: http://localhost:11434
   model: ""                       # 首次不预选；之后沿用上次选择
+  auto_start: true                # 本机 Ollama 没在跑就顺手拉起来（3.4）；远端地址或 false 则不自启
   options: { temperature: 0.9, num_ctx: 32768 }  # 与 compress_threshold 配套
 memory:
   model: ""                       # 压缩用模型，空=同对话模型
@@ -613,7 +632,7 @@ data_dir: ./data                  # 直接指定
 - 源码 `frontend/`、产物提交 `app/static/`：改源码必须 `npm run build`，产物别手改
 
 ### 9.8 测试与验证
-- **清单**：11 个纯 Python + 3 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`，需先装前端依赖）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
+- **清单**：12 个纯 Python + 3 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`，需先装前端依赖）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
 - **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、模式介绍浮层、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件；新结构约定顺手补断言
 - **后端"闸门/边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机——网络来源相关的规则都照这个套路测
 - **壳（Electron）用自带的自检**：`electron . --selftest` 起后端 + 开隐藏窗口，验证 preload 桥接与"手机视图真的把页面缩进 640px"，全程不弹窗

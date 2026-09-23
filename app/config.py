@@ -10,6 +10,9 @@ DEFAULTS = {
         "base_url": "http://localhost:11434",
         # 空 = 首次使用不预选模型：由用户在顶栏自己选，之后沿用上次的选择（app_settings）
         "model": "",
+        # 启动时若探到本机 Ollama 没在运行，就顺手 `ollama serve` 拉起来（见 §3.4）。
+        # 只对本机 base_url 生效；不想要这个行为就置 false
+        "auto_start": True,
         # temperature 只是兜底：对话生成的实际取值来自会话的「发散程度」档位
         # （见 prompts.chat_options），记忆压缩与会话命名自己压到 0.3
         # num_ctx 是硬天花板：超窗时 Ollama 从最前面静默截断，而系统提示词（角色设定 +
