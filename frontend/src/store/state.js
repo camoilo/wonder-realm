@@ -33,6 +33,11 @@ export const store = reactive({
       initError: "",
       sideCollapsed: false,
       panelCollapsed: false,
+      // 手机断点（≤640px）下的抽屉 / 底部面板 / 更多菜单 / 折叠搜索条开关；桌面端不使用
+      mobileSideOpen: false,
+      mobilePanelOpen: false,
+      mobileMoreOpen: false,
+      mobileSearchOpen: false,
       theme: "light", // 当前主题 light / dark；"选一个存本地"见 store/ui.js 的 setTheme
       charForm: emptyCharForm(),
       charLocked: false,

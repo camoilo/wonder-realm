@@ -3,8 +3,18 @@
 // 只依赖 state.js（唯一的 reactive 对象），不 import 别的领域模块 —— 依赖是星形的，
 // 所以不存在循环依赖；跨领域的调用都走 store.xxx（运行时才解析）。
 import { store } from "./state.js";
+import { computed } from "vue";
 
 Object.assign(store, {
+  // 手机端三个浮层（抽屉 / 底部面板 / 更多菜单）共用一个遮罩：任一打开就显示，
+  // 点遮罩全部关闭。桌面端这三个状态不会打开，所以遮罩在桌面从不出现。
+  mobileMask: computed(() => store.mobileSideOpen || store.mobilePanelOpen || store.mobileMoreOpen),
+  closeMobileLayers() {
+    store.mobileSideOpen = false;
+    store.mobilePanelOpen = false;
+    store.mobileMoreOpen = false;
+    store.mobileSearchOpen = false;
+  },
   len(value) {
     return (value || "").length;
   },

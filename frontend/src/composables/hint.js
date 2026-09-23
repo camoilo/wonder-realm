@@ -15,6 +15,11 @@ const GAP = 8;      // 浮层与目标的间距
 const MARGIN = 8;   // 距视口边缘至少留这么多
 let current = null; // 当前正在显示的那个元素（只可能有一个）
 
+// 触屏设备（手机/平板）没有 hover，v-hint 降级为"点一下看提示、再点一下或点别处关闭"。
+// 用 pointer: coarse 判断，与 CSS 触屏适配同一套语义（模拟器切触屏时也即时生效）
+const coarsePointer = typeof window !== "undefined"
+  && window.matchMedia("(pointer: coarse)").matches;
+
 function textOf(el) {
   return String(el.__hintValue ?? "").trim();
 }
@@ -67,6 +72,13 @@ function hideAll() {
 if (typeof window !== "undefined") {
   window.addEventListener("scroll", hideAll, true);
   window.addEventListener("resize", hideAll);
+  // 触屏降级：点提示元素之外任意处关闭（bubble 阶段晚于元素自己的 click 切换，
+  // 所以"再点一下同一个元素"由 __hintToggle 处理，这里只管点别处）
+  if (coarsePointer) {
+    document.addEventListener("click", (e) => {
+      if (current && !current.contains(e.target)) hideAll();
+    });
+  }
 }
 
 export const hintDirective = {
@@ -74,10 +86,17 @@ export const hintDirective = {
     el.__hintValue = binding.value;
     el.__hintShow = () => show(el);
     el.__hintHide = () => hide(el);
-    el.addEventListener("mouseenter", el.__hintShow);
-    el.addEventListener("mouseleave", el.__hintHide);
-    el.addEventListener("focus", el.__hintShow);
-    el.addEventListener("blur", el.__hintHide);
+    // 触屏（手机/平板）没有 hover：降级为"点一下看提示、再点一下或点别处关闭"。
+    // 桌面照旧用悬停/聚焦。判断走 pointer: coarse，与 CSS 的触屏适配同一套语义
+    if (coarsePointer) {
+      el.__hintToggle = () => (current === el ? hide(el) : show(el));
+      el.addEventListener("click", el.__hintToggle);
+    } else {
+      el.addEventListener("mouseenter", el.__hintShow);
+      el.addEventListener("mouseleave", el.__hintHide);
+      el.addEventListener("focus", el.__hintShow);
+      el.addEventListener("blur", el.__hintHide);
+    }
   },
   updated(el, binding) {
     // 文案是动态的（如"关闭背景 / 显示背景"）：如果正显示着，跟着换掉
@@ -92,10 +111,14 @@ export const hintDirective = {
     }
   },
   unmounted(el) {
-    el.removeEventListener("mouseenter", el.__hintShow);
-    el.removeEventListener("mouseleave", el.__hintHide);
-    el.removeEventListener("focus", el.__hintShow);
-    el.removeEventListener("blur", el.__hintHide);
+    if (coarsePointer) {
+      el.removeEventListener("click", el.__hintToggle);
+    } else {
+      el.removeEventListener("mouseenter", el.__hintShow);
+      el.removeEventListener("mouseleave", el.__hintHide);
+      el.removeEventListener("focus", el.__hintShow);
+      el.removeEventListener("blur", el.__hintHide);
+    }
     if (current === el) hideAll();
   },
 };

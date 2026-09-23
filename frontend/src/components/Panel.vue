@@ -1,5 +1,5 @@
 <template>
-<aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
+<aside class="panel" :class="{collapsed: panelCollapsed, 'mobile-open': mobilePanelOpen}" v-if="activeSession">
     <!-- 内容面板：点图标滑出/收起。滚动容器只包住标签内容，
          "未保存 / 还原" 与保存键在它外面（见 .panel-footer） -->
     <div class="panel-box">
@@ -46,7 +46,7 @@
               :class="{on: !panelCollapsed && panelTab === t.key}"
               v-hint="tabLabel(t)" :aria-label="tabLabel(t)"
               :aria-pressed="!panelCollapsed && panelTab === t.key"
-              @click="togglePanel(t.key)">
+              @click="onRailClick(t.key)">
         <span class="rail-svg" v-html="t.icon"></span>
         <span v-if="tabDirty(t)" class="tab-dot"></span>
       </button>
@@ -110,6 +110,7 @@ const {
   activeSession,
   activeTabDirty,
   memoryScope,
+  mobilePanelOpen,
   panelCollapsed,
   panelTab,
   revertArm,
@@ -118,6 +119,7 @@ const {
 
 const {
   armRevert,
+  onRailClick,
   saveCurrentTab,
   togglePanel,
 } = store;

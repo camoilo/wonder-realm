@@ -980,6 +980,74 @@ check("用户气泡改成白底 + 边框",
 check("用户气泡不再用强调色实底",
       "var(--user-bubble)" in css or "color: #fff;" in _bub, False)
 
+# ---- 移动端适配（MOBILE_ADAPTATION.md §2-§3） ----
+_mobile = css[css.index("@media (max-width: 640px) {"):]
+check("viewport 带 viewport-fit（刘海屏 safe-area 生效）", "viewport-fit=cover" in html, True)
+check("安全区变量在", "--sat: env(safe-area-inset-top, 0px);" in css
+      and "--sab: env(safe-area-inset-bottom, 0px);" in css, True)
+check("聚焦不放大 / 滚动不透传", "-webkit-text-size-adjust: 100%;" in css
+      and "overscroll-behavior: none;" in css, True)
+check("手机断点在（≤640px 单栏）", "@media (max-width: 640px) {" in css, True)
+check("紧凑桌面断点在（641-900px）", "@media (min-width: 641px) and (max-width: 900px) {" in css, True)
+# 左侧栏 → 抽屉：fixed + 平移藏起，mobile-open 滑出；手机端忽略桌面 collapsed 的 0 宽
+check("手机断点下侧栏变抽屉",
+      "position: fixed;" in _mobile and "transform: translateX(-100%);" in _mobile
+      and ".sidebar.mobile-open { transform: translateX(0); }" in css, True)
+check("手机断点下侧栏忽略桌面收起",
+      ".sidebar.collapsed {\n    width: min(80vw, 320px);" in css, True)
+# 右侧面板 → 底部弹层：fixed 底部 + 平移藏起，mobile-open 滑出；图标栏横排当标签
+check("手机断点下面板变底部弹层",
+      "transform: translateY(105%);" in css and ".panel.mobile-open { transform: translateY(0); }" in css
+      and "border-radius: 16px 16px 0 0;" in css, True)
+check("手机断点下面板收起不缩内容（弹层整体开合）",
+      ".panel.collapsed .panel-box { width: 100%; }" in css, True)
+check("手机断点下图标栏横排到弹层顶部",
+      "order: -1;" in _mobile and "flex-direction: row;" in _mobile, True)
+# 三个浮层共用的遮罩
+check("遮罩在根组件（任一浮层打开就显示）",
+      'v-if="mobileMask" class="mobile-mask"' in html and '@click="closeMobileLayers"' in html, True)
+check("遮罩桌面隐藏、手机显示",
+      ".mobile-mask,\n.mobile-search-btn," in css and ".mobile-mask { display: block; }" in css, True)
+# store 的移动端状态与方法
+for _key in ("mobileSideOpen", "mobilePanelOpen", "mobileMoreOpen", "mobileSearchOpen"):
+    check(f"store 有 {_key}", f"{_key}: false," in store_js, True)
+check("mobileMask 计算属性在", "mobileMask: computed" in store_js, True)
+check("closeMobileLayers 在", "closeMobileLayers() {" in store_js, True)
+# 顶栏手机精简：汉堡开抽屉 + 放大镜折叠搜索 + 更多菜单
+_tb = dict(zip(VUE_ORDER, vue_sources))["components/TopBar.vue"]
+check("汉堡在手机断点打开抽屉", "@click=\"toggleSide\"" in _tb and "toggleSide() {" in _tb, True)
+check("放大镜与更多入口在", 'mobile-search-btn' in _tb and 'mobile-more-btn' in _tb, True)
+check("折叠搜索条在（只保留输入/清空/计数，↑↓ 不重复）",
+      'class="mobile-search"' in _tb and "mobileSearchOpen" in _tb, True)
+check("更多菜单收纳模型/思考/主题", 'class="mobile-more"' in _tb
+      and "mobile-model" in _tb and "mobile-think" in _tb and "mobile-theme" in _tb, True)
+check("更多菜单共用主题切换", "THEME_UI[theme].label" in _tb, True)
+# 底部弹层的入口：弹层没开时 rail 在屏外点不到，必须走更多菜单的"面板"行
+check("更多菜单有面板入口", "mobile-panel-btn" in _tb and "toggleMobilePanel" in _tb, True)
+check("toggleMobilePanel 在 store（开弹层并收起更多菜单）",
+      "toggleMobilePanel() {" in store_js and "store.mobilePanelOpen = !store.mobilePanelOpen;" in store_js, True)
+# 手机端进入会话后抽屉自动收回（openSession 里置 false）
+check("openSession 后手机端关抽屉", "store.mobileSideOpen = false;" in store_js, True)
+# 面板：手机端 mobile-open 绑定 + 图标点击走 onRailClick（只切页）
+_pn = dict(zip(VUE_ORDER, vue_sources))["components/Panel.vue"]
+check("面板绑定 mobile-open", "'mobile-open': mobilePanelOpen" in _pn, True)
+check("图标点击在手机断点只切页", "onRailClick(tab) {" in store_js
+      and "window.innerWidth <= 640" in store_js, True)
+# 细节：沉浸输入堆叠 / 去头像列 / 操作条常显 / 弹窗全屏
+check("沉浸输入两栏改上下堆叠",
+      ".input-row { flex-direction: column; align-items: stretch; }" in _mobile, True)
+check("发送键放大到 44px", "height: 44px;" in _mobile, True)
+check("消息区去头像列", ".msg-side { display: none; }" in _mobile, True)
+check("气泡放宽近全宽", ".bubble-wrap { max-width: 100%; }" in _mobile, True)
+check("消息操作条手机常显（没有 hover）", ".msg-actions { opacity: 1; }" in _mobile, True)
+check("弹窗手机全屏化", ".modal {\n    width: 100%;" in _mobile
+      and "height: 100dvh;" in _mobile and "border-radius: 0;" in _mobile, True)
+check("预设两栏在手机改回上下堆叠",
+      ".modal-body.preset-split { flex-direction: column; }" in _mobile, True)
+# 触屏降级：v-hint 在 pointer: coarse 下改点击显示
+check("v-hint 触屏降级为点击显示", "(pointer: coarse)" in
+      (frontend / "src/composables/hint.js").read_text(encoding="utf-8"), True)
+
 print()
 if FAILED:
     print(f"失败 {len(FAILED)} 项：{FAILED}")

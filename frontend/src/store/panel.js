@@ -123,6 +123,18 @@ Object.assign(store, {
       store.panelTab = tab;
     }
   },
+  // 手机断点下面板是底部弹层，图标栏横排在弹层顶部当标签用：点图标只切页，
+  // 收起靠遮罩 / 下滑，不让它像桌面那样"点当前图标收起"把内容缩成 0 宽
+  onRailClick(tab) {
+    if (window.innerWidth <= 640) store.panelTab = tab;
+    else store.togglePanel(tab);
+  },
+  // 手机端底部弹层的总开关：更多菜单里的"面板"行（rail 在弹层内部，弹层没开时点不到，
+  // 必须有一个弹层之外的入口）。开关时顺手收起更多菜单，避免两个浮层叠着
+  toggleMobilePanel() {
+    store.mobilePanelOpen = !store.mobilePanelOpen;
+    store.mobileMoreOpen = false;
+  },
   async loadMemory() {
     if (!store.memoryScope) return;
     const { type, id } = store.memoryScope;

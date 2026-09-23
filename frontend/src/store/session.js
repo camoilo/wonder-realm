@@ -73,6 +73,8 @@ Object.assign(store, {
         store.expandedChars[session.character_id] = true;
       }
       store.error = "";
+      // 手机端：进了会话就把抽屉收回去，聊天区不再被挡（桌面端该状态恒 false，赋值无副作用）
+      store.mobileSideOpen = false;
       store.scrollBottom();
     } catch (e) {
       store.error = e.message;

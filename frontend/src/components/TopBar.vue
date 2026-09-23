@@ -1,9 +1,9 @@
 <template>
 <header class="topbar">
       <div class="title-area">
-        <button class="icon-btn rail-toggle" v-hint="sideCollapsed ? '展开左侧栏' : '收起左侧栏'"
-                :aria-label="sideCollapsed ? '展开左侧栏' : '收起左侧栏'"
-                @click="sideCollapsed = !sideCollapsed">&#9776;</button>
+        <!-- 汉堡：桌面断点收起/展开左侧栏；手机断点打开抽屉（关闭走遮罩） -->
+        <button class="icon-btn rail-toggle" v-hint="sideToggleHint()" :aria-label="sideToggleHint()"
+                @click="toggleSide">&#9776;</button>
         <template v-if="activeSession">
           <span v-if="renaming" class="counted title-counted">
             <input v-model="renameText" class="title-input" :maxlength="limits.title"
@@ -48,6 +48,49 @@
                 v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
                 @click="cycleTheme">{{ themeIcon() }}</button>
       </div>
+      <!-- 手机端两个入口：放大镜（折叠搜索条）+ 更多（⋮，收纳模型/思考/主题）。
+           桌面断点由 CSS 隐藏 -->
+      <button class="icon-btn mobile-search-btn" aria-label="搜索当前会话" @click="toggleSearch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+      </button>
+      <button class="icon-btn mobile-more-btn" aria-label="更多设置" @click="toggleMore">&#8942;</button>
+      <!-- 折叠搜索条：点放大镜展开，占顶栏一整行 -->
+      <div v-if="activeSession && mobileSearchOpen" class="mobile-search">
+        <div class="search-box mobile-search-box">
+          <input v-model="searchQuery" type="text" class="search-input"
+                 placeholder="搜索当前会话"
+                 @keydown.enter.exact.prevent="searchNext"
+                 @keydown.shift.enter.prevent="searchPrev"
+                 @keydown.esc="clearSearch">
+          <button class="icon-btn" aria-label="清空搜索" :disabled="!searchQuery" @click="clearSearch">&times;</button>
+          <span class="search-count">{{ searchTotal ? searchIndex + 1 : 0 }}/{{ searchTotal }}</span>
+        </div>
+      </div>
+      <!-- 更多菜单：模型 / 思考开关 / 主题切换（手机断点替代顶栏右侧那一排） -->
+      <div v-if="mobileMoreOpen" class="mobile-more">
+        <div class="more-row">
+          <span class="more-label">模型</span>
+          <select v-model="currentModel" class="model-select mobile-model"
+                  :disabled="models.length === 0" @change="switchModel">
+            <option value="" disabled>选择模型</option>
+            <option v-for="m in models" :key="m.name" :value="m.name">{{ m.name }}{{ m.thinking ? "（思考型）" : "" }}</option>
+          </select>
+        </div>
+        <div class="more-row">
+          <span class="more-label">思考模式</span>
+          <button class="ghost-btn mobile-think" :class="{off: disableThinking}"
+                  :disabled="!currentModelSupportsThinking"
+                  @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
+        </div>
+        <div class="more-row">
+          <span class="more-label">主题</span>
+          <button class="ghost-btn mobile-theme" @click="cycleTheme">{{ themeIcon() }} {{ THEME_UI[theme].label }}</button>
+        </div>
+        <div class="more-row">
+          <span class="more-label">面板</span>
+          <button class="ghost-btn mobile-panel-btn" @click="toggleMobilePanel">面板：{{ mobilePanelOpen ? "开" : "关" }}</button>
+        </div>
+      </div>
     </header>
 </template>
 
@@ -63,6 +106,9 @@ const {
   disableThinking,
   initError,
   limits,
+  mobileMoreOpen,
+  mobilePanelOpen,
+  mobileSearchOpen,
   modelWarning,
   models,
   orphanActive,
@@ -76,11 +122,11 @@ const {
   thinkToggleTitle,
 } = toRefs(store);
 
-// 主题按钮的三个可用 handle（图标 / 标题随模式变）
+// 主题按钮的三个可用 handle（图标 / 标题 / 短名随模式变）
 const THEME_UI = {
-  auto:    { icon: "◐", title: "主题：跟随系统（点按切换）" },
-  light:   { icon: "☀", title: "主题：浅色" },
-  dark:    { icon: "☾", title: "主题：深色" },
+  auto:    { icon: "◐", title: "主题：跟随系统（点按切换）", label: "跟随系统" },
+  light:   { icon: "☀", title: "主题：浅色", label: "浅色" },
+  dark:    { icon: "☾", title: "主题：深色", label: "深色" },
 };
 const themeIcon = () => THEME_UI[theme.value].icon;
 const themeButtonTitle = () => THEME_UI[theme.value].title;
@@ -88,6 +134,24 @@ const themeButtonTitle = () => THEME_UI[theme.value].title;
 function cycleTheme() {
   const next = theme.value === "auto" ? "light" : theme.value === "light" ? "dark" : "auto";
   store.setTheme(next);
+}
+
+// 汉堡：桌面断点收起/展开左侧栏；手机断点打开抽屉（关闭走遮罩）
+const sideToggleHint = () => window.innerWidth <= 640
+  ? "打开左侧栏"
+  : (store.sideCollapsed ? "展开左侧栏" : "收起左侧栏");
+function toggleSide() {
+  if (window.innerWidth <= 640) store.mobileSideOpen = !store.mobileSideOpen;
+  else store.sideCollapsed = !store.sideCollapsed;
+}
+// 放大镜与更多互斥：展开一个时收起另一个，避免两个浮层叠着
+function toggleSearch() {
+  store.mobileSearchOpen = !store.mobileSearchOpen;
+  store.mobileMoreOpen = false;
+}
+function toggleMore() {
+  store.mobileMoreOpen = !store.mobileMoreOpen;
+  store.mobileSearchOpen = false;
 }
 
 // 模板用到的方法（函数不是响应式的，直接解构）
@@ -100,6 +164,7 @@ const {
   searchPrev,
   startRename,
   switchModel,
+  toggleMobilePanel,
   toggleThinking,
 } = store;
 </script>

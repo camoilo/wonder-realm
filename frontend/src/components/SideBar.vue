@@ -1,5 +1,5 @@
 <template>
-<aside class="sidebar" :class="{collapsed: sideCollapsed}">
+<aside class="sidebar" :class="{collapsed: sideCollapsed, 'mobile-open': mobileSideOpen}">
     <div class="sidebar-inner">
       <div class="app-brand">
         <span class="brand-mark">◇</span>
@@ -89,6 +89,7 @@ const {
   directorSessions,
   usesCharacter,
   mode,
+  mobileSideOpen,
   orphanSessions,
   sideCollapsed,
 } = toRefs(store);

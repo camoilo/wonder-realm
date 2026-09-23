@@ -2343,3 +2343,192 @@ mark.search-hit.current {
 
 .confirm-modal { width: 360px; }
 .confirm-text { margin: 4px 0 6px; font-size: 14px; line-height: 1.6; }
+
+/* ---------- 移动端适配（断点策略见 MOBILE_ADAPTATION.md §2） ---------- */
+/* 手机三个浮层（抽屉 / 底部面板 / 更多菜单）共用的遮罩与两个顶栏入口，桌面端一律不显示 */
+.mobile-mask,
+.mobile-search-btn,
+.mobile-more-btn,
+.mobile-search,
+.mobile-more { display: none; }
+
+/* 安全区变量：刘海 / 圆角屏 / 手势条让位。env() 不随主题变，定义一次即可 */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* 聚焦输入时浏览器会按设备宽度自动放大页面（字号小于 16px 时），这里禁掉 */
+html { -webkit-text-size-adjust: 100%; }
+/* 滚动到底/顶时不再把"橡皮筋"手势透传给上一级（聊天区是内滚容器，尤其需要） */
+body { overscroll-behavior: none; }
+
+/* 紧凑桌面（竖屏平板 / 窄窗口）：保留三栏，只收紧顶栏与标题 */
+@media (min-width: 641px) and (max-width: 900px) {
+  .title { max-width: 220px; }
+  .toolbar { gap: 8px; }
+  .model-select { max-width: 200px; }
+}
+
+/* 手机断点（≤640px）：单栏对话铺满，左侧栏变抽屉、右侧面板变底部弹层 */
+@media (max-width: 640px) {
+  /* ---- 左侧栏 → 抽屉：默认藏在左侧，mobile-open 时滑出，关闭走遮罩 ---- */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(80vw, 320px);
+    border-right: 1px solid var(--border);
+    box-shadow: 12px 0 32px var(--shadow);
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 901;
+  }
+  .sidebar.collapsed {
+    width: min(80vw, 320px);
+    border-right: 1px solid var(--border);
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar-inner { width: min(80vw, 320px); }
+
+  /* ---- 三个浮层共用的遮罩（层级 900：在抽屉 901 / 弹层 902 / 菜单 910 之下，弹窗 1000 之下） ---- */
+  .mobile-mask { display: block; }
+
+  /* ---- 右侧面板 → 底部弹层：默认藏在屏外，mobile-open 时滑出 ---- */
+  .panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    max-height: 88vh;
+    flex-direction: column;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 34px var(--shadow);
+    transform: translateY(105%);
+    transition: transform 0.24s ease;
+    z-index: 902;
+  }
+  .panel.mobile-open { transform: translateY(0); }
+  /* 手机端"收起"只由弹层整体开合决定，不再把内容区缩成 0 宽 */
+  .panel.collapsed { width: 100%; }
+  .panel.collapsed .panel-box { width: 100%; }
+  .panel-box { width: 100%; flex: 1; min-height: 0; }
+  /* 竖排图标栏横排到弹层顶部当标签条用 */
+  .panel-rail {
+    order: -1;
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 4px;
+    padding: 8px 6px;
+    border-left: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-btn { width: 40px; height: 40px; }
+  .panel-footer { padding-bottom: calc(14px + var(--sab)); }
+
+  /* ---- 顶栏精简：标题 + 汉堡 + 放大镜 + 更多⋮，右侧那一排收进更多菜单 ---- */
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px calc(10px + var(--sat));
+  }
+  .title { max-width: 38vw; font-size: 15px; }
+  .chip { display: none; }
+  .toolbar .search-box,
+  .toolbar .model-select,
+  .toolbar .think-btn,
+  .toolbar .theme-toggle { display: none; }
+  .mobile-search-btn,
+  .mobile-more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 16px;
+  }
+  .mobile-search-btn svg { width: 18px; height: 18px; }
+
+  /* 折叠搜索条：占顶栏一整行 */
+  .mobile-search { flex-basis: 100%; display: flex; }
+  .mobile-search-box { flex: 1; }
+  .mobile-search-box .search-input { flex: 1; width: auto; }
+
+  /* ---- 更多菜单：模型 / 思考 / 主题（fixed 卡片挂在右上角，遮罩点击关闭） ---- */
+  .mobile-more {
+    position: fixed;
+    top: calc(58px + var(--sat));
+    right: 12px;
+    z-index: 910;
+    width: min(280px, calc(100vw - 24px));
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px var(--shadow);
+  }
+  .more-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px;
+  }
+  .more-label {
+    flex: none;
+    width: 52px;
+    font-size: 12.5px;
+    color: var(--text-soft);
+  }
+  .more-row .model-select { flex: 1; max-width: none; }
+  .more-row .ghost-btn { flex: 1; }
+  .mobile-theme { white-space: nowrap; }
+
+  /* ---- 输入区：沉浸两栏改上下堆叠，发送键放大到 ≥44px ---- */
+  .inputbar { padding: 8px 12px calc(12px + var(--sab)); }
+  .input-row { flex-direction: column; align-items: stretch; }
+  .input-field.scenario-field { flex: none; }
+  .send-col { width: 100%; }
+  .send-btn,
+  .stop-btn,
+  .continue-btn,
+  .jump-btn,
+  .bg-switch { height: 44px; }
+  .jump-btn { width: 44px; }
+
+  /* ---- 消息区：去头像列、气泡放宽、操作条常显（手机上没有 hover） ---- */
+  .chat { padding: 12px 10px; }
+  .msg { gap: 8px; margin-bottom: 12px; }
+  .msg-side { display: none; }
+  .bubble-wrap { max-width: 100%; }
+  .bubble { font-size: 14px; padding: 9px 12px; }
+  .msg-actions { opacity: 1; }
+
+  /* 附加属性浮层：收起态图标放大到 44px 热区 */
+  .attr-icon { width: 44px; height: 44px; }
+
+  /* ---- 弹窗全屏化 ---- */
+  .modal-mask { padding: 0; }
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    padding: calc(14px + var(--sat)) 14px calc(14px + var(--sab));
+  }
+  /* 预设两栏在窄屏改回上下堆叠：40% 的列表列在手机上太窄 */
+  .modal-body.preset-split { flex-direction: column; }
+  .preset-list { flex: none; width: 100%; max-width: none; max-height: 40vh; }
+}

@@ -426,6 +426,7 @@ event: error  {"message"}                       # 中断发送并结束流
 - **消息区**：滚动容器外有背景层（`contain` 居中，滚消息背景不动）；有 ≥1 背景时底部中央浮胶囊 +「关闭背景」；聊天/沉浸两侧各有头像列（`.msg-side`+`.avatar.lg` 64px 方形），用户列只在设了名字或头像时渲染；气泡上方 `.msg-head`（说话人+时间，两侧镜像顺序）；气泡宽度由 `bubble-wrap` 单独约束（`min(80%,680px)`），内层只写 `max-width:100%`（两层都写会二次收缩）；**两侧同白底同边框**，只靠左右与下方缺角（`border-bottom-left/right-radius:4px`）区分；已归档折叠"已归档 N 条（已存入记忆）"
 - **消息操作**：hover 显示操作条——复制/编辑/删除（单条或"此处之后"）/重新生成（都自带文字，不再加悬停提示）。删除选项用小菜单，点别处/Esc 关闭。角色已删除的会话只可查看（"重新生成"不渲染，输入框禁用）
 - **面板"未保存"提示**：比对快照，有改动在图标右上点小圆点 + 面板底部"未保存"与「还原」键；只提示不弹窗拦截
+- **移动端适配**（方案见 `MOBILE_ADAPTATION.md`，已实施）：三断点 `>900px` 桌面三栏 / `641–900px` 紧凑桌面（保留三栏，收紧顶栏）/ `≤640px` 手机单栏。手机断点全部规则收在一条 `@media (max-width: 640px)`：左侧栏 fixed 抽屉（汉堡滑出、遮罩关闭，进会话自动收回）、右侧面板变底部弹层（图标栏横排当标签，`onRailClick` 只切页；**打开入口在更多菜单"面板"行** `toggleMobilePanel`，遮罩关闭）、顶栏仅留 汉堡/标题/放大镜(折叠搜索条)/更多⋮(收纳模型/思考/主题/面板)、沉浸输入上下堆叠、发送键 44px、消息去头像列、弹窗全屏、`.modal-body.preset-split` 上下堆叠。全局基础：`viewport-fit=cover` + `--sat/--sab` 安全区、`-webkit-text-size-adjust:100%` 禁聚焦放大、`overscroll-behavior:none`、`v-hint` 在 `pointer:coarse` 降级为点击显示。三个浮层共用 `mobileMask` 遮罩（`closeMobileLayers` 全关）
 
 ### 7.2 关键交互流
 - **发送**：回车/点发送 → 立即渲染 user 气泡 → 建 SSE →（`thinking` 时"模型思考中…"占位）→ 逐段追加 → `done` 解析渲染、刷新归档折叠区（done 连带附加属性）。生成中变"停止"（`AbortController`，见 5.5）
@@ -502,7 +503,7 @@ memory:
 character_gen: { timeout: 600 }   # 生化角色设定等待上限
 chat: { history_max_messages: 60 }# 注入历史最大条数
 naming: { model: "", max_chars: 12, min_user_chars: 8 }
-server: { host: 127.0.0.1, port: 17800 }
+server: { host: 0.0.0.0, port: 17800 } # 0.0.0.0=局域网可访问（手机 http://<本机IP>:17800），只本机可改回 127.0.0.1
 backup: { dir: ./backups, days: 14, on_startup: true }
 data_dir: ./data                  # 直接指定
 ```
