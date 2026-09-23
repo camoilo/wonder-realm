@@ -6,11 +6,10 @@
      **收起时只是一个图标**，展开才显示标题与详细内容。 -->
 <div v-if="showAttrPanel" class="attr-panel" :class="{collapsed: attrsCollapsed}">
   <button v-if="attrsCollapsed" class="attr-icon" v-hint="'展开附加属性'"
-          aria-label="展开附加属性" @click="attrsCollapsed = false">▤</button>
+          aria-label="展开附加属性" @click="attrsCollapsed = false">∨</button>
   <template v-else>
     <button class="attr-toggle" v-hint="'收起附加属性'" aria-expanded="true"
             @click="attrsCollapsed = true">
-      <span class="attr-caret">▾</span>
       <span class="attr-title">附加属性</span>
     </button>
     <div class="attr-body">

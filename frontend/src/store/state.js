@@ -33,6 +33,7 @@ export const store = reactive({
       initError: "",
       sideCollapsed: false,
       panelCollapsed: false,
+      theme: "light", // 当前主题 light / dark；"选一个存本地"见 store/ui.js 的 setTheme
       charForm: emptyCharForm(),
       charLocked: false,
       charModal: emptyCharModal(),

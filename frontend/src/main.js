@@ -8,6 +8,10 @@ import { createApp } from "vue";
 import "./style.css";
 import App from "./App.vue";
 import { hintDirective } from "./composables/hint.js";
+import { store } from "./store/state.js";
+
+// 主题：挂载前先按"本地选择 / 系统偏好"定下 data-theme，避免一开始闪成默认浅色
+store.initTheme();
 
 // 悬停提示统一走 v-hint（不用原生 title，理由见 composables/hint.js）。
 // 指令全局注册，模板里直接写 v-hint="'文案'"，不必逐个组件 import。

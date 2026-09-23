@@ -1,6 +1,13 @@
 <template>
 <aside class="sidebar" :class="{collapsed: sideCollapsed}">
     <div class="sidebar-inner">
+      <div class="app-brand">
+        <span class="brand-mark">◇</span>
+        <span class="brand-stack">
+          <span class="brand-name">多模式对话助手</span>
+          <span class="brand-sub">本地 · Ollama</span>
+        </span>
+      </div>
       <div class="side-label">模式选择</div>
       <nav class="mode-tabs">
         <button v-for="(m, key) in MODES" :key="key" class="mode-tab" :class="{active: mode === key}"

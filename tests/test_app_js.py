@@ -276,24 +276,29 @@ check("背景故事框用了 grow-lg 类", 'class="grow-lg"' in html, True)
 check("宽度规则不作用于右侧面板",
       ".modal.char-modal .field textarea {" in css and css.count(".modal.char-modal .field") >= 2, True)
 
-# ---- 右侧面板改成标签页 ----
-check("有标签栏", html.count('class="panel-tabs"'), 1)
-check("标签按钮（模板里五个，导演模式少两个）", html.count('class="panel-tab"'), 5)
+# ---- 右侧面板：竖排图标栏 + 展开的内容面板 ----
+# 标签从横向文字钮改成最右一条竖排图标（icon rail）：面板收起时也常驻，点图标滑出对应面板、
+# 再点当前激活图标收起；悬停显示文字提示（原横向标签的"未保存"圆点沿用到图标右上角）
+check("右侧内容面板在", 'class="panel-box"' in html, True)
+check("竖排图标栏在（icon rail）", 'class="panel-rail"' in html, True)
+check("图标按钮只有一个模板（v-for 渲染五个）", html.count('class="rail-btn"'), 1)
+check("五个图标由配置表驱动（加标签只动 tabs 数组）", "const tabs = [" in html, True)
 check("内容面板（模板里五个）", html.count("panel-tab-pane"), 5)
 check("旧的折叠结构已清除",
       [w for w in ("panel-section", "panelFold", "togglePanelFold") if (w in html or w in js)], [])
 check("CSS 里的折叠样式已清除", ".panel-section" in css_code, False)
-check("未保存圆点样式在", ".tab-dot" in css, True)
+check("未保存圆点样式在（图标右上角的小点）", ".tab-dot" in css, True)
 check("当前标签的未保存状态有计算属性", "activeTabDirty" in js and "activeTabDirty" in html, True)
-# ---- "配置"开关：常驻 + 改名 + 位置固定（面板开合都不动）（DEVELOPMENT §9.6 界面约定） ----
-check("面板里没有标题行（开关不搬进面板）", 'class="panel-head"' not in html, True)
-check("面板里没有第二个开关", 'class="panel-title"' not in html, True)
-check("顶栏那一份没有 v-if（常驻，不随会话/面板出现消失）",
-      re.search(r'<button v-if="[^"]*" class="ghost-btn panel-toggle"', html), None)
-check("无会话时禁用", ':disabled="!activeSession"' in html, True)
-check("禁用样式有定义（否则看起来仍可点）", ".ghost-btn:disabled {" in css, True)
-check("开关在顶栏里（位置固定在工具栏最右）",
-      html.index('class="toolbar"') < html.index("panel-toggle") < html.index("</header>"), True)
+check("图标的未保存圆点按各标签分别判断",
+      "this.worldDirty" in js and "this.charDirty" in js and "this.profileDirty" in js
+      and "this.memoryDirty" in js and "this.genDirty" in js, True)
+check("点图标：收起时展开、点当前图标收起、点别的图标仅切换",
+      "this.panelCollapsed" in js and "this.panelTab" in js and "togglePanel" in html, True)
+# ---- "配置"开关已移除：原顶栏最右那个开关由最右竖排图标栏取代（DEVELOPMENT §9.6 界面约定更新） ----
+check("顶栏不再有『配置』开关",
+      any(w in html for w in ("panel-toggle", '"配置 ›"', '"配置 ‹"')), False)
+check("面板里没有标题行 / 没有第二个开关",
+      'class="panel-head"' not in html and 'class="panel-title"' not in html, True)
 # 顶栏必须横跨"对话区 + 面板"：面板是 .main 的兄弟列时，面板一开顶栏就窄 330px，
 # 按钮会左移并落到面板标签上（DEVELOPMENT §9.6 界面约定 第二版的真实事故）。这条断言把结构钉住
 _app_tpl = re.search(r"<template>(.*?)</template>", vue_sources[0], re.S).group(1)
@@ -305,26 +310,22 @@ check("对话区与面板在同一行里并排（对话区在 .work-main 内）"
       html.index('class="work"') < html.index('class="work-main"') < html.index('class="chat-area"')
       and html.index('class="chat-area"') < html.index('class="panel"'), True)
 check("这两层容器的样式都在", ".work {" in css and ".work-main {" in css, True)
-# 文案只换箭头、字数不变，所以按钮宽度不随状态变化（"不挪鼠标点开、看一眼、再点关"）
-check("文案按状态只换箭头",
-      'activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›"' in html, True)
-check("旧文案'面板'已清除",
-      any(w in html for w in ("面板 ‹", "面板 ›", ">面板</h2>", "收起面板")), False)
-check("标题提示随状态变化",
-      "(panelCollapsed ? '展开配置面板' : '收起配置面板')" in html, True)
+check("面板 = 内容区 + 竖排图标栏，收起仍留一条图标",
+      "calc(var(--panel-w) + var(--rail-w))" in css
+      and ".panel.collapsed { width: var(--rail-w); }" in css, True)
 
 # ---- 分隔线：左右两侧同一条（DEVELOPMENT §9.6 界面约定） ----
-check("分隔线定义成变量", "--divider: 2px solid #d7dae1;" in css, True)
-check("三处分区线都用它（面板标签栏 / 左侧标题 / 左侧模式按钮）",
-      css.count("border-bottom: var(--divider);"), 3)
-check("标签边框常驻（不再只给选中项画边）",
-      bool(re.search(r"\.panel-tab \{[^}]*\}", css))
-      and "border: 1px solid var(--border);" in re.search(r"\.panel-tab \{[^}]*\}", css).group(0)
-      and "border: 1px solid transparent;" not in re.search(r"\.panel-tab \{[^}]*\}", css).group(0),
-      True)
-on_tab_css = re.search(r"\.panel-tab\.on \{[^}]*\}", css)
-check("选中标签用强调色边框区分",
-      bool(on_tab_css) and "border-color: var(--accent);" in on_tab_css.group(0), True)
+check("分隔线定义成变量", "--divider: 2px solid #39404f;" in css, True)
+check("两处分区线都用它（左侧标题 / 左侧模式按钮）",
+      css.count("border-bottom: var(--divider);"), 2)
+# 图标按钮框线常驻（透明），选中/悬停才着色：避免选中状态导致尺寸跳变
+rail_css = re.search(r"\.rail-btn \{[^}]*\}", css)
+check("图标按钮框线常驻不跳变",
+      bool(rail_css) and "border: 1px solid transparent;" in rail_css.group(0), True)
+on_rail_css = re.search(r"\.rail-btn\.on \{[^}]*\}", css)
+check("选中图标用强调色边框 + 深色底区分",
+      bool(on_rail_css) and "border-color: var(--accent);" in on_rail_css.group(0)
+      and "background: var(--field);" in on_rail_css.group(0), True)
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
@@ -369,11 +370,13 @@ check("单张背景时翻页键置灰", ':disabled="bgImages.length < 2"' in htm
 check("关闭键要压得住 .bg-switch button 的 28px",
       ".bg-switch button.bg-close {" in css, True)
 
-# ---- 标签栏必须在滚动容器外面（否则内容一长就被滚轮带走） ----
-check("标签栏排在滚动容器之前", html.index('class="panel-tabs"') < html.index('class="panel-body"'), True)
+# ---- 竖排图标栏与内容面板在滚动容器外（内容一长也够得着） ----
+check("图标栏排在内容面板之后（贴最右）",
+      html.index('class="panel-box"') < html.index('class="panel-rail"'), True)
 check("标签内容面板在滚动容器之内",
       html.index('class="panel-body"') < html.index("panel-tab-pane"), True)
-check("标签栏与还原行都不参与伸缩", css.count(".panel-tabs {") == 1 and "flex: none;" in css, True)
+check("内容区与图标栏都不参与伸缩",
+      ".panel-box {\n  flex: none;" in css and ".panel-rail {\n  flex: none;" in css, True)
 check("滚动容器仍是 panel-body", "overflow-y: auto;" in css and ".panel-body {" in css, True)
 
 # ---- 消息上方那一行：说话人 + 发送时间 ----
@@ -427,7 +430,7 @@ check("浮层用 sticky 贴在对话区顶部", ".attr-panel {" in css
 # 展开态的宽度要落在"能读清"与"不铺张"之间：太窄（按内容缩成 255px）像信息条、
 # 与气泡一样宽（680px）又太宽——用户的两次反馈分别针对这两头，所以钉住中间那个值
 check("展开态宽度取中间值（不是按内容缩成窄条，也不是与气泡同宽）",
-      "max-width: min(480px, 100%);" in css
+      "max-width: min(400px, 100%);" in css
       and "width: max-content;" in css.split(".attr-panel.collapsed")[1][:120], True)
 check("浮层可收纳（收起时只是一个图标，展开才有标题与内容）",
       'class="attr-icon"' in html and "attrsCollapsed = false" in html
@@ -466,10 +469,10 @@ check("SSE done 带回的属性直接进消息列表",
 check("气泡与消息组件完全不碰属性", "attrs" in dict(zip(VUE_ORDER, vue_sources))["components/MessageItem.vue"], False)
 
 # ---- 我的设定（用户资料） ----
-check("有我的设定标签", ">我的设定<span" in html, True)
+check("有我的设定图标（配置表里登记）", '{ key: "profile", label: "我的设定"' in html, True)
 check("我的设定面板在", 'panelTab === \'profile\'' in html, True)
 check("面板顶部的输出倾向已改名", "输出倾向" in html or "genSectionTitle" in js, False)
-check("生成要求标签写死文案", '>生成要求<span' in html, True)
+check("生成要求图标在配置表里", '{ key: "gen", label: "生成要求"' in html, True)
 check("用户头像有第三个 target", "pickAvatar($event, 'profile')" in html, True)
 check("头像归属有统一入口", "avatarForm(target)" in js, True)
 check("我的设定有独立的脏标记与还原", "profileDirty" in js and 'section === "profile"' in js, True)
@@ -477,10 +480,10 @@ check("保存派发包含我的设定", 'if (this.panelTab === "profile") return
 check("启动时加载我的设定", 'await this.api("/api/profile")' in js, True)
 
 # ---- 世界设定（全局一份，三种模式都用得上） ----
-check("有世界设定标签", ">世界设定<span" in html, True)
+check("有世界设定图标（配置表里登记）", '{ key: "world", label: "世界设定"' in html, True)
 check("世界设定面板在", "panelTab === 'world'" in html, True)
-check("世界设定标签不判模式（导演模式也显示）",
-      "v-if" not in re.search(r"<button([^>]*)panelTab = 'world'", html).group(1), True)
+check("世界设定图标不判模式（导演模式也显示）",
+      "t.key === 'world'" not in html or "{ key: \"world\", label: \"世界设定\" }" in html, True)
 check("世界设定有独立的脏标记与还原", "worldDirty" in js and 'section === "world"' in js, True)
 check("保存派发包含世界设定", 'if (this.panelTab === "world") return this.saveWorld();' in js, True)
 check("启动时加载世界设定", 'await this.api("/api/world")' in js, True)
@@ -491,14 +494,10 @@ check("到上限后不能再加词条",
       ':disabled="form.terms.length >= limits.world_terms_max"' in html, True)
 check("名称注明不发给模型", "只用于自己辨认，不发给模型" in html, True)
 check("词库说明写清空行会被丢弃", "名词留空的行在保存时自动丢弃" in html, True)
-# 5 个标签在 330px 面板里等分只有约 56px，四字标签需要约 68px：必须能换行
-tabs_css = re.search(r"\.panel-tabs \{[^}]*\}", css)
-check("标签栏可换行", bool(tabs_css) and "flex-wrap: wrap;" in tabs_css.group(0), True)
-check("标签栏仍不参与伸缩", bool(tabs_css) and "flex: none;" in tabs_css.group(0), True)
-# 实测：基准 56px 时 5 个标签挤在一行、每格 56px，四个汉字要 56px 以上 → 被截成"生成要…"；
-# 30% 时排成 3+2、每格 97px，不截断。改这个数字前请重新量一遍
-tab_css = re.search(r"\.panel-tab \{[^}]*\}", css)
-check("标签基准宽度能排下三个（30%）", bool(tab_css) and "flex: 1 1 30%;" in tab_css.group(0), True)
+# 竖排图标栏：宽度固定、竖排；图标是同一套 24px 线性图标，统一随按钮颜色走（currentColor）
+rail_box_css = re.search(r"\.panel-rail \{[^}]*\}", css)
+check("图标栏宽度固定", bool(rail_box_css) and "width: var(--rail-w);" in rail_box_css.group(0), True)
+check("图标栏竖排", bool(rail_box_css) and "flex-direction: column;" in rail_box_css.group(0), True)
 check("消息按模式取名字", "msgName(m)" in js and "msgName(m)" in html, True)
 check("用户头像列有显示条件", "showUserSide" in js and "showUserSide" in html, True)
 check("导演模式不显示用户头像列", "return !!this.activeChar && !!(this.profile.avatar || this.profile.name);" in js, True)
@@ -529,8 +528,8 @@ check("保存失败提示也在字段区之外（与按钮一起常驻）",
 
 # ---- 会话内搜索 ----
 check("顶栏有搜索框", 'class="search-box"' in html and 'class="search-input"' in html, True)
-check("搜索框在工具栏里（配置开关之前）",
-      html.index('class="search-box"') < html.index("panel-toggle"), True)
+check("搜索框在工具栏里",
+      html.index('class="toolbar"') < html.index('class="search-box"'), True)
 check("搜索框只在有会话时出现", 'v-if="activeSession" class="search-box"' in html, True)
 check("Enter / Shift+Enter / Esc 都接上了",
       ('@keydown.enter.exact.prevent="searchNext"' in html)
@@ -564,11 +563,12 @@ check("搜索框在模型选择左边",
       html.index('class="search-box"') < html.index('class="model-select"'), True)
 check("顶栏放不下时换行而不是溢出", "flex-wrap: wrap;" in css, True)
 
-# ---- "面板"按钮上的小点不能改变按钮尺寸 ----
-check("面板按钮可作定位父层", ".panel-toggle { position: relative; }" in css, True)
+# ---- 图标上的未保存小点不能改变图标尺寸 ----
 check("小点是绝对定位且不吃外边距",
-      ".panel-toggle .dirty-dot {" in css and "position: absolute;" in css
-      and "margin: 0;" in css, True)
+      ".tab-dot {" in css and "position: absolute;" in css
+      and "margin-left: 6px;" not in re.search(r"\.tab-dot \{[^}]*\}", css).group(0)
+      and "top:" in re.search(r"\.tab-dot \{[^}]*\}", css).group(0)
+      and "right:" in re.search(r"\.tab-dot \{[^}]*\}", css).group(0), True)
 
 # ---- 左侧栏的"模式选择" ----
 check("左侧栏有模式选择标题", '<div class="side-label">模式选择</div>' in html, True)
@@ -913,7 +913,7 @@ check("浮层挂在根组件", 'class="hint-tip"' in _all_vue and "hintText" in 
 check("指令模块在", (frontend / "src/composables/hint.js").exists(), True)
 # 两种浮层共用一套视觉；.hint-tip 是 fixed 定位、不吃鼠标、层级高于弹窗遮罩（1200）
 check("两种浮层共用一套样式",
-      "pointer-events: none;" in _shared_tip and "background: #2f3441;" in _shared_tip, True)
+      "pointer-events: none;" in _shared_tip and "background: #3a4252;" in _shared_tip, True)
 check("v-hint 浮层定位与层级",
       "position: fixed;" in _hint_css and "z-index: 1500;" in _hint_css, True)
 # 浮层层级表必须单调递增：普通遮罩 < 裁剪遮罩 < 确认框 < 提示浮层。

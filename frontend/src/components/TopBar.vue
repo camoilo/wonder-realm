@@ -43,16 +43,10 @@
                 :disabled="!currentModelSupportsThinking"
                 v-hint="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
-        <!-- "配置"面板的开关。三点约定（见 DEVELOPMENT §9.6 界面约定）：**常驻**（没有会话时也在，只是禁用）、
-             **改名"配置"**、**位置固定**——它永远待在顶栏最右这一格，面板开、关都不移动，
-             所以能"不挪鼠标点开、看一眼、再点关"。文案只换箭头、字数不变，宽度也不变。
-             未保存的小圆点同样常驻（面板收起时标签看不见，只能靠它提示） -->
-        <button class="ghost-btn panel-toggle"
-                :disabled="!activeSession"
-                v-hint="!activeSession ? '先打开一个会话，才能打开配置面板'
-                        : ((panelCollapsed ? '展开配置面板' : '收起配置面板')
-                           + (anyDirty ? '（有未保存的修改）' : ''))"
-                @click="panelCollapsed = !panelCollapsed">{{ activeSession && !panelCollapsed ? "配置 ‹" : "配置 ›" }}<span v-if="anyDirty" class="dirty-dot"></span></button>
+        <!-- 主题切换：跟随系统 → 浅色 → 深色 → 跟随系统 …。选择存本地，详见 store/ui.js 的 setTheme -->
+        <button class="theme-toggle" :class="'theme-' + theme"
+                v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
+                @click="cycleTheme">{{ themeIcon() }}</button>
       </div>
     </header>
 </template>
@@ -64,7 +58,6 @@ import { store, MODES } from "../store.js";
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
   activeSession,
-  anyDirty,
   currentModel,
   currentModelSupportsThinking,
   disableThinking,
@@ -73,15 +66,29 @@ const {
   modelWarning,
   models,
   orphanActive,
-  panelCollapsed,
   renameText,
   renaming,
   searchIndex,
   searchQuery,
   searchTotal,
   sideCollapsed,
+  theme,
   thinkToggleTitle,
 } = toRefs(store);
+
+// 主题按钮的三个可用 handle（图标 / 标题随模式变）
+const THEME_UI = {
+  auto:    { icon: "◐", title: "主题：跟随系统（点按切换）" },
+  light:   { icon: "☀", title: "主题：浅色" },
+  dark:    { icon: "☾", title: "主题：深色" },
+};
+const themeIcon = () => THEME_UI[theme.value].icon;
+const themeButtonTitle = () => THEME_UI[theme.value].title;
+
+function cycleTheme() {
+  const next = theme.value === "auto" ? "light" : theme.value === "light" ? "dark" : "auto";
+  store.setTheme(next);
+}
 
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {

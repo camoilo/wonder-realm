@@ -61,4 +61,29 @@ Object.assign(store, {
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight + 2, 460) + "px";
   },
+  // 主题切换：light / dark / auto（跟随系统的亮暗偏好，选择存进 localStorage，
+  // 下次启动仍有效；auto 下若系统偏好有变化，由下面 initTheme 的监听即时跟上）。
+  setTheme(mode) {
+    store.theme = mode;
+    localStorage.setItem("ollama_agent_theme", mode);
+    applyTheme(mode);
+  },
+  initTheme() {
+    const saved = localStorage.getItem("ollama_agent_theme");
+    const start = saved === "light" || saved === "dark" ? saved : "auto";
+    store.theme = start;
+    applyTheme(start);
+  },
+});
+
+const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+function applyTheme(mode) {
+  const dark = mode === "dark" || (mode === "auto" && prefersDark.matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+}
+
+// auto 模式下系统偏好变了就即时跟随，不用重新加载
+prefersDark.addEventListener("change", () => {
+  if (store.theme === "auto") applyTheme("auto");
 });

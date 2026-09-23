@@ -1,24 +1,8 @@
 <template>
 <aside class="panel" :class="{collapsed: panelCollapsed}" v-if="activeSession">
-    <div class="panel-inner">
-      <!-- 面板里没有标题行、也没有关闭键：开关只有一个，就在顶栏最右那一格，
-           位置不随面板开合变化（见 DEVELOPMENT §9.6 界面约定）。所以标签栏是面板最上面的一行 -->
-      <!-- 标签栏放在滚动容器**外面**：面板内容一长，滚轮往下滚时标签会被顶出视野、
-           得再滚回顶部才能切标签。放在外面就永远贴在面板顶部。
-           （整个 aside 本来就是 v-if="activeSession"，这里不必再判一次） -->
-      <div class="panel-tabs">
-        <button class="panel-tab" :class="{on: panelTab === 'gen'}"
-                @click="panelTab = 'gen'">生成要求<span v-if="genDirty" class="tab-dot"></span></button>
-        <!-- 世界设定是全局的，三种模式都用得上（导演模式也发生在某个世界里），所以不判模式 -->
-        <button class="panel-tab" :class="{on: panelTab === 'world'}"
-                @click="panelTab = 'world'">世界设定<span v-if="worldDirty" class="tab-dot"></span></button>
-        <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'char'}"
-                @click="panelTab = 'char'">角色设定<span v-if="charDirty" class="tab-dot"></span></button>
-        <button v-if="activeSession.character" class="panel-tab" :class="{on: panelTab === 'profile'}"
-                @click="panelTab = 'profile'">我的设定<span v-if="profileDirty" class="tab-dot"></span></button>
-        <button v-if="memoryScope" class="panel-tab" :class="{on: panelTab === 'memory'}"
-                @click="panelTab = 'memory'">{{ memoryScope.label }}<span v-if="memoryDirty" class="tab-dot"></span></button>
-      </div>
+    <!-- 内容面板：点图标滑出/收起。滚动容器只包住标签内容，
+         "未保存 / 还原" 与保存键在它外面（见 .panel-footer） -->
+    <div class="panel-box">
       <div class="panel-body">
         <div class="panel-tab-pane" v-show="panelTab === 'gen'">
         <GenPane />
@@ -42,7 +26,7 @@
       </div>
       </div>
       <!-- 保存与"未保存 / 还原"常驻在面板底部（滚动容器之外）：内容再长也不会跟着滚走，
-           也不会被内容量挤位置。三个标签共用这一个按钮，保存谁由当前标签决定 -->
+           也不会被内容量挤位置。所有页签共用这一个按钮，保存谁由当前页签决定 -->
       <div class="panel-footer">
         <div v-if="activeTabDirty" class="panel-tab-actions">
           <span class="dirty-flag">未保存</span>
@@ -54,6 +38,19 @@
         <p class="hint">保存后立即生效，只影响后续生成</p>
       </div>
     </div>
+
+    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起时也可见。
+         点某个图标展开对应面板，再点当前激活图标收起。悬停显示文字提示 -->
+    <div class="panel-rail">
+      <button v-for="t in visibleTabs" :key="t.key" class="rail-btn"
+              :class="{on: !panelCollapsed && panelTab === t.key}"
+              v-hint="tabLabel(t)" :aria-label="tabLabel(t)"
+              :aria-pressed="!panelCollapsed && panelTab === t.key"
+              @click="togglePanel(t.key)">
+        <span class="rail-svg" v-html="t.icon"></span>
+        <span v-if="tabDirty(t)" class="tab-dot"></span>
+      </button>
+    </div>
   </aside>
 </template>
 
@@ -63,26 +60,65 @@ import WorldPane from "./panes/WorldPane.vue";
 import CharPane from "./panes/CharPane.vue";
 import ProfilePane from "./panes/ProfilePane.vue";
 import MemoryPane from "./panes/MemoryPane.vue";
-import { toRefs } from "vue";
+import { computed, toRefs } from "vue";
 import { store } from "../store.js";
+
+// 图标统一 24px 线性风格，随按钮颜色走（currentColor）
+const I = {
+  // 生成要求：调谐/参数设置滑块
+  gen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.5" fill="currentColor"/><circle cx="15" cy="12" r="2.5" fill="currentColor"/><circle cx="7" cy="17" r="2.5" fill="currentColor"/></svg>`,
+  // 世界设定：地球
+  world: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>`,
+  // 角色设定：人形
+  char: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.9 3.1-6 7-6s7 2.1 7 6"/></svg>`,
+  // 我的设定：名片（头像 + 小字）
+  profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 16.5c.6-1.4 1.8-2 3.5-2s2.9.6 3.5 2"/><path d="M15.5 10h2.5"/><path d="M15.5 14h2.5"/></svg>`,
+  // 会话记忆：书/档案
+  memory: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
+};
+
+const tabs = [
+  { key: "gen", label: "生成要求", icon: I.gen },
+  { key: "world", label: "世界设定", icon: I.world },
+  { key: "char", label: "角色设定", icon: I.char },
+  { key: "profile", label: "我的设定", icon: I.profile },
+  { key: "memory", label: "会话记忆", icon: I.memory },
+];
+
+function tabVisible(t) {
+  if (t.key === "char" || t.key === "profile") return !!store.activeSession?.character;
+  if (t.key === "memory") return !!store.memoryScope;
+  return true;
+}
+function tabLabel(t) {
+  return t.key === "memory" ? (store.memoryScope?.label || "记忆") : t.label;
+}
+function tabDirty(t) {
+  switch (t.key) {
+    case "world": return store.worldDirty;
+    case "char": return store.charDirty;
+    case "profile": return store.profileDirty;
+    case "memory": return store.memoryDirty;
+    default: return store.genDirty;
+  }
+}
+
+// 只展示当前场景下真正用得到的图标（无角色 → 不显示角色/我的设定，无记忆范围 → 不显示记忆）
+const visibleTabs = computed(() => tabs.filter(tabVisible));
 
 const {
   activeSession,
   activeTabDirty,
-  charDirty,
-  genDirty,
-  memoryDirty,
   memoryScope,
   panelCollapsed,
   panelTab,
-  profileDirty,
   revertArm,
   saveDisabled,
-  worldDirty,
 } = toRefs(store);
 
 const {
   armRevert,
   saveCurrentTab,
+  togglePanel,
 } = store;
 </script>

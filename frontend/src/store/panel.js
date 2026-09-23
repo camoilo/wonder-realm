@@ -111,6 +111,18 @@ Object.assign(store, {
     if (store.panelTab === "memory") return store.saveMemory();
     return store.saveGenSettings();
   },
+  // 右侧竖排图标栏：收起时点任意图标 → 展开并切过去；展开时点当前激活图标 → 收起；
+  // 展开时点别的图标 → 只切换内容
+  togglePanel(tab) {
+    if (store.panelCollapsed) {
+      store.panelTab = tab;
+      store.panelCollapsed = false;
+    } else if (store.panelTab === tab) {
+      store.panelCollapsed = true;
+    } else {
+      store.panelTab = tab;
+    }
+  },
   async loadMemory() {
     if (!store.memoryScope) return;
     const { type, id } = store.memoryScope;
@@ -167,13 +179,6 @@ store.genDirty = computed(() => {
 
 store.memoryDirty = computed(() => {
       return store.memoryText !== store.memorySaved;
-});
-
-store.anyDirty = computed(() => {
-      return (
-        store.genDirty || store.charDirty || store.profileDirty ||
-        store.memoryDirty || store.worldDirty
-      );
 });
 
 store.activeTabDirty = computed(() => {
