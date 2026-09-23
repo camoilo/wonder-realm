@@ -981,7 +981,7 @@ check("用户气泡改成白底 + 边框",
 check("用户气泡不再用强调色实底",
       "var(--user-bubble)" in css or "color: #fff;" in _bub, False)
 
-# ---- 移动端适配（MOBILE_ADAPTATION.md §2-§3） ----
+# ---- 移动端适配（DEVELOPMENT §7.1 / §9.6：三断点 + 抽屉/底部弹层 + 触屏约定） ----
 _mobile = css[css.index("@media (max-width: 640px) {"):]
 check("viewport 带 viewport-fit（刘海屏 safe-area 生效）", "viewport-fit=cover" in html, True)
 check("安全区变量在", "--sat: env(safe-area-inset-top, 0px);" in css
