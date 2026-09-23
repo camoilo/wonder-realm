@@ -165,6 +165,11 @@ function createWindow() {
     },
   });
   win.loadURL(URL);
+  // 打开成功/失败都留一行日志：界面出问题时，"窗口到底加载到没有"是最先要确认的
+  win.webContents.on("did-finish-load", () => log(`窗口已打开：${URL}`));
+  win.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    log(`页面加载失败：${code} ${desc} ${url || ""}`);
+  });
   // 外链走系统浏览器：应用里的链接不该把整个壳导航走
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);
