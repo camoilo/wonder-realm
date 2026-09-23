@@ -66,20 +66,21 @@ Object.assign(store, {
     } catch (e) {
       /* 用兜底值 */
     }
-    // "我的设定"是全局的，只在启动时取一次；保存后由 saveProfile 刷新
+    // "我的设定"是每个主体一份：当前那份 + 预设库，都只在启动时取一次
     try {
       const p = await store.api("/api/profile");
       store.profile = p;
       store.profileForm = store.snapshot(p);
-      await store.loadPresets();
+      await store.loadPresets("profile");
     } catch (e) {
       /* 拿不到就用空值，面板里照样能填 */
     }
-    // "世界设定"同样是全局的，也只在启动时取一次；保存后由 saveWorld 刷新
+    // "世界设定"同一套：当前世界 + 世界预设库
     try {
       const w = await store.api("/api/world");
       store.world = w;
       store.worldForm = store.snapshot(w);
+      await store.loadPresets("world");
     } catch (e) {
       /* 拿不到就用空值 */
     }

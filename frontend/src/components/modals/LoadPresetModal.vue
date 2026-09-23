@@ -2,21 +2,22 @@
 <div class="modal-mask" v-if="loadPresetModal.visible"
      @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal load-modal">
-      <h2>载入预设</h2>
-      <!-- 左边挑、右边看详情：预设名字可能重复，光看一行字分不清是谁，
-           这里把头像、身份、外观都摆出来。确认后立即写入"当前使用的设定"。 -->
+      <h2>{{ kind.loadTitle }}</h2>
+      <!-- 左边挑、右边看详情：预设名字可能重复，光看一行字分不清是谁，这里把内容摆出来。
+           确认后立即写入"当前生效的那一份"。"我的设定"与"世界设定"共用这一对弹窗，
+           差别只有右侧的字段与接口（kind 决定，见 helpers.js 的 PRESET_KINDS）。 -->
       <div class="modal-body preset-split">
         <div class="preset-list">
-          <button v-for="p in profilePresets" :key="p.id" class="preset-item"
+          <button v-for="p in presets" :key="p.id" class="preset-item"
                   :class="{on: p.id === loadPresetModal.pick}"
                   @click="pickLoadPreset(p.id)">
             <span class="avatar sm">
-              <img v-if="p.avatar" :src="p.avatar" alt="">
+              <img v-if="kind.hasAvatar && p.avatar" :src="p.avatar" alt="">
               <template v-else>{{ (p.name || "预").slice(0, 1) }}</template>
             </span>
             <span class="preset-item-text">
               <span class="preset-item-name">{{ p.name }}</span>
-              <span class="preset-item-sub">{{ p.identity || "（没填身份）" }}</span>
+              <span class="preset-item-sub">{{ kind.sub(p) }}</span>
               <span class="preset-item-bind">角色：{{ presetBindLabel(p) }}</span>
             </span>
           </button>
@@ -25,21 +26,35 @@
           <template v-if="picked">
             <div class="avatar-pick">
               <span class="avatar xl">
-                <img v-if="picked.avatar" :src="picked.avatar" alt="">
+                <img v-if="kind.hasAvatar && picked.avatar" :src="picked.avatar" alt="">
                 <template v-else>{{ (picked.name || "预").slice(0, 1) }}</template>
               </span>
             </div>
             <dl>
-              <dt>名字</dt><dd>{{ picked.name }}</dd>
-              <dt>身份</dt><dd>{{ picked.identity || "（未填）" }}</dd>
-              <dt>外观</dt><dd class="pre">{{ picked.appearance || "（未填）" }}</dd>
+              <template v-if="isProfile">
+                <dt>名字</dt><dd>{{ picked.name }}</dd>
+                <dt>身份</dt><dd>{{ picked.identity || "（未填）" }}</dd>
+                <dt>外观</dt><dd class="pre">{{ picked.appearance || "（未填）" }}</dd>
+              </template>
+              <template v-else>
+                <dt>世界名称</dt><dd>{{ picked.name }}</dd>
+                <dt>描述</dt><dd class="pre">{{ picked.description || "（未填）" }}</dd>
+                <dt>规则</dt><dd class="pre">{{ picked.rules || "（未填）" }}</dd>
+                <dt>词库</dt>
+                <dd class="pre">
+                  <template v-if="(picked.terms || []).length">
+                    <div v-for="(t, i) in picked.terms" :key="i">{{ t.term }}：{{ t.meaning || "（无解释）" }}</div>
+                  </template>
+                  <template v-else>（未填）</template>
+                </dd>
+              </template>
               <dt>绑定角色</dt><dd>{{ presetBindLabel(picked) }}</dd>
             </dl>
           </template>
         </div>
       </div>
       <div class="modal-actions">
-        <span class="hint">载入会用这条预设覆盖"当前使用的设定"</span>
+        <span class="hint">{{ kind.loadHint }}</span>
         <button class="ghost-btn" @click="closeLoadModal">取消</button>
         <button class="primary-btn" :disabled="!picked" @click="confirmLoadPreset">载入这条</button>
       </div>
@@ -50,16 +65,20 @@
 <script setup>
 import { computed, toRefs } from "vue";
 import { store } from "../../store.js";
+import { PRESET_KINDS } from "../../store/helpers.js";
 import { useMaskClose } from "../../composables/maskClose.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
   loadPresetModal,
-  profilePresets,
 } = toRefs(store);
 
+// 这一次打开的是哪种预设：标题、列表、右侧字段都由它决定
+const kind = computed(() => PRESET_KINDS[store.loadPresetModal.kind] || PRESET_KINDS.profile);
+const isProfile = computed(() => store.loadPresetModal.kind === "profile");
+const presets = computed(() => store[kind.value.listKey]);
 const picked = computed(() =>
-  store.profilePresets.find((p) => p.id === store.loadPresetModal.pick) || null
+  presets.value.find((p) => p.id === store.loadPresetModal.pick) || null
 );
 
 // 模板用到的方法（函数不是响应式的，直接解构）

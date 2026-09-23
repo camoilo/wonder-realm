@@ -18,17 +18,23 @@ CREATE TABLE IF NOT EXISTS characters (
     -- 探索模式：1 = 性格/语言风格/背景故事对用户隐藏且不可改（接口也不下发），
     -- 点击「公开角色设定」后永久置 0。见 character_gen.py 与 DEVELOPMENT §2.2 角色设定
     locked       INTEGER NOT NULL DEFAULT 0,
-    -- 这个角色用哪份「我的设定」预设（user_profile.id），NULL = 不绑定。
+    -- 这个角色用哪份「我的设定」预设（user_profiles.id），NULL = 不绑定。
     -- 绑定关系**放在角色这一侧**：一条预设可以被多个角色共用（多对一就够了），
     -- 读法是"身份跟着角色走"（见 DEVELOPMENT §2.3 我的设定）。
     -- 被引用的预设删掉时由 delete_preset() 把这一列清成 NULL，不会留悬空引用
-    profile_id   INTEGER REFERENCES user_profile(id)
+    profile_id   INTEGER REFERENCES user_profiles(id),
+    -- 同理：这个角色用哪份**世界**预设（worlds.id，NULL = 不绑定）。
+    -- 一份世界预设同样可以被多个角色共用（见 DEVELOPMENT §2.4 世界设定）
+    world_id     INTEGER REFERENCES worlds(id)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     mode         TEXT NOT NULL CHECK(mode IN ('chat','immersive','director')),
     character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,
+    -- 导演会话绑定的世界预设（worlds.id，NULL = 不用世界）。只有导演模式会用到它：
+    -- 聊天与沉浸两种模式的世界跟着**角色**的 world_id 走（见 DEVELOPMENT §2.4 世界设定）
+    world_id     INTEGER REFERENCES worlds(id),
     title        TEXT NOT NULL DEFAULT '新会话',
     title_auto   INTEGER NOT NULL DEFAULT 1,
     gen_settings TEXT NOT NULL DEFAULT '{}',
@@ -86,8 +92,9 @@ CREATE INDEX IF NOT EXISTS idx_character_images ON character_images(character_id
 -- id>1 是用户存下来的预设（见 DEVELOPMENT §2.3 我的设定）——所以这里**不能**再写 CHECK(id=1)：
 -- 那条约束会把整张表锁成单行，预设就存不进来。
 -- 单开一张表而不是给别的表加列：新表对已有库也会建出来（见 4.2），无需用户删库；
--- 而且它是"用户"这个主体的属性，跟角色、会话都没有从属关系
-CREATE TABLE IF NOT EXISTS user_profile (
+-- 而且它是"用户"这个主体的属性，跟角色、会话都没有从属关系。
+-- 表名用复数：它装的不是"一行数据"，而是"当前那份 + 若干预设"（world → worlds 同理）
+CREATE TABLE IF NOT EXISTS user_profiles (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL DEFAULT '',
     identity   TEXT NOT NULL DEFAULT '',
@@ -96,12 +103,11 @@ CREATE TABLE IF NOT EXISTS user_profile (
     updated_at TEXT NOT NULL
 );
 
--- 世界设定（右侧面板的"世界设定"）。**全局一份**，约定 id=1，三种模式都注入提示词。
--- 同样不写 CHECK(id=1)：以后若要做"多世界切换"，往这张表插 id>1 的行即可（同 DEVELOPMENT §2.3 我的设定 的预设）。
--- 单开一张表而不是给 app_settings 加列：新表对已有库也会建出来（见 4.2），无需用户删库。
+-- 世界设定（右侧面板的"世界设定"）。**和"我的设定"同一套约定**：id=1 是当前世界，id>1 是世界预设。
+-- 三种模式都注入提示词：聊天与沉浸跟着**角色**的绑定走，导演会话跟着**会话**的绑定走（见 2.4）。
 -- terms 存 JSON 数组 [{"term": ..., "meaning": ...}]：它有序、可增删，整体读写最省事；
 -- 名称只给自己辨认，**不进提示词**（用户明确要求）。
-CREATE TABLE IF NOT EXISTS world (
+CREATE TABLE IF NOT EXISTS worlds (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
@@ -131,8 +137,27 @@ def now() -> str:
 # 在这里登记一次，否则老库上这一列永远不存在（新库由 SCHEMA 直接建出来）。
 # 只登记"加列"，改类型/删列 SQLite 也不支持——那种情况按 4.2 的例外流程重建。
 _COLUMN_MIGRATIONS = {
-    "characters": {"profile_id": "INTEGER REFERENCES user_profile(id)"},
+    "characters": {
+        "profile_id": "INTEGER REFERENCES user_profiles(id)",
+        "world_id": "INTEGER REFERENCES worlds(id)",
+    },
+    "sessions": {"world_id": "INTEGER REFERENCES worlds(id)"},
 }
+
+# 老库里的旧表名 → 新表名。改名的理由：这两张表装的都是"当前那份 + 若干预设"，
+# 单数名字会让人以为是单行表。必须**先改名、再建表**：新库直接按新名字建，
+# 老库改完名之后建表脚本里的 CREATE TABLE IF NOT EXISTS 自然成了空操作。
+# SQLite 的 RENAME 会同步改写别的表里指向它的外键（characters.profile_id 就是这种情况），
+# tests/test_naming.py 专门盯着这一点。
+_TABLE_RENAMES = {"user_profile": "user_profiles", "world": "worlds"}
+
+
+def _apply_table_renames(con) -> None:
+    """旧表名改成新名字。幂等：已经改过（或本来就是新库）就什么都不做。"""
+    have = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for old, new in _TABLE_RENAMES.items():
+        if old in have and new not in have:
+            con.execute(f"ALTER TABLE {old} RENAME TO {new}")
 
 
 def _apply_column_migrations(con) -> None:
@@ -145,27 +170,28 @@ def _apply_column_migrations(con) -> None:
 
 
 def _create_schema() -> None:
-    """建表 + 补列 + 三张单行表的初始行。幂等（IF NOT EXISTS / INSERT OR IGNORE），可反复调用。"""
+    """改名 + 建表 + 补列 + 单行表的初始行。幂等（IF NOT EXISTS / INSERT OR IGNORE），可反复调用。"""
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA journal_mode=WAL")
+    _apply_table_renames(con)
     con.executescript(SCHEMA)
     _apply_column_migrations(con)
     con.execute(
         "INSERT OR IGNORE INTO app_settings(id, model, memory_model, updated_at) VALUES(1, ?, ?, ?)",
         (_DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL, now()),
     )
-    # "我的设定"也是单行表：缺了就补一行空白的，读的时候不必到处判 None
+    # "我的设定"也是那个主体的一行：缺了就补一行空白的，读的时候不必到处判 None
     con.execute(
-        "INSERT OR IGNORE INTO user_profile(id, updated_at) VALUES(1, ?)", (now(),)
+        "INSERT OR IGNORE INTO user_profiles(id, updated_at) VALUES(1, ?)", (now(),)
     )
-    # "世界设定"同理（全局一份）
-    con.execute("INSERT OR IGNORE INTO world(id, updated_at) VALUES(1, ?)", (now(),))
+    # "世界设定"同理（id=1 是当前世界）
+    con.execute("INSERT OR IGNORE INTO worlds(id, updated_at) VALUES(1, ?)", (now(),))
     con.commit()
     con.close()
 
 
 def init_db(data_dir: str, default_model: str, default_memory_model: str = "") -> None:
-    """建库建表（含给老库补列，见 _COLUMN_MIGRATIONS）。"""
+    """建库建表（含老库改名与补列，见 _TABLE_RENAMES / _COLUMN_MIGRATIONS）。"""
     global DB_PATH, _DEFAULT_MODEL, _DEFAULT_MEMORY_MODEL
     _DEFAULT_MODEL = default_model
     _DEFAULT_MEMORY_MODEL = default_memory_model
@@ -249,7 +275,7 @@ def read_profile() -> dict:
     con = connect()
     try:
         row = con.execute(
-            "SELECT name, identity, appearance, avatar FROM user_profile WHERE id=1"
+            "SELECT name, identity, appearance, avatar FROM user_profiles WHERE id=1"
         ).fetchone()
     finally:
         con.close()
@@ -261,7 +287,7 @@ def read_profile_by_id(pid: int) -> dict | None:
     con = connect()
     try:
         row = con.execute(
-            f"SELECT {_PRESET_COLS} FROM user_profile WHERE id=?", (pid,)
+            f"SELECT {_PRESET_COLS} FROM user_profiles WHERE id=?", (pid,)
         ).fetchone()
     finally:
         con.close()
@@ -273,7 +299,7 @@ def write_profile(values: dict) -> dict:
     con = connect()
     try:
         con.execute(
-            "UPDATE user_profile SET name=?, identity=?, appearance=?, avatar=?, updated_at=? WHERE id=1",
+            "UPDATE user_profiles SET name=?, identity=?, appearance=?, avatar=?, updated_at=? WHERE id=1",
             (
                 values.get("name", ""),
                 values.get("identity", ""),
@@ -293,6 +319,20 @@ def write_profile(values: dict) -> dict:
 _PRESET_COLS = "id, name, identity, appearance, avatar, updated_at"
 
 
+def _bound_characters(con, column: str) -> dict[int, list[dict]]:
+    """按绑定列反查：{预设 id: [绑了它的角色]}。
+
+    绑定存在角色侧（`characters.profile_id` / `characters.world_id`），所以预设列表要显示
+    "这条给了哪些角色"就得反查一次。两种预设共用这一份，免得两处口径不一。
+    """
+    bound: dict[int, list[dict]] = {}
+    for r in con.execute(
+        f"SELECT id, name, {column} AS pid FROM characters WHERE {column} IS NOT NULL ORDER BY id"
+    ):
+        bound.setdefault(r["pid"], []).append({"id": r["id"], "name": r["name"]})
+    return bound
+
+
 def list_presets() -> list[dict]:
     """已保存的预设，新的排前面。id=1 是当前设定，不算预设。
 
@@ -302,14 +342,9 @@ def list_presets() -> list[dict]:
     con = connect()
     try:
         rows = con.execute(
-            f"SELECT {_PRESET_COLS} FROM user_profile WHERE id>1 ORDER BY updated_at DESC, id DESC"
+            f"SELECT {_PRESET_COLS} FROM user_profiles WHERE id>1 ORDER BY updated_at DESC, id DESC"
         ).fetchall()
-        bound: dict[int, list[dict]] = {}
-        for r in con.execute(
-            "SELECT id, name, profile_id FROM characters "
-            "WHERE profile_id IS NOT NULL ORDER BY id"
-        ):
-            bound.setdefault(r["profile_id"], []).append({"id": r["id"], "name": r["name"]})
+        bound = _bound_characters(con, "profile_id")
     finally:
         con.close()
     return [{**dict(r), "characters": bound.get(r["id"], [])} for r in rows]
@@ -320,7 +355,7 @@ def add_preset(values: dict) -> dict:
     con = connect()
     try:
         cur = con.execute(
-            "INSERT INTO user_profile(name, identity, appearance, avatar, updated_at) "
+            "INSERT INTO user_profiles(name, identity, appearance, avatar, updated_at) "
             "VALUES(?,?,?,?,?)",
             (
                 values.get("name", ""),
@@ -332,7 +367,7 @@ def add_preset(values: dict) -> dict:
         )
         con.commit()
         row = con.execute(
-            f"SELECT {_PRESET_COLS} FROM user_profile WHERE id=?", (cur.lastrowid,)
+            f"SELECT {_PRESET_COLS} FROM user_profiles WHERE id=?", (cur.lastrowid,)
         ).fetchone()
     finally:
         con.close()
@@ -346,7 +381,7 @@ def update_preset(preset_id: int, values: dict) -> dict | None:
     con = connect()
     try:
         cur = con.execute(
-            "UPDATE user_profile SET name=?, identity=?, appearance=?, avatar=?, updated_at=? "
+            "UPDATE user_profiles SET name=?, identity=?, appearance=?, avatar=?, updated_at=? "
             "WHERE id=?",
             (
                 values.get("name", ""),
@@ -361,7 +396,7 @@ def update_preset(preset_id: int, values: dict) -> dict | None:
             return None
         con.commit()
         row = con.execute(
-            f"SELECT {_PRESET_COLS} FROM user_profile WHERE id=?", (preset_id,)
+            f"SELECT {_PRESET_COLS} FROM user_profiles WHERE id=?", (preset_id,)
         ).fetchone()
     finally:
         con.close()
@@ -379,14 +414,113 @@ def delete_preset(preset_id: int) -> bool:
     con = connect()
     try:
         con.execute("UPDATE characters SET profile_id=NULL WHERE profile_id=?", (preset_id,))
-        cur = con.execute("DELETE FROM user_profile WHERE id=?", (preset_id,))
+        cur = con.execute("DELETE FROM user_profiles WHERE id=?", (preset_id,))
         con.commit()
         return cur.rowcount > 0
     finally:
         con.close()
 
 
-# ---- 世界设定：全局一份（id=1），三种模式都注入提示词 ----
+# ---- 世界设定：id=1 是当前世界、id>1 是世界预设（见 DEVELOPMENT §2.4 世界设定） ----
+
+_WORLD_COLS = "id, name, description, rules, terms, updated_at"
+
+
+def _world_row(row) -> dict:
+    """把一行世界设定转成接口用的形状（terms 从 JSON 解成列表）。"""
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"],
+        "rules": row["rules"],
+        "terms": _parse_terms(row["terms"]),
+    }
+
+
+def read_world_by_id(pid: int) -> dict | None:
+    """按 id 取一行世界设定（预设表用）。不存在返回 None。"""
+    con = connect()
+    try:
+        row = con.execute(
+            "SELECT id, name, description, rules, terms FROM worlds WHERE id=?", (pid,)
+        ).fetchone()
+    finally:
+        con.close()
+    return _world_row(row) if row else None
+
+
+def list_world_presets() -> list[dict]:
+    """已保存的世界预设，新的排前面。id=1 是当前世界，不算预设。
+
+    与"我的设定"预设完全同构：每项附 `characters`（绑定了这条世界预设的角色）。
+    导演会话绑的是 `sessions.world_id`，那条路径不在预设列表里显示（列表只说角色）。
+    """
+    con = connect()
+    try:
+        rows = con.execute(
+            f"SELECT {_WORLD_COLS} FROM worlds WHERE id>1 ORDER BY updated_at DESC, id DESC"
+        ).fetchall()
+        bound = _bound_characters(con, "world_id")
+    finally:
+        con.close()
+    return [{**_world_row(r), "characters": bound.get(r["id"], [])} for r in rows]
+
+
+def add_world_preset(values: dict) -> dict:
+    """把当前世界存成一条新预设，返回新建的预设。"""
+    con = connect()
+    try:
+        cur = con.execute(
+            "INSERT INTO worlds(name, description, rules, terms, updated_at) VALUES(?,?,?,?,?)",
+            (*_world_values(values), now()),
+        )
+        con.commit()
+        row = con.execute(
+            f"SELECT {_WORLD_COLS} FROM worlds WHERE id=?", (cur.lastrowid,)
+        ).fetchone()
+    finally:
+        con.close()
+    return _world_row(row)
+
+
+def update_world_preset(preset_id: int, values: dict) -> dict | None:
+    """覆盖一条世界预设。id<=1（当前世界本身）或不存在返回 None。"""
+    if preset_id <= 1:
+        return None
+    con = connect()
+    try:
+        name, description, rules, terms = _world_values(values)
+        cur = con.execute(
+            "UPDATE worlds SET name=?, description=?, rules=?, terms=?, updated_at=? WHERE id=?",
+            (name, description, rules, terms, now(), preset_id),
+        )
+        if cur.rowcount == 0:
+            return None
+        con.commit()
+        row = con.execute(
+            f"SELECT {_WORLD_COLS} FROM worlds WHERE id=?", (preset_id,)
+        ).fetchone()
+    finally:
+        con.close()
+    return _world_row(row) if row else None
+
+
+def delete_world_preset(preset_id: int) -> bool:
+    """删除一条世界预设。id<=1 一律拒绝——那是当前世界本身。
+
+    引用它的角色与导演会话一并解绑（这两列都没有 ON DELETE 级联）。
+    """
+    if preset_id <= 1:
+        return False
+    con = connect()
+    try:
+        con.execute("UPDATE characters SET world_id=NULL WHERE world_id=?", (preset_id,))
+        con.execute("UPDATE sessions SET world_id=NULL WHERE world_id=?", (preset_id,))
+        cur = con.execute("DELETE FROM worlds WHERE id=?", (preset_id,))
+        con.commit()
+        return cur.rowcount > 0
+    finally:
+        con.close()
 
 WORLD_FIELDS = ("name", "description", "rules", "terms")
 
@@ -416,12 +550,34 @@ def _parse_terms(raw: str) -> list[dict]:
     return out
 
 
+def _dump_terms(items) -> str:
+    """把词库整成入库用的 JSON。名词为空的行直接丢弃——界面上刚点出来、还没填的空行
+    不该让整次保存失败（与 `_parse_terms` 是一对形状规则，放一处才不会读写走偏）。"""
+    terms = []
+    for item in items or []:
+        term = str((item or {}).get("term") or "").strip()
+        if not term:
+            continue
+        terms.append({"term": term, "meaning": str((item or {}).get("meaning") or "").strip()})
+    return json.dumps(terms, ensure_ascii=False)
+
+
+def _world_values(values: dict) -> tuple:
+    """写入世界用的四个值（文本 strip + 词库转 JSON）。当前世界与预设共用这一处。"""
+    return (
+        str(values.get("name") or "").strip(),
+        str(values.get("description") or "").strip(),
+        str(values.get("rules") or "").strip(),
+        _dump_terms(values.get("terms")),
+    )
+
+
 def read_world() -> dict:
-    """世界设定。行不存在时返回空设定，调用方不必判 None（init_db 会补行）。"""
+    """当前世界（id=1）。行不存在时返回空设定，调用方不必判 None（init_db 会补行）。"""
     con = connect()
     try:
         row = con.execute(
-            "SELECT name, description, rules, terms FROM world WHERE id=1"
+            "SELECT name, description, rules, terms FROM worlds WHERE id=1"
         ).fetchone()
     finally:
         con.close()
@@ -436,29 +592,12 @@ def read_world() -> dict:
 
 
 def write_world(values: dict) -> dict:
-    """整体覆盖式写入（表单就是整体提交的），返回写入后的结果。
-
-    文本的 strip 与"丢掉名词为空的行"都在这里做，而不是丢给接口：读（`_parse_terms`）与写
-    是一对形状规则，放一处才不会出现"某个调用方写进去的行读出来是坏的"。名词为空的行直接
-    丢弃——界面上刚点出来、还没填的空行不该让整次保存失败。
-    """
-    terms = []
-    for item in values.get("terms") or []:
-        term = str(item.get("term") or "").strip()
-        if not term:
-            continue
-        terms.append({"term": term, "meaning": str(item.get("meaning") or "").strip()})
+    """整体覆盖式写入（表单就是整体提交的），返回写入后的结果。"""
     con = connect()
     try:
         con.execute(
-            "UPDATE world SET name=?, description=?, rules=?, terms=?, updated_at=? WHERE id=1",
-            (
-                str(values.get("name") or "").strip(),
-                str(values.get("description") or "").strip(),
-                str(values.get("rules") or "").strip(),
-                json.dumps(terms, ensure_ascii=False),
-                now(),
-            ),
+            "UPDATE worlds SET name=?, description=?, rules=?, terms=?, updated_at=? WHERE id=1",
+            (*_world_values(values), now()),
         )
         con.commit()
     finally:

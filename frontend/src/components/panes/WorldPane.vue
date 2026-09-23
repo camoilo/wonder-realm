@@ -1,4 +1,32 @@
 <template>
+<!-- 世界设定与"我的设定"同一套模型：id=1 是当前世界，预设是"另存的一份"（见 DEVELOPMENT §2.4）。
+     面板只显示"当前世界预设是谁"，挑选 / 看详情 / 编辑 / 删除都在弹窗里做。 -->
+<div class="preset-current">当前世界预设：<b>{{ currentWorldPresetLabel }}</b></div>
+<div class="preset-row preset-actions">
+  <button class="ghost-btn" :disabled="!worldPresets.length"
+          v-hint="'在弹窗里挑一条世界预设，看清详情后载入（立即生效，覆盖当前世界）'"
+          @click="openLoadModal('world')">载入预设…</button>
+  <button class="ghost-btn" :disabled="!worldPresets.length"
+          v-hint="'在弹窗里选一条世界预设来改，删除也在这里'"
+          @click="openPresetModal('world')">编辑预设…</button>
+  <button class="ghost-btn" :disabled="!worldForm.name.trim()"
+          v-hint="'把下面的世界另存成一条新预设'"
+          @click="savePreset('world')">存为预设</button>
+</div>
+<p v-if="presetError" class="avatar-error">{{ presetError }}</p>
+<p v-if="!worldPresets.length" class="hint">
+  还没有世界预设：填好下面几项后点「存为预设」，之后就能给角色或导演会话各选一份世界。
+</p>
+<!-- 导演模式没有角色，世界只能挂在会话上（见 §2.4 世界设定）：这一行就是改它的地方 -->
+<label v-if="isDirectorMode" class="field">
+  本会话的世界预设
+  <select :value="activeSession && activeSession.world_id ? String(activeSession.world_id) : ''"
+          @change="setSessionWorld($event.target.value ? Number($event.target.value) : null)">
+    <option value="">不用世界</option>
+    <option v-for="p in worldPresets" :key="p.id" :value="String(p.id)">{{ p.name }}</option>
+  </select>
+  <span class="hint">导演会话各带一份世界；「不用世界」表示这个会话不注入世界设定。</span>
+</label>
 <label class="field">世界名称
   <div class="counted">
     <input v-model="worldForm.name" type="text" :maxlength="limits.world_name"
@@ -23,49 +51,31 @@
           :class="{near: isNear(worldForm.rules, limits.world_rules)}">{{ len(worldForm.rules) }}/{{ limits.world_rules }}</span>
   </div>
 </label>
-<div class="field">
-  <span class="field-label">词库</span>
-  <div v-for="(t, i) in worldForm.terms" :key="i" class="term-row">
-    <div class="term-head">
-      <span class="term-index">词条 {{ i + 1 }}</span>
-      <button type="button" class="term-del" v-hint="'删除这一条'" aria-label="删除这一条"
-              @click="removeTerm(i)">删除</button>
-    </div>
-    <div class="counted">
-      <input v-model="t.term" type="text" :maxlength="limits.world_term" placeholder="专有名词">
-      <span class="char-count inline"
-            :class="{near: isNear(t.term, limits.world_term)}">{{ len(t.term) }}/{{ limits.world_term }}</span>
-    </div>
-    <div class="counted">
-      <textarea v-model="t.meaning" rows="2" :maxlength="limits.world_term_meaning"
-                placeholder="它的含义（可留空）"></textarea>
-      <span class="char-count"
-            :class="{near: isNear(t.meaning, limits.world_term_meaning)}">{{ len(t.meaning) }}/{{ limits.world_term_meaning }}</span>
-    </div>
-  </div>
-  <button type="button" class="ghost-btn full"
-          :disabled="worldForm.terms.length >= limits.world_terms_max"
-          @click="addTerm">＋ 添加词条</button>
-  <p class="hint">
-    最多 {{ limits.world_terms_max }} 条，按这里的顺序注入；名词留空的行在保存时自动丢弃。
-  </p>
-</div>
+<TermEditor :form="worldForm" />
 <p class="hint">名称只给自己看；描述、规则、词库会写进三种模式的提示词（在角色设定之前）。</p>
 </template>
 
 <script setup>
+import TermEditor from "../TermEditor.vue";
 import { toRefs } from "vue";
 import { store } from "../../store.js";
 
 const {
+  activeSession,
+  currentWorldPresetLabel,
+  isDirectorMode,
   limits,
+  presetError,
   worldForm,
+  worldPresets,
 } = toRefs(store);
 
 const {
-  addTerm,
   isNear,
   len,
-  removeTerm,
+  openLoadModal,
+  openPresetModal,
+  savePreset,
+  setSessionWorld,
 } = store;
 </script>

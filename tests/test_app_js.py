@@ -115,8 +115,12 @@ _store_methods = "\n".join(f.read_text(encoding="utf-8") for f in store_files)
 
 # ---- 拆组件后的守卫：模板里用到的 store 成员必须在该文件声明过 ----
 # 漏声明时 Vue 只在开发构建里 warning，生产构建下就是"看起来正常但点了没反应"，很难查。
+# data 字段只在 state.js 里找（状态集中在那一个 reactive 对象里）：方法体内的嵌套对象
+# 也会有 6 空格缩进的 `name,`，拿全量源码去匹配会把这些局部键误当成 store 状态
+# （踩过：chat.js 与 presets.js 里的 `kind,` 让 `kind` 变成一个假的状态字段）。
+_state_js = (frontend / "src/store/state.js").read_text(encoding="utf-8")
 STORE_KEYS = (
-    set(re.findall(r"^      ([A-Za-z_$][\w$]*)[,:]", store_js, re.M))          # data 字段
+    set(re.findall(r"^      ([A-Za-z_$][\w$]*)[,:]", _state_js, re.M))           # data 字段
     | set(re.findall(r"^store\.([A-Za-z_$][\w$]*) = computed", store_js, re.M))  # 计算属性
     | set(re.findall(r"^  (?:async )?([A-Za-z_$][\w$]*)\([^)]*\) \{", _store_methods, re.M))  # 方法
 )
@@ -156,6 +160,24 @@ for _rel, _src in zip(VUE_ORDER, vue_sources):
         _used |= _ids(_e)
     _missing = sorted(_used & STORE_KEYS - _declared - _locals - _SKIP)
     check(f"{_rel} 模板用到的 store 成员都已声明", _missing, [])
+
+
+# ---- 相对 import 必须指到真实文件（DEVELOPMENT §9.7 前端工程约定） ----
+# 组件分散在三层目录里（components/、panes/、modals/），store.js 的相对深度各不相同：
+# 多写一层 `../` 时打包器才会报 "Could not resolve"，静态守卫（模板标识符、构建产物）全都看不见。
+# 这里把每条相对 import 解析成路径核对一遍，省一次"构建才发现"。
+_bad_imports = []
+for _rel, _src in zip(VUE_ORDER, vue_sources):
+    _base = (frontend / "src" / _rel).parent
+    for _spec in re.findall(r'from\s+"(\./[^"]+)"', _src):
+        if not (_base / _spec).resolve().exists():
+            _bad_imports.append(f"{_rel} -> {_spec}")
+for _f in store_files + [frontend / "src/main.js"]:
+    _base = _f.parent
+    for _spec in re.findall(r'from\s+"(\./[^"]+)"', _f.read_text(encoding="utf-8")):
+        if not (_base / _spec).resolve().exists():
+            _bad_imports.append(f"{_f.name} -> {_spec}")
+check("相对 import 都指到真实文件", _bad_imports, [])
 
 
 # ---- 消息列表只能在一处遍历（DEVELOPMENT §9.7 前端工程约定） ----
@@ -298,8 +320,8 @@ check("选中标签用强调色边框区分",
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量（含底部输入区两栏、我的设定三项、预设弹窗三项、世界设定三项与词条两项）",
-      counters, 30)
+check("计数提示数量（含底部输入区两栏、我的设定三项、两种预设弹窗各三项、世界设定三项与词条两项）",
+      counters, 33)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆除外）；会话内搜索框是
@@ -377,9 +399,11 @@ check("世界设定标签不判模式（导演模式也显示）",
 check("世界设定有独立的脏标记与还原", "worldDirty" in js and 'section === "world"' in js, True)
 check("保存派发包含世界设定", 'if (this.panelTab === "world") return this.saveWorld();' in js, True)
 check("启动时加载世界设定", 'await this.api("/api/world")' in js, True)
-check("词条可增可删", "addTerm()" in js and "removeTerm(index)" in js, True)
+check("词条可增可删（方法收一份表单，面板与预设弹窗共用）",
+      "addTerm(form) {" in js and "removeTerm(form, index) {" in js
+      and '@click="addTerm(form)"' in html and '@click="removeTerm(form, i)"' in html, True)
 check("到上限后不能再加词条",
-      ':disabled="worldForm.terms.length >= limits.world_terms_max"' in html, True)
+      ':disabled="form.terms.length >= limits.world_terms_max"' in html, True)
 check("名称注明不发给模型", "只用于自己辨认，不发给模型" in html, True)
 check("词库说明写清空行会被丢弃", "名词留空的行在保存时自动丢弃" in html, True)
 # 5 个标签在 330px 面板里等分只有约 56px，四字标签需要约 68px：必须能换行
@@ -552,23 +576,23 @@ check("四处头像按钮同文案（无头像=上传头像 / 有头像=更换�
       normalized, ['AV ? "更换头像" : "上传头像"'] * 4)
 check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
 
-# ---- 我的设定的预设 ----
-# 面板只显示"当前预设是谁"，挑选/看详情/编辑/删除都在弹窗里：预设名字可能重复，
-# 下拉里一行字分不清，弹窗里能看到头像与身份、外观。
-check("面板只显示当前预设名",
-      'class="preset-current">当前预设：<b>{{ currentPresetLabel }}</b>' in html, True)
-check("三个入口键按 载入 / 编辑 / 存为 排列",
-      [f">{k}</button>" in html for k in ("载入预设…", "编辑预设…", "存为预设")]
-      and (html.index(">载入预设…</button>") < html.index(">编辑预设…</button>")
-           < html.index(">存为预设</button>")), True)
+# ---- "我的设定"与"世界设定"的预设：一套实现 + kind 派发（DEVELOPMENT §2.3 / §2.4） ----
+# 两种预设是同一套东西（挑一条、看详情、立即生效；另存、覆盖、删除），差别只是字段与接口，
+# 所以 store 里一份实现按 kind 派发，组件也共用同一对弹窗——加一种预设只改 helpers 里的配置。
+check("面板只显示当前预设名（两种各一行）",
+      html.count('class="preset-current">当前预设：<b>{{ currentPresetLabel }}</b>') == 1
+      and 'class="preset-current">当前世界预设：<b>{{ currentWorldPresetLabel }}</b>' in html, True)
+check("两处面板各有三个入口键（载入 / 编辑 / 存为）",
+      [html.count(f">{k}</button>") for k in ("载入预设…", "编辑预设…", "存为预设")] == [2, 2, 2], True)
+check("载入 / 编辑 / 存为 的排列顺序",
+      (html.index(">载入预设…</button>") < html.index(">编辑预设…</button>")
+       < html.index(">存为预设</button>")), True)
 check("面板上不放删除（不可逆操作收进弹窗）", ">删除预设</button>" in html, False)
 check("载入弹窗有列表与详情",
       'class="preset-list"' in html and 'class="preset-detail"' in html
-      and ">载入这条</button>" in html and "p.identity" in html, True)
+      and ">载入这条</button>" in html and "picked.identity" in html, True)
 check("删除在编辑预设弹窗里", ">删除这条预设</button>" in html, True)
-# 两个预设弹窗共用同一套两栏骨架（左列表 / 右内容）与同一条样式：名字可能重复，
-# 两边都得靠列表里的身份摘要分辨
-check("编辑与载入预设都是左列表 + 右内容",
+check("两个预设弹窗共用同一套两栏骨架（一份模板管两种预设）",
       html.count('class="modal-body preset-split"') == 2
       and html.count('class="preset-list"') == 2
       and html.count('class="preset-detail"') == 2, True)
@@ -577,68 +601,109 @@ check("两个预设弹窗同宽（且压得住 .modal.edit-modal 的写法）",
 # 同理：基础 `.modal-body` 是列布局且写在文件后部，两栏要显式写复合选择器才并排
 check("两栏用复合选择器压住 .modal-body 的列布局",
       ".modal-body.preset-split {" in css and "flex-direction: row;" in css, True)
-check("列表与详情都列出预设（名字 + 身份）",
-      'v-for="p in profilePresets"' in html, True)
-check("没有预设时给出提示", "还没有预设" in html, True)
-check("预设方法齐全",
-      all(k in js for k in ("async loadPresets()", "openLoadModal() {", "closeLoadModal() {",
-                            "pickLoadPreset(id) {", "async confirmLoadPreset() {",
-                            "async savePreset()", "openPresetModal() {", "editPickPreset(id) {",
+check("弹窗标题与列表按 kind 决定",
+      "kind.loadTitle" in html and "kind.editTitle" in html
+      and "v-for=\"p in presets\"" in html and "kind.sub(p)" in html, True)
+check("世界预设有自己的详情字段（描述/规则/词库）",
+      "<dt>世界名称</dt>" in html and "<dt>词库</dt>" in html, True)
+check("没有预设时给出提示", "还没有预设" in html and "还没有世界预设" in html, True)
+check("预设方法齐全（kind 参数化的那几个）",
+      all(k in js for k in ("async loadPresets(kind = \"profile\") {", "async writeCurrent(kind, values, presetId) {",
+                            "async applyPreset(kind, id) {", "openLoadModal(kind) {",
+                            "closeLoadModal() {", "pickLoadPreset(id) {", "async confirmLoadPreset() {",
+                            "async savePreset(kind) {", "openPresetModal(kind) {", "editPickPreset(id) {",
                             "async savePresetModal() {", "async deletePresetInModal() {")), True)
-# 载入 = 立即生效（写当前使用的设定），所以要带一次"覆盖"确认；删除也要确认
-_apply = js[js.index("async applyPreset(id) {"):js.index("async confirmLoadPreset() {")]
-_confirm = js[js.index("async confirmLoadPreset() {"):js.index("async savePreset()")]
+check("kind 配置表在 helpers 里（加一种预设只动配置）",
+      "export const PRESET_KINDS = {" in js and "profile: {" in js and "world: {" in js
+      and 'listKey: "worldPresets"' in js and 'currentKey: "currentWorldPresetId"' in js, True)
+check("预设列表的字段名从配置里取（不写死 profilePresets）",
+      "const k = kindOf(kind);" in js and "store[k.listKey]" in js, True)
+# 载入 = 立即生效（写当前生效的那份），所以要带一次"覆盖"确认；删除也要确认
+_write = js[js.index("async writeCurrent(kind, values, presetId) {"):js.index("async applyPreset(kind, id) {")]
+_confirm = js[js.index("async confirmLoadPreset() {"):js.index("async savePreset(kind) {")]
 check("载入前对未保存改动要确认", "await this.ask(" in _confirm, True)
-check("载入走同一条“立即生效”路径", "await this.applyPreset(p.id)" in _confirm, True)
-check("立即生效写的是当前配置",
-      'this.api(' in _apply and '"/api/profile"' in _apply and 'this.jsonOpts("PUT"' in _apply, True)
-check("载入后记住当前预设", "this.currentPresetId = p.id" in _apply, True)
+check("载入走同一条“立即生效”路径", "await this.applyPreset(kind, p.id)" in _confirm, True)
+check("立即生效写到配置里的那个接口",
+      "this.api(k.base" in _write and 'this.jsonOpts("PUT", values)' in _write, True)
+check("立即生效后当前那份与表单一起更新",
+      "store[rowKey(kind)] = saved" in _write
+      and "store[formKey(kind)] = this.snapshot(saved)" in _write, True)
+check("立即生效后记住当前预设", "store[k.currentKey] = presetId" in _write, True)
 check("当前预设名带“已修改”判定",
-      "currentPresetLabel = computed" in js and "（已修改）" in js, True)
-check("启动时拉预设列表", "await this.loadPresets();" in js, True)
-check("删除预设要确认", "删除预设「" in js, True)
+      "currentPresetLabel = computed" in js and "currentWorldPresetLabel = computed" in js
+      and "（已修改）" in js, True)
+check("启动时两种预设列表都拉一次",
+      'await this.loadPresets("profile");' in js and 'await this.loadPresets("world");' in js, True)
+check("删除预设要确认（两种都有文案）", "删除预设「" in js and "删除世界预设「" in js, True)
 check("预设样式在", ".preset-row {" in css and ".preset-current {" in css
       and ".preset-item {" in css and ".preset-detail {" in css, True)
+check("世界面板也有一行当前世界预设与三个键",
+      ">当前世界预设：" in html and html.count("openLoadModal('world')") == 1
+      and "openPresetModal('world')" in html and "savePreset('world')" in html, True)
+check("我的设定面板的键带着自己的 kind",
+      "openLoadModal('profile')" in html and "openPresetModal('profile')" in html
+      and "savePreset('profile')" in html, True)
 
-# ---- 预设绑定角色：身份跟着角色走（DEVELOPMENT §2.3 我的设定） ----
-# 一份预设可以被多个角色共用，所以绑定存在角色那侧（characters.profile_id），
+# ---- 预设绑定：身份与世界跟着角色走（DEVELOPMENT §2.3 / §2.4） ----
+# 一份预设可以被多个角色共用，所以绑定存在角色那侧（characters.profile_id / world_id），
 # 两个预设弹窗只负责显示"这条预设给了哪些角色"，改绑在「编辑角色」里
 check("两个预设弹窗都显示绑定角色",
-      html.count("presetBindLabel(p)") >= 1 and "presetBindLabel(picked)" in html, True)
-check("列表里有绑定那一行", 'class="preset-item-bind"' in html and ".preset-item-bind {" in css, True)
+      html.count("presetBindLabel(p)") == 2 and "presetBindLabel(picked)" in html, True)
+check("列表里有绑定那一行", html.count('class="preset-item-bind"') == 2 and ".preset-item-bind {" in css, True)
 check("绑定文案函数在（没绑就是「未绑定」）",
       "presetBindLabel(p) {" in js and '"未绑定"' in js, True)
-check("角色弹窗里有身份预设下拉",
-      'v-model="charModal.form.profile_id"' in html
-      and '<option :value="null">不绑定（不用预设）</option>' in html, True)
-check("下拉列出所有预设", 'v-for="p in profilePresets" :key="p.id" :value="p.id"' in html, True)
+check("角色弹窗里有身份与世界两个下拉",
+      'v-model="charModal.form.profile_id"' in html and 'v-model="charModal.form.world_id"' in html
+      and '<option :value="null">不绑定（不用预设）</option>' in html
+      and '<option :value="null">不绑定（不用世界设定）</option>' in html, True)
+check("下拉列出所有预设", 'v-for="p in profilePresets" :key="p.id" :value="p.id"' in html
+      and 'v-for="p in worldPresets" :key="p.id" :value="p.id"' in html, True)
 check("绑定项与角色字段分开", ".field-bind {" in css and 'class="field field-bind"' in html, True)
-# profile_id 只能加在弹窗表单里：右侧面板的 charForm 用的是同一个 emptyCharForm()，
-# 多带一个 null 就等于"一保存角色设定就把身份预设解绑"
+# 两个绑定字段只能加在弹窗表单里：右侧面板的 charForm 用的是同一个 emptyCharForm()，
+# 多带一个 null 就等于"一保存角色设定就把两个绑定都解了"
 _char_form = js[js.index("export const emptyCharForm = () =>"):js.index("export const emptyCharModal = () =>")]
-check("面板表单不带 profile_id", "profile_id" in _char_form, False)
-check("弹窗表单带 profile_id", "profile_id: null" in js, True)
-check("打开角色弹窗时带上绑定", "profile_id: c.profile_id ?? null" in js, True)
-check("打开角色弹窗时确保预设已加载",
-      "if (!this.profilePresets.length) this.loadPresets();" in js, True)
+check("面板表单不带绑定字段", ("profile_id" in _char_form) or ("world_id" in _char_form), False)
+check("弹窗表单带两个绑定字段", "profile_id: null, world_id: null" in js, True)
+check("打开角色弹窗时带上两个绑定",
+      "profile_id: c.profile_id ?? null" in js and "world_id: c.world_id ?? null" in js, True)
+check("打开角色弹窗时确保两种预设都加载过",
+      'if (!this.profilePresets.length) this.loadPresets("profile");' in js
+      and 'if (!this.worldPresets.length) this.loadPresets("world");' in js, True)
 # 校准规则：绑了预设就用它；没绑就不用预设（当前正用着预设时清空）；
 # 已经就是那一条则什么都不做（面板上临时手改过的内容要留住）；找不到预设时一律不动
-_sync = js[js.index("async syncCharacterProfile() {"):js.index("presetBindLabel(p) {")]
-check("打开会话时校准身份", "await this.syncCharacterProfile();" in js, True)
+_sync = js[js.index("async syncBinding(kind, boundId) {"):js.index("presetBindLabel(p) {")]
+check("打开会话时校准", "await this.syncCharacterBindings();" in js, True)
 _after_char = js[js.index("async afterCharacterChange() {"):]
 _after_char = _after_char[: _after_char.index("});")]
 check("改完角色设定（绑定可能变了）也校准",
-      "await this.syncCharacterProfile();" in _after_char, True)
-check("已经是这条预设就不再覆盖", "if (this.currentPresetId === bound.id) return;" in _sync, True)
-check("没绑且本来就没用预设就不动", "if (!this.currentPresetId) return;" in _sync, True)
-check("没绑时清空（不用预设）",
-      'values = { name: "", identity: "", appearance: "", avatar: "" };' in _sync, True)
+      "await this.syncCharacterBindings();" in _after_char, True)
+check("角色会话校准两个绑定", 'await this.syncBinding("profile", c.profile_id);' in js
+      and 'await this.syncBinding("world", c.world_id);' in js, True)
+check("导演会话按会话自己的世界校准",
+      'if (s && s.mode === "director") await this.syncBinding("world", s.world_id);' in js, True)
+check("已经是这条预设就不再覆盖", "if (store[k.currentKey] === bound.id) return;" in _sync, True)
+check("没绑且本来就没用预设就不动", "if (!store[k.currentKey]) return;" in _sync, True)
+check("没绑时清空（不用预设）", 'await this.writeCurrent(kind, k.empty(), "");' in _sync, True)
 check("找不到那条预设时按“没绑”处理（保守，不乱清）",
-      "const bound = c.profile_id" in _sync
-      and "this.profilePresets.find((p) => p.id === c.profile_id)" in _sync, True)
-check("校准写的是当前配置",
-      'this.api(' in _sync and '"/api/profile"' in _sync and 'this.jsonOpts("PUT"' in _sync, True)
-check("导演模式（没有角色）不校准", "if (!c) return;" in _sync, True)
+      "const bound = boundId ? store[k.listKey].find((p) => p.id === boundId) : null;" in _sync, True)
+check("面板上有没保存的改动时不校准（别冲掉正在编辑的内容）",
+      "if (dirtyOf(kind)) return;" in _sync, True)
+check("导演会话换世界会写会话本身",
+      '"PATCH", { world_id: worldId }' in js
+      and 'await this.syncBinding("world", saved.world_id);' in js, True)
+
+# ---- 世界设定：面板表单 + 导演会话选世界 + 词库编辑器共用（DEVELOPMENT §2.4） ----
+check("世界面板有本会话的世界下拉（仅导演模式）",
+      'v-if="isDirectorMode"' in html and "setSessionWorld($event.target.value" in html, True)
+check("新建会话弹窗里按模式换字段",
+      "v-if=\"mode !== 'director'\"" in html and "<option :value=\"null\">不用世界设定</option>" in html, True)
+check("新建导演会话会带上世界",
+      "world_id: m.worldId ?? null" in js and "characterMode ? {} : { world_id: m.worldId ?? null }" in js, True)
+check("词库编辑器抽成组件、面板与预设弹窗共用",
+      "components/TermEditor.vue" in VUE_ORDER and html.count("<TermEditor") == 2
+      and "defineProps({ form: { type: Object, required: true } })" in html, True)
+check("词条增删都作用在传进来的表单上",
+      "@click=\"addTerm(form)\"" in html and "@click=\"removeTerm(form, i)\"" in html, True)
 
 # ---- 没选模型时的提示 ----
 check("启动时若没选模型会提示", "还没有选择模型，生成前请先在左边选一个" in js, True)
@@ -812,12 +877,13 @@ check("下拉占位是名词（不再有“从预设载入”）",
 check("选下拉不再自动载入表单",
       'v-model="presetPick" @change="loadPreset"' in _pp, False)
 check("载入入口打开弹窗（不再就地载入）",
-      '@click="openLoadModal"' in _pp and "loadPreset() {" in _pp, False)
+      "@click=\"openLoadModal('profile')\"" in _pp and "loadPreset() {" in _pp, False)
 check("预设的编辑走独立弹窗",
-      '@click="openPresetModal"' in _pp and (frontend / "src/components/modals/PresetModal.vue").exists(), True)
+      "@click=\"openPresetModal('profile')\"" in _pp
+      and (frontend / "src/components/modals/PresetModal.vue").exists(), True)
 check("存为预设只新建、编辑预设才覆盖",
-      'store.jsonOpts("POST", store.profileForm)' in store_js
-      and "`/api/profile/presets/${store.presetModal.id}`" in store_js
+      'store.jsonOpts("POST", store[formKey(kind)])' in store_js
+      and "`${k.presets}/${store.presetModal.id}`" in store_js
       and 'store.jsonOpts("PUT", form)' in store_js, True)
 check("覆盖接口在", "@router.put(\"/profile/presets/{preset_id}\")" in
       (ROOT / "app/routes/profile.py").read_text(encoding="utf-8"), True)

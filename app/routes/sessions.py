@@ -3,17 +3,35 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..character_gen import public_character
-from ..database import get_db, now
+from ..database import get_db, now, read_world_by_id
 from ..schemas import SessionIn, SessionPatch
 
 router = APIRouter(prefix="/api")
 
 MODES = ("chat", "immersive", "director")
 CHARACTER_MODES = ("chat", "immersive")
+# 请求体里没提 world_id 时的占位：与 None（显式解绑）区分开
+UNSET = object()
 
 
 def _dump(settings: dict) -> str:
     return json.dumps(settings or {}, ensure_ascii=False)
+
+
+def _world_binding(body) -> object:
+    """导演会话绑的世界预设（见 DEVELOPMENT §2.4 世界设定）：UNSET = 这一项不用动。
+
+    聊天与沉浸两种模式的世界跟着**角色**走（`characters.world_id`），这里只服务导演模式——
+    那种会话没有角色，世界只能挂在会话上。只认已存在的预设：id<=1 是"当前世界"本身。
+    """
+    if "world_id" not in body.model_fields_set:
+        return UNSET
+    wid = body.world_id
+    if wid is None:
+        return None
+    if wid <= 1 or read_world_by_id(wid) is None:
+        raise HTTPException(400, "要绑定的「世界」预设不存在")
+    return wid
 
 
 def _get_session(db, sid: int):
@@ -75,12 +93,14 @@ def create_session(body: SessionIn, db=Depends(get_db)):
         if not row:
             raise HTTPException(404, "角色不存在")
         character_id = body.character_id
+    world = _world_binding(body)
     cur = db.execute(
-        "INSERT INTO sessions(mode, character_id, title, title_auto, gen_settings, created_at, updated_at) "
-        "VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO sessions(mode, character_id, world_id, title, title_auto, gen_settings, created_at, updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?)",
         (
             body.mode,
             character_id,
+            None if world is UNSET else world,
             body.title.strip() or "新会话",
             0 if body.title.strip() else 1,  # 未命名的新会话交给模型自动命名
             _dump(body.gen_settings),
@@ -100,6 +120,7 @@ def get_session(sid: int, db=Depends(get_db)):
 @router.patch("/sessions/{sid}")
 def update_session(sid: int, body: SessionPatch, db=Depends(get_db)):
     _get_session(db, sid)
+    world = _world_binding(body)
     sets, vals = [], []
     if body.title is not None:
         sets.append("title=?")
@@ -108,6 +129,10 @@ def update_session(sid: int, body: SessionPatch, db=Depends(get_db)):
     if body.gen_settings is not None:
         sets.append("gen_settings=?")
         vals.append(_dump(body.gen_settings))
+    # 没带 world_id = 不改绑定（前端保存生成要求时提交的补丁里就没有它）
+    if world is not UNSET:
+        sets.append("world_id=?")
+        vals.append(world)
     if sets:
         sets.append("updated_at=?")
         vals.append(now())

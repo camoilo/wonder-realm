@@ -162,12 +162,65 @@ export const emptyCharForm = () => ({
 // 探索模式下对用户隐藏、也不允许改写的三个字段（与后端 character_gen.HIDDEN_FIELDS 一致）
 export const LOCKED_FIELDS = ["personality", "speech_style", "backstory"];
 
-// "我的设定"（用户本人）。全局单行，与角色无关；三项都可以留空
+// "我的设定"（用户本人）。与角色无关；三项都可以留空。id=1 是当前那份、id>1 是预设
 export const emptyProfile = () => ({ name: "", identity: "", appearance: "", avatar: "" });
 
-// "世界设定"。全局一份，与角色/会话无关；四项都可以留空。
+// "世界设定"。id=1 是当前世界、id>1 是世界预设；四项都可以留空。
 // terms 是词库：[{term, meaning}]，顺序就是注入提示词的顺序。
 export const emptyWorld = () => ({ name: "", description: "", rules: "", terms: [] });
+
+// 两种预设（"我的设定"与"世界设定"）的差异都收在这张表里：store 里一份实现在 kind 上派发，
+// 组件那边共用同一对弹窗（见 DEVELOPMENT §2.3 / §2.4 / §7.1）。加一种预设只要在这里加一项。
+//   base / presets —— 当前那一份 / 预设库的接口
+//   listKey / currentKey —— 状态字段名（预设列表、当前那份来自哪条预设）
+//   empty —— "清空当前那份"的形状（没绑预设时用）
+//   values(p) —— 从一条预设取出表单要的字段（**必须新建对象/数组**，否则改表单会改到列表项）
+//   sub(p) —— 列表第二行显示什么（光看名字分不清是谁）
+export const PRESET_KINDS = {
+  profile: {
+    label: "我的设定",
+    listKey: "profilePresets",
+    currentKey: "currentPresetId",
+    base: "/api/profile",
+    presets: "/api/profile/presets",
+    empty: emptyProfile,
+    hasAvatar: true,
+    sub: (p) => p.identity || "（没填身份）",
+    values: (p) => ({
+      name: p.name || "",
+      identity: p.identity || "",
+      appearance: p.appearance || "",
+      avatar: p.avatar || "",
+    }),
+    nameError: "先给这条预设填个名字",
+    loadTitle: "载入预设",
+    loadHint: "载入会用这条预设覆盖“当前使用的设定”",
+    editTitle: "编辑预设",
+    deleteText: (name) => `删除预设「${name}」？当前使用的设定不受影响。`,
+  },
+  world: {
+    label: "世界设定",
+    listKey: "worldPresets",
+    currentKey: "currentWorldPresetId",
+    base: "/api/world",
+    presets: "/api/world/presets",
+    empty: emptyWorld,
+    hasAvatar: false,
+    sub: (p) => p.description || "（没填描述）",
+    values: (p) => ({
+      name: p.name || "",
+      description: p.description || "",
+      rules: p.rules || "",
+      terms: (p.terms || []).map((t) => ({ term: t.term, meaning: t.meaning })),
+    }),
+    nameError: "先给这个世界预设填个名字",
+    loadTitle: "载入世界预设",
+    loadHint: "载入会用这条世界预设覆盖“当前世界”",
+    editTitle: "编辑世界预设",
+    deleteText: (name) =>
+      `删除世界预设「${name}」？当前世界不受影响，用了它的角色会变成“不绑定”。`,
+  },
+};
 
 export const emptyGenerator = () => ({
   hint: "",
@@ -182,9 +235,9 @@ export const emptyGenerator = () => ({
 export const emptyCharModal = () => ({
   visible: false,
   editingId: null,
-  // profile_id 只加在弹窗表单里（不加进 emptyCharForm）：右侧面板那个 charForm 也用它，
-  // 而面板是整体提交的，多带一个 null 就等于"一保存角色设定就把身份预设解绑"
-  form: { ...emptyCharForm(), profile_id: null },
+  // profile_id / world_id 只加在弹窗表单里（不加进 emptyCharForm）：右侧面板那个 charForm
+  // 也用它，而面板是整体提交的，多带一个 null 就等于"一保存角色设定就把两个绑定都解了"
+  form: { ...emptyCharForm(), profile_id: null, world_id: null },
   gen: emptyGenerator(),
   locked: false,
   // 保存失败要在弹窗里说：底部错误条只在会话打开时渲染，新建角色时它根本不在

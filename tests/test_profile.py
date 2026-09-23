@@ -1,4 +1,4 @@
-"""我的设定：预设库（复用 user_profile，id=1 是当前设定、id>1 是预设）与"没选模型"的行为。
+"""我的设定：预设库（复用 user_profiles，id=1 是当前设定、id>1 是预设）与"没选模型"的行为。
 
 用临时库 + TestClient，绝不碰 data/ 下的真实库。
 
@@ -40,7 +40,7 @@ tmp.mkdir()
 database.init_db(str(tmp), cfg["ollama"]["model"], "")
 check("新库模型为空", database.read_settings()["model"], "")
 check("新库有一行当前设定", database.connect().execute(
-    "SELECT COUNT(*) FROM user_profile").fetchone()[0], 1)
+    "SELECT COUNT(*) FROM user_profiles").fetchone()[0], 1)
 check("初始没有预设", database.list_presets(), [])
 
 # prepare_generation 在没选模型时应抛 400 而不是把空模型名发出去
@@ -80,7 +80,7 @@ check("新的排前面", [p["name"] for p in presets][:1], ["小满"])
 check("当前设定不在预设里", "小林" in [p["name"] for p in presets], False)
 check("存预设不影响当前设定", client.get("/api/profile").json()["name"], "小林")
 check("当前设定仍只有一行", database.connect().execute(
-    "SELECT COUNT(*) FROM user_profile WHERE id=1").fetchone()[0], 1)
+    "SELECT COUNT(*) FROM user_profiles WHERE id=1").fetchone()[0], 1)
 
 check("名字为空拒绝存预设", client.post("/api/profile/presets", json={"name": "  "}).status_code, 400)
 
@@ -117,7 +117,7 @@ check("预设头像仍走白名单",
 
 # ---- 4. 旧库兼容：只有 id=1 的库读起来一切正常 ----
 con = database.connect()
-con.execute("DELETE FROM user_profile WHERE id>1")
+con.execute("DELETE FROM user_profiles WHERE id>1")
 con.commit()
 con.close()
 check("没有预设时列表为空", client.get("/api/profile/presets").json(), [])

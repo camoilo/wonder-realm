@@ -1,4 +1,6 @@
-"""世界设定：全局一份；名称只给自己看（不进提示词），描述 / 规则 / 词库进三种模式的提示词。
+"""世界设定：id=1 是当前世界、id>1 是世界预设；名称只给自己看（不进提示词），
+描述 / 规则 / 词库进三种模式的提示词。用哪份世界由绑定决定——聊天与沉浸跟着角色，
+导演跟着会话（见 DEVELOPMENT §2.4）。
 
 用临时库 + TestClient，绝不碰 data/ 下的真实库。
 
@@ -15,6 +17,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app import database, prompts  # noqa: E402
 from app.limits import LIMITS  # noqa: E402
+from app.routes import characters as character_routes  # noqa: E402
+from app.routes import sessions as session_routes  # noqa: E402
 from app.routes import world as world_routes  # noqa: E402
 
 FAILED = []
@@ -36,7 +40,7 @@ tmp.mkdir()
 database.init_db(str(tmp), "", "")
 check("新库世界设定为空", database.read_world(), EMPTY)
 check("世界表只有一行", database.connect().execute(
-    "SELECT COUNT(*) FROM world").fetchone()[0], 1)
+    "SELECT COUNT(*) FROM worlds").fetchone()[0], 1)
 
 # ---- 2. 接口往返 ----
 app = FastAPI()
@@ -145,11 +149,110 @@ check("build_messages 的 system 消息含世界设定", "# 世界设定" in msg
 
 # ---- 5. 库里的词库 JSON 被写坏时降级成空列表，而不是整个读取失败 ----
 con = database.connect()
-con.execute("UPDATE world SET terms=? WHERE id=1", ("{不是数组",))
+con.execute("UPDATE worlds SET terms=? WHERE id=1", ("{不是数组",))
 con.commit()
 con.close()
 check("坏 JSON 退回空列表", database.read_world()["terms"], [])
 check("坏 JSON 不影响其它字段", isinstance(database.read_world()["rules"], str), True)
+
+# ---- 6. 世界预设：增 / 列 / 覆盖 / 删，且不动 id=1 ----
+# 与"我的设定"预设完全同构（见 2.3）：同一个主体一张表，id=1 是当前那份、id>1 是预设
+app.include_router(character_routes.router)
+app.include_router(session_routes.router)
+client.put("/api/world", json={"name": "当前世界", "description": "当下的那份", "terms": []})
+
+check("新库没有世界预设", client.get("/api/world/presets").json(), [])
+check("世界预设名字为空被拒",
+      client.post("/api/world/presets", json={"description": "没名字"}).status_code, 400)
+w1 = client.post("/api/world/presets", json={
+    "name": "海边小城", "description": "常年有雾", "rules": "没有魔法",
+    "terms": [{"term": "雾钟", "meaning": "报雾的钟"}],
+}).json()
+check("存为世界预设 200 并带回整份设定",
+      (w1["name"], w1["description"], w1["rules"], w1["terms"]),
+      ("海边小城", "常年有雾", "没有魔法", [{"term": "雾钟", "meaning": "报雾的钟"}]))
+check("新预设默认没绑角色",
+      [p["characters"] for p in client.get("/api/world/presets").json() if p["id"] == w1["id"]], [[]])
+check("存预设不影响当前世界", client.get("/api/world").json()["name"], "当前世界")
+w2 = client.post("/api/world/presets", json={"name": "高原", "rules": "风大"}).json()
+check("列表里两条且新的在前",
+      [p["name"] for p in client.get("/api/world/presets").json()], ["高原", "海边小城"])
+check("当前世界不在预设里",
+      "当前世界" in [p["name"] for p in client.get("/api/world/presets").json()], False)
+check("世界预设名字上限仍生效",
+      client.post("/api/world/presets", json={"name": "字" * (LIMITS["world_name"] + 1)}).status_code, 422)
+check("世界预设词库上限仍生效",
+      client.post("/api/world/presets", json={"name": "x", "terms": [
+          {"term": f"t{i}", "meaning": ""} for i in range(LIMITS["world_terms_max"] + 1)
+      ]}).status_code, 422)
+
+r = client.put(f"/api/world/presets/{w2['id']}", json={
+    "name": "高原", "description": "海拔四千米", "terms": [{"term": "雪线", "meaning": "界线"}],
+})
+check("覆盖世界预设 200", (r.status_code, r.json()["description"]), (200, "海拔四千米"))
+check("覆盖不新增条目", len(client.get("/api/world/presets").json()), 2)
+check("覆盖时名字为空被拒",
+      client.put(f"/api/world/presets/{w2['id']}", json={"name": " "}).status_code, 400)
+check("覆盖不存在的预设 404",
+      client.put("/api/world/presets/999", json={"name": "x"}).status_code, 404)
+check("覆盖 id=1（当前世界）被拒",
+      client.put("/api/world/presets/1", json={"name": "x"}).status_code, 404)
+check("覆盖世界预设不影响当前世界", client.get("/api/world").json()["description"], "当下的那份")
+
+# ---- 7. 绑定：角色（聊天 / 沉浸）与导演会话 ----
+c1 = client.post("/api/characters", json={"name": "阿岚"}).json()
+c2 = client.post("/api/characters", json={"name": "小满"}).json()
+check("新建角色默认不绑世界", (c1["world_id"], c2["world_id"]), (None, None))
+r = client.put(f"/api/characters/{c1['id']}", json={"name": "阿岚", "world_id": w1["id"]})
+check("给角色绑世界预设", r.json()["world_id"], w1["id"])
+client.put(f"/api/characters/{c2['id']}", json={"name": "小满", "world_id": w1["id"]})
+by_id = {p["id"]: p for p in client.get("/api/world/presets").json()}
+check("一份世界预设可以绑多个角色",
+      [c["name"] for c in by_id[w1["id"]]["characters"]], ["阿岚", "小满"])
+check("没被绑的预设显示为空", by_id[w2["id"]]["characters"], [])
+# 面板保存角色设定时提交的表单里没有 world_id——那不能被当成"解绑"（同 profile_id）
+r = client.put(f"/api/characters/{c1['id']}", json={"name": "阿岚改", "appearance": "黑衣"})
+check("不改世界绑定就不动它", r.json()["world_id"], w1["id"])
+r = client.put(f"/api/characters/{c1['id']}", json={"name": "阿岚改", "world_id": None})
+check("显式 null 才解绑世界", r.json()["world_id"], None)
+check("绑不存在的世界预设被拒",
+      client.put(f"/api/characters/{c1['id']}",
+                 json={"name": "阿岚", "world_id": 999}).status_code, 400)
+check("不能绑到 id=1（那是当前世界，不是预设）",
+      client.put(f"/api/characters/{c1['id']}",
+                 json={"name": "阿岚", "world_id": 1}).status_code, 400)
+check("身份与世界两个绑定互不干扰",
+      client.put(f"/api/characters/{c1['id']}",
+                 json={"name": "阿岚", "profile_id": None}).json()["world_id"], None)
+
+# 导演会话没有角色，世界只能挂在会话上
+s = client.post("/api/sessions", json={"mode": "director", "world_id": w1["id"]}).json()
+check("新建导演会话时绑世界", s["world_id"], w1["id"])
+check("新建导演会话时也能不绑",
+      client.post("/api/sessions", json={"mode": "director"}).json()["world_id"], None)
+check("导演会话绑不存在的世界预设被拒",
+      client.post("/api/sessions", json={"mode": "director", "world_id": 999}).status_code, 400)
+r = client.patch(f"/api/sessions/{s['id']}", json={"world_id": w2["id"]})
+check("事后改导演会话的世界", r.json()["world_id"], w2["id"])
+r = client.patch(f"/api/sessions/{s['id']}", json={"title": "只改标题"})
+check("不提交 world_id 就不动绑定（生成要求补丁里没有它）", r.json()["world_id"], w2["id"])
+r = client.patch(f"/api/sessions/{s['id']}", json={"world_id": None})
+check("显式 null 解绑导演会话的世界", r.json()["world_id"], None)
+check("导演会话绑到 id=1 被拒",
+      client.patch(f"/api/sessions/{s['id']}", json={"world_id": 1}).status_code, 400)
+
+# ---- 8. 删掉世界预设：引用它的角色与会话一起解绑，不留悬空 id ----
+client.put(f"/api/characters/{c2['id']}", json={"name": "小满", "world_id": w1["id"]})
+client.patch(f"/api/sessions/{s['id']}", json={"world_id": w1["id"]})
+check("删除被引用的世界预设 200",
+      client.delete(f"/api/world/presets/{w1['id']}").status_code, 200)
+check("删预设后角色自动解绑",
+      [c["world_id"] for c in client.get("/api/characters").json() if c["id"] == c2["id"]], [None])
+check("删预设后导演会话自动解绑",
+      client.get(f"/api/sessions/{s['id']}").json()["world_id"], None)
+check("删除世界预设不动当前世界", client.get("/api/world").json()["name"], "当前世界")
+check("重复删除 404", client.delete(f"/api/world/presets/{w1['id']}").status_code, 404)
+check("删 id=1（当前世界）被拒", client.delete("/api/world/presets/1").status_code, 404)
 
 shutil.rmtree(tmp, ignore_errors=True)
 print()

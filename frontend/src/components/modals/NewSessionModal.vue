@@ -3,10 +3,19 @@
      @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal">
       <h2>新会话 · {{ MODES[mode].label }}</h2>
-      <label class="field">角色
+      <!-- 角色只有聊天与沉浸两种模式要选；导演模式没有角色，改选这个世界会话用哪份世界设定
+           （导演会话各带一份，见 DEVELOPMENT §2.4 世界设定） -->
+      <label v-if="mode !== 'director'" class="field">角色
         <select v-model="newSessionModal.characterId">
           <option v-for="c in characters" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
+      </label>
+      <label v-else class="field">世界预设
+        <select v-model="newSessionModal.worldId">
+          <option :value="null">不用世界设定</option>
+          <option v-for="p in worldPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
+        </select>
+        <span class="hint">这个会话用哪份世界设定；建好之后还能在「世界设定」标签里改。</span>
       </label>
       <label class="field">标题（可选）
         <div class="counted">
@@ -17,9 +26,14 @@
       </label>
       <div class="modal-actions">
         <button class="ghost-btn" @click="newSessionModal.visible = false">取消</button>
-        <button class="primary-btn" :disabled="!newSessionModal.characterId" @click="confirmNewSession">创建</button>
+        <button class="primary-btn"
+                :disabled="mode !== 'director' && !newSessionModal.characterId"
+                @click="confirmNewSession">创建</button>
       </div>
-      <p class="hint"><a @click="newSessionModal.visible = false; openCharacterModal()">没有角色？先创建一个</a></p>
+      <p v-if="mode !== 'director'" class="hint"><a @click="newSessionModal.visible = false; openCharacterModal()">没有角色？先创建一个</a></p>
+      <p v-else-if="!worldPresets.length" class="hint">
+        还没有世界预设：先在「世界设定」里填好，再点「存为预设」，之后就能给导演会话选世界。
+      </p>
     </div>
   </div>
 </template>
@@ -35,6 +49,7 @@ const {
   limits,
   mode,
   newSessionModal,
+  worldPresets,
 } = toRefs(store);
 
 // 模板用到的方法（函数不是响应式的，直接解构）

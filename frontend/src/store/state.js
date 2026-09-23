@@ -35,7 +35,7 @@ export const store = reactive({
       charForm: emptyCharForm(),
       charLocked: false,
       charModal: emptyCharModal(),
-      newSessionModal: { visible: false, characterId: null, title: "" },
+      newSessionModal: { visible: false, characterId: null, worldId: null, title: "" },
       renaming: false,
       renameText: "",
       editingId: null,
@@ -71,12 +71,16 @@ export const store = reactive({
       // 当前使用的设定来自哪条预设（空 = 未选择预设），面板那行据此显示名字
       currentPresetId: "",
       presetError: "",
-      // 载入预设的弹窗：左边挑一条、右边看详情，确认后立即生效
-      loadPresetModal: { visible: false, pick: "" },
+      // 载入预设的弹窗：左边挑一条、右边看详情，确认后立即生效。
+      // kind 决定这是"我的设定"还是"世界设定"的预设（两种共用这一对弹窗，见 helpers.PRESET_KINDS）
+      loadPresetModal: { visible: false, kind: "profile", pick: "" },
       // 编辑预设的弹窗：在里面选要改哪条，删除也在这里
-      presetModal: { visible: false, id: null, form: emptyProfile(), saveError: "" },
+      presetModal: { visible: false, kind: "profile", id: null, form: emptyProfile(), saveError: "" },
       world: emptyWorld(),
       worldForm: emptyWorld(),
+      worldPresets: [],
+      // 当前世界来自哪条世界预设（空 = 未选择预设）
+      currentWorldPresetId: "",
       limits: {
         message: 2000, scenario: 2000, name: 20, appearance: 600, personality: 600,
         speech_style: 600, backstory: 1200, genre: 60, extra: 500, hint: 200,

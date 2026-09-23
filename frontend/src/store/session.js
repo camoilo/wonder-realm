@@ -64,8 +64,8 @@ Object.assign(store, {
       store.activeSessionId = id;
       store.activeByMode[session.mode] = id;
       store.messages = await store.api(`/api/sessions/${id}/messages`);
-      // "我的身份"跟着角色走：这个角色绑了哪份预设就套用哪份（没绑就不用预设）
-      await store.syncCharacterProfile();
+      // "我的身份"与"世界"跟着角色走（导演会话跟着会话自己的世界绑定）
+      await store.syncCharacterBindings();
       // 背景图单独取（只有聊天与沉浸两种模式有）
       if (session.character_id) await store.loadBackgrounds(session.character_id);
       else store.resetBackgrounds();
@@ -80,16 +80,14 @@ Object.assign(store, {
   },
   async newSession() {
     if (store.mode === "director") {
-      try {
-        const s = await store.api(
-          "/api/sessions",
-          store.jsonOpts("POST", { mode: "director" })
-        );
-        await store.refreshSessions();
-        await store.openSession(s.id);
-      } catch (e) {
-        store.error = e.message;
-      }
+      // 导演会话各自带一份世界（见 DEVELOPMENT §2.4 世界设定），所以先弹一次窗让用户选：
+      // 默认沿用当前正用的那条世界预设（手改过的当前世界没法用下拉表达，那就默认"不用"）
+      store.newSessionModal = {
+        visible: true,
+        characterId: null,
+        worldId: store.currentWorldPresetId || null,
+        title: "",
+      };
       return;
     }
     if (store.characters.length === 0) {
@@ -99,17 +97,22 @@ Object.assign(store, {
     store.newSessionModal = {
       visible: true,
       characterId: store.characters[0].id,
+      worldId: null, // 聊天与沉浸的世界跟着角色走，不由会话决定
       title: "",
     };
   },
   async confirmNewSession() {
+    const m = store.newSessionModal;
+    const characterMode = store.mode !== "director";
     try {
       const s = await store.api(
         "/api/sessions",
         store.jsonOpts("POST", {
           mode: store.mode,
-          character_id: store.newSessionModal.characterId,
-          title: store.newSessionModal.title,
+          character_id: characterMode ? m.characterId : null,
+          // 只有导演会话绑世界；聊天与沉浸带上它反倒会盖掉"跟着角色走"这条规则
+          ...(characterMode ? {} : { world_id: m.worldId ?? null }),
+          title: m.title,
         })
       );
       store.newSessionModal.visible = false;

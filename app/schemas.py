@@ -41,11 +41,13 @@ class CharacterIn(BaseModel):
     speech_style: str = Field(default="", max_length=LIMITS["speech_style"])
     backstory: str = Field(default="", max_length=LIMITS["backstory"])
     avatar: str = ""
-    # 这个角色用哪份「我的设定」预设（user_profile.id）。None = 不绑定。
+    # 这个角色用哪份「我的设定」预设（user_profiles.id）。None = 不绑定。
     # 取值必须靠 model_fields_set 区分"没带这一项"和"显式传 null"：右侧面板保存角色设定时
     # 提交的是面板表单（不含这一项），若把"没带"当成解绑，一保存角色就把绑定清掉了
     # （见 routes/characters.py 与 DEVELOPMENT §2.3 我的设定）
     profile_id: int | None = None
+    # 同理：这个角色用哪份**世界**预设（worlds.id）。None = 不绑定（见 §2.4 世界设定）
+    world_id: int | None = None
 
     @field_validator("avatar")
     @classmethod
@@ -115,6 +117,8 @@ class GenerateIn(BaseModel):
 class SessionIn(BaseModel):
     mode: str = "director"
     character_id: int | None = None
+    # 导演会话绑定的世界预设（worlds.id）。聊天与沉浸两种模式的世界跟着角色走，不用这一项
+    world_id: int | None = None
     # 留空表示交给模型自动命名（sessions.title_auto）
     title: str = Field(default="", max_length=LIMITS["title"])
     gen_settings: dict = {}
@@ -123,6 +127,9 @@ class SessionIn(BaseModel):
 class SessionPatch(BaseModel):
     title: str | None = Field(default=None, max_length=LIMITS["title"])
     gen_settings: dict | None = None
+    # 与角色那边的 profile_id / world_id 同一套语义：**没带这一项 = 不改绑定**，
+    # 显式 null = 解绑（见 DEVELOPMENT §2.4 世界设定）
+    world_id: int | None = None
 
 
 class MessageEdit(BaseModel):
