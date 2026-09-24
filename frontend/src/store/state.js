@@ -42,9 +42,12 @@ export const store = reactive({
       // 桌面端（Electron 壳，见 DEVELOPMENT §3.3）：壳在 preload 里注入 window.dshDesktop，
       // 网页端（含手机浏览器）没有它 —— 于是桌面专属的那两个键根本不会渲染
       isDesktop: false,
+      // 壳用的是自绘标题栏（Windows 的 Window Controls Overlay）：顶栏要当拖拽区、
+      // 右上角要给系统那三个按钮留宽度（见 DEVELOPMENT 3.3）
+      wco: false,
       // 壳把窗口缩成手机尺寸时为 true：页面按窄屏断点走手机布局，桌面专属键隐藏
       desktopPhoneView: false,
-      desktopConfigOpen: false, // 「配置」弹出的小面板（右侧图标列最低栏那个 ⚙，见 7.1）
+      desktopConfigOpen: false, // 「配置」弹出的小面板（标题栏那个 ⚙，见 3.3 / 7.1）
       lanEnabled: false,        // 后端"推送局域网"开关（读 /api/settings 带回）
       lanBusy: false,
       lanUrl: "",               // 局域网地址（壳按网卡算出来给的，用于复制与二维码）

@@ -995,21 +995,36 @@ readme = (ROOT / "README.md").read_text(encoding="utf-8")
 shell_js = (ROOT / "desktop" / "main.js").read_text(encoding="utf-8")
 preload_js = (ROOT / "desktop" / "preload.js").read_text(encoding="utf-8")
 
-# 顶栏只留「手机视图」（在主题键旁）；「配置」在右侧图标列最低栏。
-# 图标列**常驻**：没有会话时也在（那排标签禁用、⚙ 配置不禁用）——否则空状态那一屏就进不去配置。
-check("顶栏只留手机视图键（配置键已搬走）",
-      "收纳成手机视图" in _topbar and 'class="icon-btn desktop-btn"' in _topbar
-      and "togglePhoneView" in _topbar and 'aria-label="配置"' not in _topbar, True)
-check("图标列常驻、内容区按需挂载",
-      'class="panel-rail"' in _panel and '<div class="panel-box" v-if="activeSession">' in _panel, True)
-check("没有会话时标签禁用、⚙ 配置仍可用",
-      ':disabled="!activeSession"' in _panel and 'class="rail-btn rail-config"' in _panel
+# 「配置 / 手机视图」两个键都在顶栏——而壳在 Windows 用**自绘标题栏**（Window Controls Overlay），
+# 所以那条顶栏就是标题栏：跟系统的最小化/最大化/关闭同排。图标列则只管面板标签。
+check("两个桌面键都在顶栏",
+      'aria-label="配置"' in _topbar and "收纳成手机视图" in _topbar
+      and 'class="icon-btn desktop-btn"' in _topbar
+      and "toggleDesktopConfig" in _topbar, True)
+check("手机视图键在手机视图下仍然渲染（文案变成退出）",
+      "退出手机视图" in _topbar and ':class="{on: desktopPhoneView}"' in _topbar, True)
+check("配置面板挂在顶栏（标题栏）下方",
+      '<ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" />' in _topbar, True)
+check("图标列只管标签、常驻、没会话时禁用",
+      'class="panel-rail"' in _panel and 'class="rail-btn rail-config"' not in _panel
+      and "ConfigPanel" not in _panel
+      and ':disabled="!activeSession"' in _panel
+      and '<div class="panel-box" v-if="activeSession">' in _panel
       and ".rail-btn:disabled {" in css, True)
-check("配置键在图标列最低栏（margin-top:auto 顶到底）",
-      ".rail-config { margin-top: auto; }" in css, True)
-check("配置面板挂在图标列左下",
-      '<ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" class="at-rail" />' in _panel
-      and "toggleDesktopConfig" in _panel, True)
+# 自绘标题栏：三条约束缺一不可——壳开 titleBarOverlay、顶栏进 .wco（拖拽区 + 让出右上角）、
+# 高度常量与 CSS 变量同值（不同值系统三键就会跟页面按钮错开）
+check("壳开了自绘标题栏",
+      'titleBarStyle: "hidden"' in shell_js and "titleBarOverlay:" in shell_js
+      and "setTitleBarOverlay(" in shell_js, True)
+check("顶栏在自绘标题栏下当拖拽区、并让出右上角",
+      ".topbar.wco {" in css and "-webkit-app-region: drag;" in css
+      and "env(titlebar-area-width" in css and ":class=\"{wco}\"" in _topbar, True)
+check("标题栏高度两处同值（壳的常量 vs CSS 变量）",
+      re.search(r"TITLEBAR_H = (\d+)", shell_js).group(1)
+      == re.search(r"--titlebar-h: (\d+)px", css).group(1), True)
+check("主题变了壳要跟着改标题栏配色",
+      "desktop:set-titlebar-theme" in shell_js and "setTitleBarTheme:" in preload_js
+      and "api.setTitleBarTheme(" in js, True)
 check("配置面板内容齐全（开关 / 状态 / 二维码 / 地址 / 手机视图 / 防火墙 / 日志）",
       all(k in _config for k in ('class="dc-switch"', 'class="dc-status"', 'class="dc-qr"',
                                  'class="dc-url"', 'class="dc-label"', "togglePhoneView",
@@ -1021,8 +1036,6 @@ check("二维码只在取到地址时画，局域网关着时置灰",
 check("配置面板层级在浮层与弹窗之间",
       ".desktop-config {" in css and "z-index: 600;" in css
       and css.index("z-index: 600;") < css.index(".modal-mask {"), True)
-check("面板贴图标列时向左展开",
-      ".desktop-config.at-rail {" in css and "right: calc(100% + 10px);" in css, True)
 # 桌面键曾被 .icon-btn 的 opacity:0 与"没有固有尺寸的内联 SVG"叠成看不见的 10px 方块（实测踩到），
 # 所以尺寸与可见性必须写死，别让它悄悄退回去
 _desktop_btn_css = css_code[css_code.index(".desktop-btn {"):css_code.index(".desktop-btn.on")]

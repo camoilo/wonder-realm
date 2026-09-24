@@ -1,6 +1,7 @@
 // 桌面端（Electron）与网页之间的唯一接口（见 DEVELOPMENT §3.3）。
 //
-// 只暴露"壳才能做的事"：切换手机视图、取局域网地址、订阅手机视图状态、打开壳日志。
+// 只暴露"壳才能做的事"：切换手机视图、取局域网地址、订阅手机视图状态、打开壳日志、
+// 以及自绘标题栏的两件事（知道有没有、把深浅主题告诉壳）。
 // 页面本身照旧只跟本机后端说 HTTP（局域网开关就是 PUT /api/settings），
 // 所以这里不需要、也不该暴露任何文件系统或 Node 能力。
 const { contextBridge, ipcRenderer } = require("electron");
@@ -13,6 +14,10 @@ contextBridge.exposeInMainWorld("dshDesktop", {
   togglePhoneView: () => ipcRenderer.invoke("desktop:toggle-phone-view"),
   onPhoneView: (cb) => ipcRenderer.on("desktop:phone-view", (_e, on) => cb(on)),
   getLanUrl: () => ipcRenderer.invoke("desktop:lan-url"),
+  // 自绘标题栏（Windows 的 Window Controls Overlay）：页面据此把顶栏当拖拽区、
+  // 给右上角那三个系统按钮留宽度；主题一变要把深浅告诉壳（那三个按钮由壳画）
+  titleBar: ipcRenderer.sendSync("desktop:titlebar-state"),
+  setTitleBarTheme: (dark) => ipcRenderer.invoke("desktop:set-titlebar-theme", dark),
   // 用系统默认程序打开壳日志（desktop.log）：出问题时不用自己去翻 %APPDATA%
   openLog: () => ipcRenderer.invoke("desktop:open-log"),
 });

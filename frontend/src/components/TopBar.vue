@@ -1,5 +1,7 @@
 <template>
-<header class="topbar">
+<!-- 壳用自绘标题栏（Windows）时给 header 加 .wco：整条顶栏变拖拽区、右侧给系统那三个按钮
+     留出宽度，「配置 / 手机视图」两个键就排在那三个按钮左边（见 DEVELOPMENT 3.3） -->
+<header class="topbar" :class="{wco}">
       <div class="title-area">
         <!-- 汉堡：桌面断点收起/展开左侧栏；手机断点打开抽屉（关闭走遮罩） -->
         <button class="icon-btn rail-toggle" v-hint="sideToggleHint()" :aria-label="sideToggleHint()"
@@ -60,7 +62,19 @@
             <rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/>
           </svg>
         </button>
+        <!-- 桌面端「配置」：跟系统那三个按钮排在同一行（自绘标题栏下），
+             这样"没打开会话时找不到配置"这个问题根本不存在 -->
+        <button v-if="isDesktop && !desktopPhoneView" class="icon-btn desktop-btn"
+                :class="{on: desktopConfigOpen}"
+                v-hint="'配置（局域网推送、手机扫码、日志）'" aria-label="配置"
+                :aria-expanded="desktopConfigOpen" @click="toggleDesktopConfig">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="3.4"/>
+            <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.2 2.2M16.5 16.5l2.2 2.2M18.7 5.3l-2.2 2.2M7.5 16.5l-2.2 2.2"/>
+          </svg>
+        </button>
       </div>
+      <ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" />
       <!-- 手机端三个入口：放大镜（折叠搜索条）+ 面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
            桌面断点由 CSS 隐藏 -->
       <button class="icon-btn mobile-search-btn" aria-label="搜索当前会话" @click="toggleSearch">
@@ -110,6 +124,7 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, toRefs } from "vue";
+import ConfigPanel from "./ConfigPanel.vue";
 import { store, MODES } from "../store.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
@@ -137,6 +152,7 @@ const {
   sideCollapsed,
   theme,
   thinkToggleTitle,
+  wco,
 } = toRefs(store);
 
 // 主题按钮的三个可用 handle（图标 / 标题 / 短名随模式变）
@@ -172,11 +188,10 @@ function toggleMore() {
 }
 
 // 「配置」面板：点别处或按 Esc 关掉（与删除菜单、提示浮层同一套习惯）。
-// 触发它的 ⚙ 现在在右侧图标列最低栏（Panel.vue），所以这里也要放过 .rail-config，
-// 否则点它会被这个"点外部就关"先关掉、再被按钮自己打开，看着像没反应。
+// 触发它的 ⚙ 就在这条顶栏里（自绘标题栏下与系统那三个按钮同排），所以放过 .desktop-btn。
 function onDocClick(e) {
   if (!store.desktopConfigOpen) return;
-  if (e.target.closest && e.target.closest(".desktop-config, .desktop-btn, .rail-config")) return;
+  if (e.target.closest && e.target.closest(".desktop-config, .desktop-btn")) return;
   store.closeDesktopConfig();
 }
 function onDocKeydown(e) {

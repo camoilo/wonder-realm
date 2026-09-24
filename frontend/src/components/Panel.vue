@@ -44,9 +44,9 @@
 
     <!-- 竖排图标栏（icon rail）：常驻最右——面板收起、甚至没打开会话时也在这里。
          点某个图标展开对应面板，再点当前激活图标收起。悬停显示文字提示。
-         没有会话时这排标签禁用（内容区也不挂载），但最下面那个 ⚙ 照样能用：
-         桌面端「配置」（局域网 / 手机扫码 / 日志）不能因为没有会话就进不去。
-         网页端与手机浏览器没有 window.dshDesktop，⚙ 不渲染（见 DEVELOPMENT §3.3） -->
+         没有会话时这排标签禁用（内容区也不挂载）；「配置」不在这里，它在顶栏/标题栏
+         （见 DEVELOPMENT 3.3），所以空状态也不会找不到它。
+         网页端与手机浏览器没有 window.dshDesktop，那些壳专属键不渲染 -->
     <div class="panel-rail">
       <button v-for="t in visibleTabs" :key="t.key" class="rail-btn"
               :class="{on: !panelCollapsed && panelTab === t.key}"
@@ -57,13 +57,6 @@
         <span class="rail-svg" v-html="t.icon"></span>
         <span v-if="tabDirty(t)" class="tab-dot"></span>
       </button>
-      <button v-if="isDesktop && !desktopPhoneView" class="rail-btn rail-config"
-              :class="{on: desktopConfigOpen}"
-              v-hint="'配置（局域网推送、手机扫码、日志）'" aria-label="配置"
-              :aria-expanded="desktopConfigOpen" @click="toggleDesktopConfig">
-        <span class="rail-svg" v-html="CONFIG_ICON"></span>
-      </button>
-      <ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" class="at-rail" />
     </div>
   </aside>
 </template>
@@ -74,7 +67,6 @@ import WorldPane from "./panes/WorldPane.vue";
 import CharPane from "./panes/CharPane.vue";
 import ProfilePane from "./panes/ProfilePane.vue";
 import MemoryPane from "./panes/MemoryPane.vue";
-import ConfigPanel from "./ConfigPanel.vue";
 import { computed, toRefs } from "vue";
 import { store } from "../store.js";
 
@@ -91,9 +83,6 @@ const I = {
   // 会话记忆：书/档案
   memory: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
 };
-
-// 桌面端「配置」（局域网 / 手机扫码 / 日志）：齿轮，与上面几个图标同一风格
-const CONFIG_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.2 2.2M16.5 16.5l2.2 2.2M18.7 5.3l-2.2 2.2M7.5 16.5l-2.2 2.2"/></svg>`;
 
 const tabs = [
   { key: "gen", label: "生成要求", icon: I.gen },
@@ -131,9 +120,6 @@ const visibleTabs = computed(() => tabs.filter(tabVisible));
 const {
   activeSession,
   activeTabDirty,
-  desktopConfigOpen,
-  desktopPhoneView,
-  isDesktop,
   memoryScope,
   mobilePanelOpen,
   panelCollapsed,
@@ -146,7 +132,6 @@ const {
   armRevert,
   onRailClick,
   saveCurrentTab,
-  toggleDesktopConfig,
   togglePanel,
 } = store;
 </script>

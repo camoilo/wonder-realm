@@ -3,12 +3,21 @@
 // 壳在 preload 里注入 `window.dshDesktop`（开窗口、缩放手机视图、算局域网地址都是壳的事）；
 // 网页端与手机浏览器没有这个对象，于是"配置 / 手机视图"两个键、以及复制局域网地址的能力
 // 自然不会出现——**同一份前端代码，桌面端只是多了一层壳**。
+import { watch } from "vue";
 import { store } from "./state.js";
 
 export function initDesktop() {
   const api = window.dshDesktop;
   if (!api) return false;
   store.isDesktop = true;
+  // 自绘标题栏：顶栏要变成拖拽区、给右上角那三个系统按钮留宽度（见 DEVELOPMENT 3.3）
+  store.wco = !!api.titleBar;
+  if (store.wco && typeof api.setTitleBarTheme === "function") {
+    // 那三个按钮是**壳**画的，主题一变要告诉它，否则深色页面会顶着一条浅色标题栏
+    const push = () => api.setTitleBarTheme(store.theme === "dark");
+    watch(() => store.theme, push);
+    push();
+  }
   // 壳记住了上次是不是手机视图：挂载前就定下来，第一屏不会先闪一下桌面键
   store.desktopPhoneView = !!api.phoneView;
   if (typeof api.onPhoneView === "function") {

@@ -3,6 +3,7 @@
 :root {
   color-scheme: light;
   --bg: #f4f5f7;
+  --titlebar-h: 56px;   /* 自绘标题栏高度；desktop/main.js 的 TITLEBAR_H 必须同值 */
   --panel: #ffffff;
   --panel-soft: #fafbfd;
   --border: #e3e5ea;
@@ -1353,8 +1354,7 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 }
 .desktop-btn svg { display: block; width: 18px; height: 18px; }
 .desktop-btn.on { color: var(--accent-dark); border-color: var(--accent); background: #eef2ff; }
-/* 「配置」小面板：平时挂在右侧图标列最低栏的 ⚙ 上（.at-rail，见 Panel.vue）；
-   没有会话时那一列整块不存在，改为挂在顶栏右下方兜底（默认定位，见 TopBar.vue）。
+/* 「配置」小面板：挂在顶栏（也就是自绘标题栏那排）下方，触发键是右上角的 ⚙。
    层级高于消息与浮层、低于弹窗遮罩（1000） */
 .desktop-config {
   position: absolute;
@@ -1374,11 +1374,6 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 /* 挂在图标列底部时：向左展开（rail 在窗口最右），底边与那个 ⚙ 对齐 */
-.desktop-config.at-rail {
-  top: auto;
-  right: calc(100% + 10px);
-  bottom: 10px;
-}
 .dc-row {
   display: flex;
   align-items: center;
@@ -1890,7 +1885,6 @@ mark.search-hit.current {
    选中图标的提示文字与悬停文字都走 v-hint */
 .panel-rail {
   flex: none;
-  position: relative;   /* 「配置」小面板要贴着它的左下角弹（.desktop-config.at-rail） */
   width: var(--rail-w);
   display: flex;
   flex-direction: column;
@@ -1901,7 +1895,7 @@ mark.search-hit.current {
   background: var(--rail-bg);
 }
 /* 图标列最低栏的 ⚙（桌面端配置）：margin-top:auto 把它顶到底部，与上面那排 tab 图标分开 */
-.rail-config { margin-top: auto; }
+/* 面板不在这里了（配置键在顶栏/标题栏），这条已随代码一起删掉 */
 
 .rail-btn {
   position: relative;
@@ -1919,7 +1913,23 @@ mark.search-hit.current {
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .rail-btn:hover { background: var(--hover); color: var(--text); }
-/* 没打开会话时图标列照旧常驻，只是上面那排标签禁用（⚙ 配置不禁用：它跟会话无关） */
+/* ---------------- 自绘标题栏（Windows 的 Window Controls Overlay，见 DEVELOPMENT 3.3） ----------------
+   壳把系统标题栏交给页面画，于是「配置 / 手机视图」能跟最小化/最大化/关闭排在同一行。
+   三件事：① 整条顶栏当拖拽区（里面的控件要 no-drag，否则点不动）；② 高度固定成 --titlebar-h
+   （壳那边 TITLEBAR_H 必须同值，否则两排按钮错位）；③ 右侧给系统那三个按钮让出宽度。 */
+.topbar.wco {
+  position: relative;   /* 手机视图下顶栏会占两行，要压住下面那块 sticky 的属性浮层（z-index 300） */
+  z-index: 400;
+  height: var(--titlebar-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
+  -webkit-app-region: drag;
+}
+.topbar.wco :is(button, input, select, a, .title-area, .search-box, .desktop-config, .mobile-more) {
+  -webkit-app-region: no-drag;
+}
+/* 没打开会话时图标列照旧常驻，只是上面那排标签禁用 */
 .rail-btn:disabled { opacity: 0.38; cursor: not-allowed; }
 .rail-btn:disabled:hover { background: transparent; color: var(--text-soft); }
 .rail-btn.on {
@@ -2578,6 +2588,21 @@ body { overscroll-behavior: none; }
     flex-wrap: wrap;
     gap: 8px;
     padding: 10px 12px calc(10px + var(--sat));
+  }
+  /* 自绘标题栏的壳里，手机视图这一屏会被右上角那三个系统按钮挤掉约 138px：
+     一行放不下 ☰ + 标题 + 手机那几个键，于是自然折行。这里让"退出手机视图"所在的
+     .toolbar 独占**第一行**（右端正好挨着系统那三个按钮，高度与标题栏对齐），
+     下面各行才是手机自己的顶栏控件 —— 跟真实 App 的"标题栏 + 工具条"一个样子。
+     高度也不能锁死在 --titlebar-h，否则折出来的行会飘到对话区上面。 */
+  .topbar.wco {
+    height: auto;
+    min-height: var(--titlebar-h);
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
+  }
+  .topbar.wco .toolbar {
+    order: -1;
+    flex-basis: 100%;
+    min-height: var(--titlebar-h);
   }
   .title { max-width: 38vw; font-size: 15px; }
   .chip { display: none; }
