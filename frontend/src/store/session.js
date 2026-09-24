@@ -63,8 +63,6 @@ Object.assign(store, {
       store.activeSession = session;
       store.activeSessionId = id;
       store.activeByMode[session.mode] = id;
-      // 打开会话就把右侧面板展开：面板收起时点会话，多半就是想接着改设定（用户要求）
-      store.panelCollapsed = false;
       store.messages = await store.api(`/api/sessions/${id}/messages`);
       // "我的身份"与"世界"跟着角色走（导演会话跟着会话自己的世界绑定）
       await store.syncCharacterBindings();

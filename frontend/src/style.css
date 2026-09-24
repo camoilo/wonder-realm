@@ -469,6 +469,10 @@ html, body {
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  /* min-width: 0 是给 flex 容器里的情况兜底：默认 min-width:auto 会让长模型名把控件撑出格子
+     （手机端那行就是这么溢出的），有了它才会按容器宽度收窄 */
+  min-width: 0;
+  text-overflow: ellipsis;
   background: var(--panel);
   color: var(--text);
   max-width: 280px;
@@ -2636,7 +2640,7 @@ body { overscroll-behavior: none; }
     gap: 8px;
     padding: 10px 12px calc(10px + var(--sat));
   }
-  /* 手机视图这一屏很窄（390 减去系统按钮占的 ~138px）：标题栏只留窗口键，
+  /* 手机视图这一屏很窄（375 减去系统按钮占的 ~138px）：标题栏只留窗口键，
      图标与应用名让位，页面自己的工具条照旧在下面那一行 */
   .titlebar .brand-mark,
   .titlebar .titlebar-name { display: none; }
@@ -2696,7 +2700,7 @@ body { overscroll-behavior: none; }
     font-size: 12.5px;
     color: var(--text-soft);
   }
-  .more-row .model-select { flex: 1; max-width: none; }
+  .more-row .model-select { flex: 1; min-width: 0; max-width: none; }
   .more-row .ghost-btn { flex: 1; }
   .mobile-theme { white-space: nowrap; }
 

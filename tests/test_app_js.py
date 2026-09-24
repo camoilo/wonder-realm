@@ -1033,8 +1033,13 @@ check("没有会话时右侧不该留大片空白",
 # 是拿 currentModel 比的，反过来会把"已经选过模型"误报成没选（真踩过，用户当场发现）
 check("先读设置再拉模型列表",
       js.index('await this.api("/api/settings")') < js.index("await this.loadModels()"), True)
-# 打开会话就把右侧面板展开（面板收起时点会话，多半是想接着改设定）
-check("打开会话会展开右侧面板", "this.panelCollapsed = false;" in js, True)
+# 点会话**不要**动右侧面板的开合：面板是收是开由用户决定，切换会话不该把它顶开
+# （用户报过"点进会话默认不自动展开"）。只看 openSession 自己的方法体，别扫全文件——
+# panel.js 里切标签时本来就会改 panelCollapsed
+_session_src = js[js.index("async openSession("):]
+_next = re.search(r"\n  async ", _session_src)
+check("切换会话不碰右侧面板的开合",
+      "panelCollapsed" not in (_session_src[: _next.start()] if _next else _session_src), True)
 # 顶栏标题：旁边真有空位就别打省略号（工具条换行后标题该用满那一行）
 check("标题宽度交给 flex 分配",
       "flex: 1 1 0;" in css_block(".title-area") and "flex: 1 1 0;" in css_block(".title")

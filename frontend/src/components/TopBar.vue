@@ -9,11 +9,12 @@
         <template v-if="activeSession">
           <span v-if="renaming" class="counted title-counted">
             <input v-model="renameText" class="title-input" :maxlength="limits.title"
+                   :style="{ width: titleInputWidth }"
                    @keydown.enter.prevent="saveRename" @blur="saveRename" />
             <span class="char-count inline" :class="{near: isNear(renameText, limits.title)}">{{ len(renameText) }}/{{ limits.title }}</span>
           </span>
           <h1 v-else class="title" v-hint="'点击重命名'" @click="startRename">{{ activeSession.title }}</h1>
-          <span class="chip">{{ MODES[activeSession.mode].label }}</span>
+          <!-- 当前模式不在这里标：左栏那排模式 Tab 上已经高亮着（用户要求去掉这个重复信息） -->
           <span v-if="orphanActive" class="chip warn">角色已删除 · 仅可查看</span>
         </template>
         <h1 v-else class="title muted">未选择会话</h1>
@@ -105,8 +106,8 @@
 </template>
 
 <script setup>
-import { toRefs } from "vue";
-import { store, MODES } from "../store.js";
+import { computed, toRefs } from "vue";
+import { store } from "../store.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
@@ -138,6 +139,15 @@ const {
 } = toRefs(store);
 
 // 主题三态的图标 / 短名来自 store（窗口标题栏那一行也在用，见 TitleBar.vue）
+
+// 重命名输入框的宽度按**当前名称**算（中日韩字符按两个宽度估）：不然它是一条写死的宽框，
+// 短名字也占那么大地方（用户要求"匹配当前名称的长度"）。6ch 起、40ch 封顶。
+const titleInputWidth = computed(() => {
+  const text = store.renameText || "";
+  const w = [...text].reduce(
+    (n, c) => n + (/[\u2E80-\u9FFF\u3000-\u303F\uFF00-\uFF60]/.test(c) ? 2 : 1), 0);
+  return `${Math.min(Math.max(w + 2, 6), 40)}ch`;
+});
 
 // 汉堡：桌面断点收起/展开左侧栏；手机断点打开抽屉（关闭走遮罩）
 const sideToggleHint = () => window.innerWidth <= 640

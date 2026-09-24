@@ -33,8 +33,12 @@ const PORT = backendPort();
 const URL = `http://127.0.0.1:${PORT}/`;
 // 手机视图：**宽度锁死**（一拖宽就跳出手机单栏布局），**高度留给用户拖**（看长内容方便）。
 // 做法是 min==max==PHONE_WIDTH：边框还能拖，但尺寸被钳住，比 setResizable(false) 更符合预期。
-const PHONE_WIDTH = 390;
-const PHONE_DEFAULT_H = 844;                          // 没存过就用常见手机高度
+// 尺寸取**传统手机比例 9:16**（375×667，iPhone 8 那一代）：用户明确要"不是现在的全面屏比例"。
+const PHONE_WIDTH = 375;
+const PHONE_DEFAULT_H = 667;                          // 9:16；没存过就用它（仍会按工作区收一下）
+// 手机视图的"几何版本"：默认尺寸换过一次（19.5:9 → 9:16）。存档里若是旧版本记住的高度，
+// 就不再沿用（否则用户改了默认值却看不到变化——踩过）。
+const PHONE_VERSION = 2;
 const PHONE_MIN_H = 480;
 const PHONE_MAX_H = 1400;
 const DEFAULT_SIZE = { width: 1180, height: 780 };   // 首次启动（或存档不可用时）的窗口大小，还会按工作区收一下
@@ -171,7 +175,11 @@ function persistWindowState() {
   if (phoneView) {
     // 手机视图下**也要把桌面尺寸存着**：否则"在手机视图里关掉应用"会让下次启动回到默认大小
     // （用户报过"切回来就变成默认了"）
-    writePrefs({ phoneHeight: win.getContentSize()[1], bounds: desktopRestoreBounds() });
+    writePrefs({
+      phoneHeight: win.getContentSize()[1],
+      phoneVersion: PHONE_VERSION,
+      bounds: desktopRestoreBounds(),
+    });
   } else {
     writePrefs({ bounds: win.getBounds() });
   }
@@ -223,8 +231,10 @@ function setPhoneView(on) {
   const frameH = Math.max(0, win.getBounds().height - win.getContentSize()[1]);
   if (phoneView) {
     if (!desktopBounds) desktopBounds = win.getBounds();
-    // 高度取"记住的那次"与工作区的较小值：默认 844 在矮屏上会超出屏幕（用户报过"手机端太长"）
-    const want = clampHeight(readPrefs().phoneHeight || PHONE_DEFAULT_H);
+    // 高度取"记住的那次"与工作区的较小值；存档是旧的几何版本就忽略它，用新默认（见 PHONE_VERSION）
+    const saved = readPrefs();
+    const remembered = saved.phoneVersion === PHONE_VERSION ? saved.phoneHeight : 0;
+    const want = clampHeight(remembered || PHONE_DEFAULT_H);
     const h = fitInWorkArea(PHONE_WIDTH, want, 120).height;
     win.setMinimumSize(PHONE_WIDTH + frameW, PHONE_MIN_H + frameH);   // 先 min 后 max，避免瞬态 min > max
     win.setMaximumSize(PHONE_WIDTH + frameW, PHONE_MAX_H + frameH);
@@ -627,7 +637,7 @@ if (!app.requestSingleInstanceLock()) {
 
     startBackend();
     if (SELFTEST) {
-      // 自检：起后端 → 开一个**隐藏**窗口 → 确认 preload 桥接通、手机视图真把页面缩到 390px。
+      // 自检：起后端 → 开一个**隐藏**窗口 → 确认 preload 桥接通、手机视图真把页面缩到 375px。
       // 全程不显示窗口，所以自检不会在用户屏幕上弹东西出来。
       try {
         await waitForBackend();
