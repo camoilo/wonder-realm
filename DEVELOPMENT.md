@@ -244,7 +244,7 @@ flowchart LR
 | `base_url` 不在本机 | `skipped-remote` | 远端 Ollama 不是我们能启动的 |
 | `ollama.auto_start: false` | `skipped-disabled` | 配置里关掉 |
 
-**界面侧要能自己缓过来**：Ollama 冷启动可能比界面慢（几秒到几十秒），只拉一次模型列表的话顶栏会一直挂着"无法连接 Ollama"，看着像"根本没自启"（用户就这么报过）。所以那句提示旁边有个**重试**键（`store/api.js` 的 `loadModels()`，初始化与重试共用同一个方法）。
+**界面侧要能自己缓过来**：Ollama 冷启动可能比界面慢（几秒到几十秒），只拉一次模型列表的话顶栏会一直挂着"无法连接 Ollama"，看着像"根本没自启"（用户就这么报过）。所以那句提示旁边有个**重试**键（`store/api.js` 的 `loadModels(ensure=true)`）：它先打 `POST /api/ollama/ensure` 让**后端再确保一次**（自启只在 `run.py` 启动时做一遍，后端本来就在跑时那条路径不会再走，光重拉列表是拉不回来的），再重拉模型列表。接口复用同一套 `ensure_ollama()`（超时压到 20s，因为用户在等着），并把 `report()` 那句话原样捎回界面。
 
 **为什么放在 `run.py` 而不是各个 .bat 里**：桌面端外壳也是 spawn `run.py`，于是 bat / 命令行 / 桌面端三条入口共用同一份实现，行为不会走偏（日志在 bat 窗口与 `desktop.log` 里都能看到那一句）。
 

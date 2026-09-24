@@ -1,7 +1,10 @@
+import os
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .. import ollama_client
+from .. import ollama_boot, ollama_client
+from ..config import get_config
 from ..database import (
     get_db,
     now,
@@ -78,3 +81,22 @@ async def get_models():
         return await ollama_client.list_models()
     except httpx.HTTPError:
         raise HTTPException(502, "无法连接 Ollama，请确认服务已启动")
+
+
+@router.post("/ollama/ensure")
+def ensure_ollama_now():
+    """让 Ollama 现在就可用（界面上那个「重试」键调它）。
+
+    为什么需要这个：自启只在 `run.py` 启动时做一次。如果后端本来就在跑（端口被占、run.py 直接
+    退出），而 Ollama 后来挂了/被关了，那就没人再去拉它——此时界面只能靠重启应用，太别扭。
+    这里按需再跑一遍同一套确保逻辑（短超时：这是用户点了一下在等），并把原因捎回去。
+    """
+    cfg = get_config()
+    base_url = cfg["ollama"]["base_url"]
+    status = ollama_boot.ensure_ollama(
+        base_url,
+        cfg["ollama"].get("auto_start", True),
+        timeout=20.0,
+        log_path=os.path.join(cfg["data_dir"], "ollama-serve.log"),
+    )
+    return {"status": status, "text": ollama_boot.report(status, base_url)}

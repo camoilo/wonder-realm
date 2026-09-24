@@ -12,6 +12,7 @@ export const store = reactive({
       models: [],
       currentModel: "",
       modelWarning: "",
+      ollamaBusy: false,   // 「重试」正在让后端再确保一次 Ollama
       disableThinking: false,
       characters: [],
       sessions: [],

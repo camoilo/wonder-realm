@@ -21,10 +21,12 @@
       <div class="toolbar">
         <span v-if="initError" class="chip warn">{{ initError }}</span>
         <span v-if="modelWarning" class="model-warning">{{ modelWarning }}</span>
-        <!-- Ollama 刚被顺手拉起来 / 还没就绪时点一下就能自己恢复，不用重启应用 -->
+        <!-- Ollama 刚被顺手拉起来 / 还没就绪时点一下就能自己恢复，不用重启应用：
+             它会让后端再确保一次 Ollama（后端本来就在跑时，启动那条路径不会再走） -->
         <button v-if="modelWarning && !models.length" class="ghost-btn retry-btn"
-                v-hint="'重新拉一次模型列表（Ollama 刚起来时点这个）'"
-                @click="loadModels">重试</button>
+                :disabled="ollamaBusy"
+                v-hint="'再确保一次 Ollama 并重拉模型列表'"
+                @click="loadModels(true)">{{ ollamaBusy ? "重试中…" : "重试" }}</button>
         <!-- 会话内搜索：命中处标黄，↑/↓ 在命中之间跳转（Enter 下一个、Shift+Enter 上一个）。
              计数、清空键与两个跳转键**始终**占位（不按有无关键词显示/隐藏）——否则输入前后整个框
              会变宽变窄，看起来像换了个控件；没有关键词 / 没有命中时它们只是置灰 -->
@@ -122,6 +124,7 @@ const {
   mobileSearchOpen,
   modelWarning,
   models,
+  ollamaBusy,
   orphanActive,
   renameText,
   renaming,

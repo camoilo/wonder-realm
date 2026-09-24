@@ -154,7 +154,17 @@ for f in (busy_log, quiet_log):
     f.unlink(missing_ok=True)
 tmp.rmdir()
 
-# ---- 10. 真探针在本机跑一遍（只读：Ollama 在跑就该返回 True）----
+# ---- 10. 界面那个"重试"键要有后端接口兜着 ----
+# 自启只在 run.py 启动时做一次；后端本来就在跑（端口被占、run.py 直接退出）而 Ollama 后来挂了时，
+# 只有这个接口能把它再拉起来。这里只查路由在不在（调用会真去 ping Ollama，不适合放进用例）。
+# 注意：这一版 FastAPI 把 include_router 的结果包成 _IncludedRouter，app.routes 里看不到具体路径，
+# 所以从 OpenAPI schema 查（那就是接口清单本身）。
+from app.main import app  # noqa: E402
+
+check("有「再确保一次 Ollama」的接口",
+      "post" in app.openapi().get("paths", {}).get("/api/ollama/ensure", {}), True)
+
+# ---- 11. 真探针在本机跑一遍（只读：Ollama 在跑就该返回 True）----
 check("真探针不会误报（拿一个必然连不上的端口）",
       ollama_boot.ping("http://127.0.0.1:1", timeout=0.5), False)
 

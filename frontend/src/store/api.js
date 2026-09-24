@@ -58,7 +58,20 @@ Object.assign(store, {
   // 拉模型列表：初始化时调一次，顶栏那个"重试"也调它。
   // 为什么要有"重试"：Ollama 由启动器顺手拉起来时可能比界面慢（冷启动几十秒），
   // 只拉一次的话界面会一直挂着"无法连接 Ollama"，看着像"根本没启动"（用户就这么报过）。
-  async loadModels() {
+  // `ensure=true` 时先让后端再确保一次 Ollama——后端本来就在跑时，启动那条路径不会再走，
+  // 光重拉列表是拉不回来的（那时 Ollama 已经挂了）。
+  async loadModels(ensure = false) {
+    if (ensure) {
+      store.ollamaBusy = true;
+      try {
+        const r = await store.api("/api/ollama/ensure", { method: "POST" });
+        if (r && r.status && r.status !== "running" && r.status !== "started") store.modelWarning = r.text;
+      } catch (e) {
+        /* 确保失败也照常去拉列表，下面的错误提示更具体 */
+      } finally {
+        store.ollamaBusy = false;
+      }
+    }
     try {
       store.models = await store.api("/api/models");
     } catch (e) {
