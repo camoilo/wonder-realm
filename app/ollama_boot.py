@@ -10,6 +10,8 @@
 端口被别的进程占着、或它刚起来就退出，都从那份输出里认出来，而不是笼统地说"启动超时"。
 """
 import logging
+import os
+import shutil
 import subprocess
 import time
 from urllib.parse import urlparse
@@ -67,6 +69,32 @@ def _read_tail(path, limit: int = 4000) -> str:
         return ""
 
 
+def _models_dir(exe: str | None = None) -> str | None:
+    """拉起的 `ollama serve` 该用哪个模型目录。
+
+    默认是 `%USERPROFILE%\\.ollama\\models`；但**装在别处的 Ollama（例如 D:\\Ollama）会把 models
+    放在自己旁边**，托盘应用知道这件事、我们 spawn 出来的 serve 不知道 —— 于是就会出现
+    "服务起来了、模型列表却是空的"，用户看着就是"Ollama 没启动 / 没有可用模型"。
+    （真踩过：测试时拉起的实例占着 11434 用空目录，而用户真正的模型在 `D:\\Ollama\\models`。）
+
+    顺序：环境变量 `OLLAMA_MODELS` > exe 旁边的 `models`（且里面真有 manifests）> 不动它。
+    返回 None 表示"别设，让 ollama 用默认"。
+    """
+    env = os.environ.get("OLLAMA_MODELS")
+    if env:
+        return env
+    exe = exe or shutil.which("ollama")
+    if exe:
+        cand = os.path.join(os.path.dirname(os.path.abspath(exe)), "models")
+        manifests = os.path.join(cand, "manifests")
+        try:
+            if os.path.isdir(manifests) and os.listdir(manifests):
+                return cand
+        except OSError:
+            pass
+    return None
+
+
 def _spawn_serve(log_path=None):
     """后台拉起 `ollama serve`。找不到可执行文件时抛 FileNotFoundError，由调用方决定怎么说。
 
@@ -78,6 +106,11 @@ def _spawn_serve(log_path=None):
             out = open(log_path, "ab")
         except OSError:
             out = None
+    env = dict(os.environ)
+    models = _models_dir()
+    if models:
+        env["OLLAMA_MODELS"] = models   # 让拉起来的服务看到用户真正的模型（见 _models_dir）
+        log.info("拉起 ollama serve 时使用模型目录：%s", models)
     flags = 0
     if hasattr(subprocess, "DETACHED_PROCESS"):  # Windows：脱离本进程与它的控制台
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
@@ -87,6 +120,7 @@ def _spawn_serve(log_path=None):
             stdin=subprocess.DEVNULL,
             stdout=out or subprocess.DEVNULL,
             stderr=subprocess.STDOUT if out else subprocess.DEVNULL,
+            env=env,
             creationflags=flags,
             start_new_session=not flags,  # POSIX：另开会话，同样脱离父进程
             close_fds=True,

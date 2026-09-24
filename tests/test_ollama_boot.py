@@ -7,6 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import shutil  # noqa: E402
+
 from app import ollama_boot  # noqa: E402
 from app.config import load_config  # noqa: E402
 
@@ -154,7 +156,38 @@ for f in (busy_log, quiet_log):
     f.unlink(missing_ok=True)
 tmp.rmdir()
 
-# ---- 10. 界面那个"重试"键要有后端接口兜着 ----
+# ---- 10. 模型目录：拉起的 serve 必须看到用户真正的模型 ----
+# 踩过的坑：Ollama 装在 D:\Ollama（模型在 D:\Ollama\models），而默认目录 %USERPROFILE%\.ollama\models
+# 是空的 —— 自动拉起的服务于是"起来了但没有模型"，用户看着就是"Ollama 没启动"。
+import os  # noqa: E402
+import tempfile  # noqa: E402
+
+# 临时目录放仓库里的 .test_*_tmp（.gitignore 已忽略）：系统临时目录在沙箱里写不进去
+tmp_models = Path(__file__).resolve().parent / ".test_ollama_tmp_models"
+tmp_models.mkdir(exist_ok=True)
+# 不必真叫 .exe：_models_dir 只看它所在的目录
+fake_exe = tmp_models / "fake-ollama"
+fake_exe.write_bytes(b"")
+# 情况 A：exe 旁边有 models/manifests 且有内容 → 认它
+(tmp_models / "models" / "manifests" / "library").mkdir(parents=True)
+(tmp_models / "models" / "manifests" / "library" / "x").write_bytes(b"")
+saved = os.environ.pop("OLLAMA_MODELS", None)
+check("认 exe 旁边的 models 目录",
+      ollama_boot._models_dir(str(fake_exe)), str(tmp_models / "models"))
+# 情况 B：环境变量优先
+os.environ["OLLAMA_MODELS"] = r"E:\somewhere\models"
+check("环境变量优先", ollama_boot._models_dir(str(fake_exe)), r"E:\somewhere\models")
+if saved is not None:
+    os.environ["OLLAMA_MODELS"] = saved
+else:
+    os.environ.pop("OLLAMA_MODELS", None)
+# 情况 C：exe 旁边没有 models → 不设（用 ollama 自己的默认）。注意要用**另一个**目录，
+# 否则会看到情况 A 建出来的 models
+empty_dir = tmp_models / "empty"
+empty_dir.mkdir(exist_ok=True)
+check("没有旁挂 models 时返回 None", ollama_boot._models_dir(str(empty_dir / "nope-ollama")), None)
+
+# ---- 11. 界面那个"重试"键要有后端接口兜着 ----
 # 自启只在 run.py 启动时做一次；后端本来就在跑（端口被占、run.py 直接退出）而 Ollama 后来挂了时，
 # 只有这个接口能把它再拉起来。这里只查路由在不在（调用会真去 ping Ollama，不适合放进用例）。
 # 注意：这一版 FastAPI 把 include_router 的结果包成 _IncludedRouter，app.routes 里看不到具体路径，
@@ -164,9 +197,10 @@ from app.main import app  # noqa: E402
 check("有「再确保一次 Ollama」的接口",
       "post" in app.openapi().get("paths", {}).get("/api/ollama/ensure", {}), True)
 
-# ---- 11. 真探针在本机跑一遍（只读：Ollama 在跑就该返回 True）----
+# ---- 12. 真探针在本机跑一遍（只读：Ollama 在跑就该返回 True）----
 check("真探针不会误报（拿一个必然连不上的端口）",
       ollama_boot.ping("http://127.0.0.1:1", timeout=0.5), False)
+shutil.rmtree(tmp_models, ignore_errors=True)
 
 print()
 if FAILED:

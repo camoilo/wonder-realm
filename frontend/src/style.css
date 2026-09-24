@@ -217,8 +217,8 @@ html, body {
 .mode-tab:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 悬浮提示（深色小卡片）：两种提示共用这一套视觉——
-   .mode-tip 是模式按钮那一排整行**上方**的介绍（下方是会话列表，向下会遮住会话），
-   .hint-tip 是 v-hint 指令给单个元素弹的提示。
+   .mode-tip 是模式按钮的介绍（桌面端弹在按钮**右侧**：上方是标题栏、下方是会话列表，
+   只有右边不挡东西；手机端仍弹在下方），.hint-tip 是 v-hint 指令给单个元素弹的提示。
    pointer-events: none 是必须的：否则鼠标移向浮层时会先触发原元素的 mouseleave，
    浮层自己把自己关掉，看起来像在闪。 */
 .mode-tip,
@@ -233,11 +233,11 @@ html, body {
   pointer-events: none;
   animation: mode-tip-in 0.12s ease-out;
 }
+/* 模式介绍：**fixed** 定位（不是 absolute）——左栏自己有 overflow: hidden（收起动画靠它），
+   绝对定位的浮层往右弹会被裁掉。位置由 SideBar.vue 按按钮的矩形算（桌面：右侧；手机：下方）。 */
 .mode-tip {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: calc(100% + 6px);
+  position: fixed;
+  width: 240px;
   z-index: 40;
 }
 /* 单个元素的提示：fixed 定位在目标下方（空间不够自动翻到上方），层级高于弹窗遮罩，
@@ -1430,8 +1430,8 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 /* 二维码：白底黑码（库画的是透明底黑模块，白底靠这里给），外面那圈白边就是静区 */
 .dc-qr {
   align-self: center;
-  width: 148px;
-  height: 148px;
+  width: 116px;
+  height: 116px;
   margin: 2px 0;
   padding: 6px;
   background: #fff;
@@ -1968,6 +1968,8 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 /* 没打开会话时图标列照旧常驻，只是上面那排标签禁用 */
 .rail-btn:disabled { opacity: 0.38; cursor: not-allowed; }
 .rail-btn:disabled:hover { background: transparent; color: var(--text-soft); }
+/* 当前模式用不到的页：只留空位（不画图标），但仍然禁用以示"这里将来会有东西" */
+.rail-btn.blank:disabled { opacity: 1; cursor: default; }
 .rail-btn.on {
   color: var(--accent-dark);
   background: var(--field);

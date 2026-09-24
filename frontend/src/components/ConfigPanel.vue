@@ -19,7 +19,7 @@
       <!-- 取到地址就画，不管开关开没开：关着时置灰并给一句"先打开开关"，
            省得用户以为要先去别处找地址（自检也据此验证二维码真的画出来了） -->
       <canvas ref="qrEl" class="dc-qr" :class="{dim: !lanEnabled}"
-              width="296" height="296" aria-label="手机访问二维码"></canvas>
+              width="232" height="232" aria-label="手机访问二维码"></canvas>
       <div class="dc-row">
         <span class="dc-url">{{ lanUrl }}</span>
         <button class="ghost-btn dc-copy" @click="copyLanUrl">{{ lanCopied ? "已复制" : "复制" }}</button>
@@ -29,12 +29,6 @@
         : "手机现在打不开——先把上面的开关打开。" }}</p>
     </template>
     <p v-else class="hint">没取到局域网地址（用 ipconfig 看一眼本机 IPv4，确认连着 WiFi/网线）。</p>
-
-    <div class="dc-row">
-      <span class="dc-label">手机视图</span>
-      <button class="ghost-btn dc-act" @click="togglePhoneView">收纳成手机大小</button>
-    </div>
-    <p class="hint">窗口宽度锁在 390（手机单栏布局），<strong>高度可以自己拖</strong>；再点一下或按 F9 恢复。</p>
 
     <div class="dc-actions">
       <button class="ghost-btn dc-act" @click="copyFirewallCmd">{{ firewallCopied ? "已复制命令" : "复制防火墙命令" }}</button>
@@ -63,7 +57,6 @@ const {
   copyLanUrl,
   openLog,
   toggleLan,
-  togglePhoneView,
 } = store;
 
 // 状态行：端口 / Ollama / 局域网。数据都是界面本来就在用的，不额外发请求。
@@ -75,13 +68,13 @@ const statusText = computed(() => {
   return `端口 ${port} · ${ollama} · 局域网${lanEnabled.value ? "已开启" : "已关闭"}`;
 });
 
-// 二维码：296px 画布 + CSS 148px，高分屏下也不糊
+// 二维码：232px 画布 + CSS 116px，高分屏下也不糊
 const qrEl = ref(null);
 async function paint() {
   if (!qrEl.value || !lanUrl.value) return;
   try {
     await QRCode.toCanvas(qrEl.value, lanUrl.value, {
-      width: 296, margin: 1, errorCorrectionLevel: "M",
+      width: 232, margin: 1, errorCorrectionLevel: "M",
     });
   } catch (e) {
     store.error = `二维码生成失败：${e.message}`;

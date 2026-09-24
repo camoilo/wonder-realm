@@ -616,18 +616,21 @@ check("三种模式的介绍都写在 MODES 里（单一数据源）",
 _side_src = dict(zip(VUE_ORDER, vue_sources))["components/SideBar.vue"]
 check("侧栏渲染介绍浮层", 'class="mode-tip"' in _side_src and "MODES[hoveredMode].hint" in _side_src, True)
 check("鼠标移入与键盘聚焦都显示",
-      all(k in _side_src for k in ('@mouseenter="hoveredMode = key"', "@mouseleave=\"hoveredMode = ''\"",
-                                   '@focus="hoveredMode = key"', "@blur=\"hoveredMode = ''\"")), True)
+      all(k in _side_src for k in ('@mouseenter="showModeTip(key, $event)"', "@mouseleave=\"hideModeTip()\"",
+                                   '@focus="showModeTip(key, $event)"', "@blur=\"hideModeTip()\"")), True)
 _tip = css_block(".mode-tip")
 # 两种浮层共用一条规则（.mode-tip, .hint-tip { ... }），css_block 会先撞上它，
 # 所以这里单独取：共用块 + .hint-tip 自己的定位块
 _shared_m = re.search(r"\.mode-tip,\s*\.hint-tip\s*\{([^}]*)\}", css)
 _shared_tip = _shared_m.group(1) if _shared_m else ""
 _hint_css = css_rule(".hint-tip")
-check("介绍浮层绝对定位（不改变布局）", "position: absolute;" in _tip, True)
-check("介绍浮层朝上弹（下方是会话列表，向下会遮住会话）", "bottom: calc(100% + 6px);" in _tip, True)
+# 浮层改成 fixed：左栏自己有 overflow: hidden（收起动画靠它），absolute 往右弹会被裁掉；
+# 位置由 SideBar.vue 按按钮矩形算（桌面右侧——上方是标题栏、下方是会话列表；手机端下方）
+check("介绍浮层固定定位（不受左栏裁剪）", "position: fixed;" in _tip, True)
+check("介绍浮层位置由脚本按按钮矩形算",
+      "tipStyle" in _side_src and "getBoundingClientRect" in _side_src
+      and "window.innerWidth <= 640" in _side_src, True)
 check("介绍浮层不吃鼠标（否则自己把自己关掉）", "pointer-events: none;" in _shared_tip, True)
-check("浮层的父层可作定位参照", "position: relative;" in css_block(".mode-tabs"), True)
 
 # ---- 面板底部常驻的保存区 ----
 check("只有一个保存键且改名为「保存当前配置」", html.count(">保存当前配置</button>"), 1)
@@ -1014,12 +1017,14 @@ check("配置面板挂在标题栏下方",
       '<ConfigPanel v-if="!desktopPhoneView && desktopConfigOpen" />' in _titlebar, True)
 check("标题栏横跨整个窗口（在 .app-body 外面）",
       "<TitleBar />" in _comp["App.vue"] and 'class="app-body"' in _comp["App.vue"], True)
-check("图标列只管标签、常驻、没会话时禁用",
+check("图标列只管标签、常驻、用不到时留空位且禁用",
       'class="panel-rail"' in _panel and 'class="rail-btn rail-config"' not in _panel
       and "ConfigPanel" not in _panel
-      and ':disabled="!activeSession"' in _panel
+      and ':disabled="!activeSession || !tabAvailable(t)"' in _panel
+      and 'v-for="t in tabs"' in _panel          # 五个位置固定，图标不跟着模式挪位
+      and "tabAvailable(t)" in _panel and "function tabAvailable(t)" in _panel
       and '<div class="panel-box" v-if="activeSession">' in _panel
-      and ".rail-btn:disabled {" in css, True)
+      and ".rail-btn.blank:disabled {" in css, True)
 # 没打开会话时内容区不挂载，图标列不该继续占着 330px 空白（只在桌面断点收窄）
 check("没有会话时右侧不该留大片空白",
       "'no-session': !activeSession" in _panel and ".panel.no-session { width: var(--rail-w); }" in css, True)
@@ -1039,10 +1044,14 @@ check("标题栏高度两处同值（壳的常量 vs CSS 变量）",
 check("主题变了壳要跟着改标题栏配色",
       "desktop:set-titlebar-theme" in shell_js and "setTitleBarTheme:" in preload_js
       and "api.setTitleBarTheme(" in js, True)
-check("配置面板内容齐全（开关 / 状态 / 二维码 / 地址 / 手机视图 / 防火墙 / 日志）",
+check("配置面板内容齐全（开关 / 状态 / 二维码 / 地址 / 防火墙 / 日志）",
       all(k in _config for k in ('class="dc-switch"', 'class="dc-status"', 'class="dc-qr"',
-                                 'class="dc-url"', 'class="dc-label"', "togglePhoneView",
+                                 'class="dc-url"', 'class="dc-label"',
                                  "copyFirewallCmd", "openLog")), True)
+# 「手机视图」不再放在配置面板里（标题栏那个窗口键就是入口，重复一个没意义）
+check("配置面板里不再重复手机视图入口",
+      "togglePhoneView" not in _config and "收纳成手机大小" not in _config, True)
+check("二维码缩小过（别撑满面板）", "width: 116px;" in css and "width: 232" in _config, True)
 check("二维码是 qrcode 画在 canvas 上（不手搓、不用 v-html）",
       "QRCode.toCanvas(" in _config and "v-html" not in _config, True)
 check("二维码只在取到地址时画，局域网关着时置灰",

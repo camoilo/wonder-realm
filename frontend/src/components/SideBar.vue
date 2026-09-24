@@ -15,11 +15,12 @@
         <button v-for="(m, key) in MODES" :key="key" class="mode-tab" :class="{active: mode === key}"
                 :aria-label="m.hint"
                 @click="switchMode(key)"
-                @mouseenter="hoveredMode = key" @mouseleave="hoveredMode = ''"
-                @focus="hoveredMode = key" @blur="hoveredMode = ''">{{ m.label }}</button>
-        <!-- 模式介绍：鼠标移入或键盘聚焦时出现。绝对定位在按钮行下方，所以不改变任何布局；
+                @mouseenter="showModeTip(key, $event)" @mouseleave="hideModeTip()"
+                @focus="showModeTip(key, $event)" @blur="hideModeTip()">{{ m.label }}</button>
+        <!-- 模式介绍：鼠标移入或键盘聚焦时出现。fixed 定位（左栏是 overflow:hidden，absolute 会被裁），
+             位置按按钮的矩形算：桌面端弹在右侧（上方是标题栏、下方是会话列表），手机端弹在下方。
              pointer-events: none 让它不会截住鼠标，也就不会自己把自己关掉 -->
-        <div v-if="hoveredMode" class="mode-tip" role="tooltip">{{ MODES[hoveredMode].hint }}</div>
+        <div v-if="hoveredMode" class="mode-tip" :style="tipStyle" role="tooltip">{{ MODES[hoveredMode].hint }}</div>
       </nav>
 
       <div class="side-list">
@@ -82,6 +83,25 @@ import { store, MODES } from "../store.js";
 
 // 当前鼠标悬停（或键盘聚焦）的模式 key；空串表示不显示介绍浮层
 const hoveredMode = ref("");
+// 浮层是 fixed 定位，位置按触发按钮的矩形算：桌面端放右侧（上方是标题栏、下方是会话列表，
+// 只有右边不挡东西），手机端放下方（那时左栏是抽屉，右侧会跑到屏幕外）
+const tipStyle = ref({});
+
+function showModeTip(key, e) {
+  hoveredMode.value = key;
+  const el = e && e.currentTarget;
+  if (!el || typeof el.getBoundingClientRect !== "function") return;
+  const r = el.getBoundingClientRect();
+  if (window.innerWidth <= 640) {
+    tipStyle.value = { top: `${Math.round(r.bottom + 6)}px`, left: `${Math.round(r.left)}px` };
+  } else {
+    tipStyle.value = { top: `${Math.round(r.top)}px`, left: `${Math.round(r.right + 10)}px` };
+  }
+}
+
+function hideModeTip() {
+  hoveredMode.value = "";
+}
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {

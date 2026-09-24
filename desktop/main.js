@@ -229,9 +229,12 @@ function setPhoneView(on) {
     win.setMinimumSize(PHONE_WIDTH + frameW, PHONE_MIN_H + frameH);   // 先 min 后 max，避免瞬态 min > max
     win.setMaximumSize(PHONE_WIDTH + frameW, PHONE_MAX_H + frameH);
     setBoundsCentered(PHONE_WIDTH + frameW, h + frameH);
+    // 手机视图是"预览 / 收纳"用的：置顶，免得被别的窗口压住（用户要求；普通桌面视图不这样）
+    win.setAlwaysOnTop(true);
   } else {
     win.setMinimumSize(DESKTOP_MIN.width, DESKTOP_MIN.height);
     win.setMaximumSize(0, 0);                       // 0 = 不限（回到普通窗口）
+    win.setAlwaysOnTop(false);
     const b = desktopRestoreBounds();
     setBoundsCentered(b.width, b.height);
   }
@@ -350,6 +353,24 @@ const PAGE_PROBE = `(async () => {
   const row = await until(() => document.querySelector('.session-row'), 4000);
   if (row) { row.click(); await tick(); await tick(); }
 
+  // 模式介绍浮层：桌面端要弹在按钮**右侧**、且不能被标题栏压住（用户报过"被顶部状态栏遮挡"）。
+  // 它靠 mouseenter 出现，这里手动派发一次事件再量位置。
+  const modeBtn = document.querySelector('.mode-tab');
+  let tipRect = null, modeRect = null;
+  if (modeBtn) {
+    modeRect = modeBtn.getBoundingClientRect();
+    modeBtn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+    await tick();
+    await tick();
+    const tip = document.querySelector('.mode-tip');
+    if (tip) {
+      const r = tip.getBoundingClientRect();
+      tipRect = [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+    }
+    modeBtn.dispatchEvent(new MouseEvent("mouseleave", { bubbles: false }));
+  }
+  const titlebarBottom = titlebarEl ? Math.round(titlebarEl.getBoundingClientRect().bottom) : 0;
+
   // 点标题栏里那个 ⚙ 开配置面板
   const rail = await until(() => document.querySelector('.titlebar [aria-label="配置"]'), 5000);
   if (rail) { rail.click(); await tick(); await tick(); }
@@ -401,6 +422,10 @@ const PAGE_PROBE = `(async () => {
     boxMounted,
     tabsDisabled,
     railTabs: tabBtns.length,
+    tipRect,
+    modeRect: modeRect ? [Math.round(modeRect.x), Math.round(modeRect.y),
+                          Math.round(modeRect.width), Math.round(modeRect.height)] : null,
+    titlebarBottom,
     viewW: window.innerWidth,
     viewH: window.innerHeight,
   };
@@ -498,6 +523,7 @@ async function selftestWindow() {
     "window.matchMedia('(max-width: 640px)').matches"
   );
   const pv = await win.webContents.executeJavaScript(PHONE_PROBE);   // 手机视图下必须还有"退出"键
+  const onTopInPhone = win.isAlwaysOnTop();                          // 手机视图要置顶（见 setPhoneView）
   if (process.env.DSH_SHOT_PHONE) {
     // 手机视图也留一张图：顶栏那个"退出"键到底有没有被别的东西盖住，看图最快
     if (!win.isVisible()) win.showInactive();
@@ -518,6 +544,7 @@ async function selftestWindow() {
   setPhoneView(false);
   await new Promise((r) => setTimeout(r, 300));
   const back = win.getContentSize();
+  const onTopInDesktop = win.isAlwaysOnTop();   // 退回桌面视图要取消置顶
   const afterBounds = win.getBounds();
   // 切一圈回来，窗口中心应该还在原处（"居中扩展或者收缩"，不是从左上角缩/涨）
   const centerShift = [
@@ -538,6 +565,7 @@ async function selftestWindow() {
     phoneBounds: { width: phoneBounds.width, height: phoneBounds.height },
     workArea: workArea ? { width: workArea.width, height: workArea.height } : null,
     phoneWidth, mobileLayout, clampedWidth, tallerHeight, centerShift,
+    onTopInPhone, onTopInDesktop,
     backWidth: back[0], backHeight: back[1],
     repairedWidth: repaired[0],
   };
@@ -608,7 +636,8 @@ if (!app.requestSingleInstanceLock()) {
           + `手机视图 ${probe.phoneSize.width}x${probe.phoneSize.height} 页面宽 ${probe.phoneWidth}px `
           + `手机布局 ${probe.mobileLayout} | 拖到 500 宽实测 ${probe.clampedWidth}px `
           + `高度改 1000 实测 ${probe.tallerHeight}px 退出后 ${probe.backWidth}x${probe.backHeight}px | `
-          + `切一圈中心偏移 ${probe.centerShift}px 手机窗口 ${probe.phoneBounds.width}x${probe.phoneBounds.height} `
+          + `切一圈中心偏移 ${probe.centerShift}px 置顶（手机 ${probe.onTopInPhone} / 桌面 ${probe.onTopInDesktop}）`
+          + ` 手机窗口 ${probe.phoneBounds.width}x${probe.phoneBounds.height} `
           + `工作区 ${probe.workArea ? probe.workArea.width + "x" + probe.workArea.height : "未知"}`);
         log(`selftest 标题栏 | 配置键 ${u.configBtnInTitlebar} 可点 ${u.cfgHitOk} 主题键 ${u.titlebarTheme} `
           + `窗口手机键 ${u.phoneBtnInTitlebar} 那一行文字「${u.titlebarText}」 | 面板打开 ${u.panelOpen} | `
@@ -617,6 +646,7 @@ if (!app.requestSingleInstanceLock()) {
           + `图标列标签 ${u.railTabs} 个 无会话时配置键仍在 ${u.cfgBtnNoSession} `
           + `内容区未挂载 ${!u.boxMounted} 标签禁用 ${u.tabsDisabled} | `
           + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
+        log(`selftest 浮层 | 模式按钮 ${u.modeRect} 介绍浮层 ${u.tipRect} 标题栏下沿 ${u.titlebarBottom}`);
         log(`selftest 尺寸 | 面板 ${u.panelRect} 窗口手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
         log(`selftest 手机视图 | 退出键 ${probe.pv.exitBtn} 文案「${probe.pv.exitLabel}」 `
           + `位置尺寸 ${probe.pv.rect} 可点 ${probe.pv.hitOk} 命中 ${probe.pv.hit} 其父 ${probe.pv.hitParent} `
@@ -657,6 +687,9 @@ if (!app.requestSingleInstanceLock()) {
         if (probe.centerShift[0] > 4 || probe.centerShift[1] > 4) {
           bad.push(`切一圈回来窗口中心偏了 ${probe.centerShift}`);
         }
+        // 手机视图要置顶（不然被别的窗口压住），退回桌面视图要取消置顶
+        if (probe.onTopInPhone !== true) bad.push("手机视图没有置顶");
+        if (probe.onTopInDesktop !== false) bad.push("退回桌面视图后还置顶着");
         if (probe.workArea
             && (probe.phoneBounds.height > probe.workArea.height
                 || probe.phoneBounds.width > probe.workArea.width)) {
@@ -677,7 +710,18 @@ if (!app.requestSingleInstanceLock()) {
           bad.push(`内容区挂载(${u.boxMounted})与标签禁用(${u.tabsDisabled})不一致`);
         }
         if (u.labels.indexOf("推送局域网") < 0) bad.push("面板缺推送局域网行");
-        if (u.labels.indexOf("手机视图") < 0) bad.push("面板缺手机视图行");
+        // 模式介绍浮层：桌面端要弹在按钮右侧，且不能跟标题栏重叠（原来朝上弹，被标题栏挡住）
+        if (u.modeRect && u.tipRect) {
+          if (u.tipRect[0] < u.modeRect[0] + u.modeRect[2]) {
+            bad.push(`模式介绍没弹在按钮右侧（提示 ${u.tipRect} 按钮 ${u.modeRect}）`);
+          }
+          if (u.tipRect[1] < u.titlebarBottom) {
+            bad.push(`模式介绍被标题栏压住（提示 y=${u.tipRect[1]} 标题栏下沿 ${u.titlebarBottom}）`);
+          }
+          if (u.tipRect[0] + u.tipRect[2] > u.viewW + 1) bad.push(`模式介绍超出右边缘（${u.tipRect}）`);
+        } else {
+          bad.push("模式介绍浮层没出来（派发 mouseenter 后仍没有 .mode-tip）");
+        }
         if (!/端口 \d+/.test(u.statusText)) bad.push(`面板状态行没有端口（${u.statusText}）`);
         if (!/Ollama/.test(u.statusText)) bad.push("面板状态行没有 Ollama 状态");
         // 宽高都留 2px 余量：min/max 按窗口算、内容尺寸差一圈边框，实测会有 1px 级抖动
