@@ -998,9 +998,9 @@ preload_js = (ROOT / "desktop" / "preload.js").read_text(encoding="utf-8")
 # 顶栏只留「手机视图」（在主题键旁）；「配置」搬到右侧图标列**最低栏**（rail 底部），
 # 而没有会话时整条图标列不存在（Panel.vue 以 activeSession 为条件）——所以顶栏还留了一个
 # 只在 !activeSession 时出现的兜底 ⚙，否则空状态那一屏就再也进不去配置
-check("顶栏只留手机视图键（配置键已搬走）",
-      'aria-label="收纳成手机视图"' in _topbar
-      and 'class="icon-btn desktop-btn"' in _topbar, True)
+check("顶栏留手机视图键（配置键已搬走）",
+      "收纳成手机视图" in _topbar and 'class="icon-btn desktop-btn"' in _topbar
+      and "togglePhoneView" in _topbar, True)
 check("顶栏兜底配置键只在没有会话时出现",
       _topbar.count('v-if="isDesktop && !desktopPhoneView && !activeSession"') == 1
       and _topbar.count('aria-label="配置"') == 1, True)
@@ -1053,6 +1053,26 @@ check("桌面尺寸与手机高度分开存",
       "phoneHeight: win.getContentSize()[1]" in shell_js and "persistWindowState()" in shell_js, True)
 check("壳日志能从面板里打开",
       "openLog:" in preload_js and 'ipcMain.handle("desktop:open-log"' in shell_js, True)
+# 后端输出走管道：Python 按控制台代码页编码（bat 里是 936）、Node 按 UTF-8 解，
+# 不显式让 Python 吐 UTF-8，日志里后端的中文就是一片"��"（真踩过）
+check("壳 spawn 后端时明确 UTF-8 输出",
+      'PYTHONIOENCODING: "utf-8"' in shell_js, True)
+# "手机视图"键在手机视图下也要在（否则进去就没有看得见的出路）；它只在 isDesktop 下渲染
+check("手机视图键在手机视图下仍然渲染（文案变成退出）",
+      'v-if="isDesktop"' in _topbar and "退出手机视图" in _topbar
+      and 'v-if="isDesktop && !desktopPhoneView"' not in _topbar.split("aria-label")[0], True)
+# 脏的"手机大小桌面尺寸"（旧版本存进去过）不能被当成恢复目标
+check("壳会丢掉脏的桌面尺寸",
+      "function desktopRestoreBounds()" in shell_js
+      and "desktopBounds.width > PHONE_WIDTH + 60" in shell_js
+      and "saved.width > PHONE_WIDTH + 60" in shell_js, True)
+# 隐藏窗口里 CSS 过渡不会自己推进：量抽屉归位前必须轮询
+check("自检等抽屉归位再量命中",
+      "side.getBoundingClientRect().x < -100" in shell_js, True)
+# 启动一律桌面视图：手机视图是临时预览态，让下次启动变成手机样子只会让人以为坏了
+check("启动不沿用上次的手机视图",
+      "if (prefs.phoneView) setPhoneView(true)" not in shell_js
+      and "phoneView: true" not in shell_js, True)
 
 # ---- 移动端适配（DEVELOPMENT §7.1 / §9.6：三断点 + 抽屉/底部弹层 + 触屏约定） ----
 _mobile = css[css.index("@media (max-width: 640px) {"):]

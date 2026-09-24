@@ -47,11 +47,14 @@
         <button class="theme-toggle" :class="'theme-' + theme"
                 v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
                 @click="cycleTheme">{{ themeIcon() }}</button>
-        <!-- 桌面端（Electron 壳）专属：收纳成手机视图（配置键已搬到右侧图标列最低栏，见 Panel.vue）。
-             网页端与手机浏览器没有 window.dshDesktop，这个键根本不渲染；手机视图下也隐藏
-             （见 DEVELOPMENT §3.3） -->
-        <button v-if="isDesktop && !desktopPhoneView" class="icon-btn desktop-btn"
-                v-hint="'收纳成手机视图（再点恢复，F9）'" aria-label="收纳成手机视图" @click="togglePhoneView">
+        <!-- 桌面端（Electron 壳）专属：收纳成手机视图 / 退出手机视图。
+             **手机视图下也留着这个键**（置为选中态）：否则进去以后屏幕上就再没有看得见的出路
+             （菜单栏是 autoHideMenuBar，F9 与「视图 → 手机视图」都不显眼）。
+             网页端与手机浏览器没有 window.dshDesktop，这个键根本不渲染（见 DEVELOPMENT §3.3） -->
+        <button v-if="isDesktop" class="icon-btn desktop-btn" :class="{on: desktopPhoneView}"
+                v-hint="desktopPhoneView ? '退出手机视图（F9）' : '收纳成手机视图（F9）'"
+                :aria-label="desktopPhoneView ? '退出手机视图' : '收纳成手机视图'"
+                :aria-pressed="desktopPhoneView" @click="togglePhoneView">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round">
             <rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/>

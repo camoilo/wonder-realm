@@ -101,6 +101,10 @@ function startBackend() {
     cwd: ROOT,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
+    // 后端输出走的是**管道**，Python 会按控制台代码页编码它（bat 里控制台设成了 936，
+    // 于是吐出来是 GBK 字节），而 Node 读管道拿到 Buffer 后按 UTF-8 解 ——
+    // 不做这一步，日志里后端那些中文就是一片"��"（踩过）。这里明确让 Python 输出 UTF-8。
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
   });
   backend.stdout.on("data", (b) => log(`后端: ${String(b).trim()}`));
   backend.stderr.on("data", (b) => log(`后端(err): ${String(b).trim()}`));
@@ -138,13 +142,20 @@ function waitForBackend(timeoutMs = 120000) {
 //
 // 偏好里**桌面尺寸与手机高度分开存**：早先把手机尺寸当 bounds 存过，结果"在手机视图下退出应用"
 // 会让下次启动的窗口只有 390 宽、且退出手机视图也回不到大尺寸（桌面尺寸被覆盖掉了）。
+// **启动一律桌面视图**（不沿用上次的手机视图）：手机视图是"预览/收纳"用的临时状态，
+// 让下次启动莫名其妙变成手机样子，用户只会以为坏了；高度倒是记着，下次进来接着用。
 function persistWindowState() {
   if (SELFTEST || !win) return;   // 自检只是量尺寸，不该改用户的偏好
-  if (phoneView) {
-    writePrefs({ phoneView: true, phoneHeight: win.getContentSize()[1] });
-  } else {
-    writePrefs({ phoneView: false, bounds: win.getBounds() });
-  }
+  if (phoneView) writePrefs({ phoneHeight: win.getContentSize()[1] });
+  else writePrefs({ bounds: win.getBounds() });
+}
+
+// 退出手机视图时恢复到多大。**要防一手被污染的旧值**：早先版本把手机尺寸当桌面尺寸存过
+// （desktop.json 里出现过 405x882 这种），照着恢复的话用户会觉得"退出了还是个小窗口"。
+// 判据很简单：桌面窗口不会只有手机那么宽。
+function desktopRestoreBounds() {
+  if (desktopBounds && desktopBounds.width > PHONE_WIDTH + 60) return desktopBounds;
+  return { width: 1280, height: 860 };
 }
 
 function setPhoneView(on) {
@@ -161,7 +172,7 @@ function setPhoneView(on) {
   } else {
     win.setMinimumSize(DESKTOP_MIN.width, DESKTOP_MIN.height);
     win.setMaximumSize(0, 0);                       // 0 = 不限（回到普通窗口）
-    if (desktopBounds) win.setBounds(desktopBounds);
+    win.setBounds(desktopRestoreBounds());
   }
   win.webContents.send("desktop:phone-view", phoneView);
   persistWindowState();
@@ -170,7 +181,9 @@ function setPhoneView(on) {
 
 function createWindow() {
   const prefs = readPrefs();
-  const bounds = prefs.bounds || {};
+  const saved = prefs.bounds || {};
+  // 旧版本把手机尺寸当桌面尺寸存过：那种尺寸不能拿来当窗口初始大小（否则一启动就"还是个手机窗口"）
+  const bounds = saved.width > PHONE_WIDTH + 60 ? saved : {};
   win = new BrowserWindow({
     width: bounds.width || 1280,
     height: bounds.height || 860,
@@ -203,7 +216,7 @@ function createWindow() {
     persistWindowState();
   });
   win.on("closed", () => { win = null; });
-  if (prefs.phoneView) setPhoneView(true); // 上次退出时就是手机视图，这次接着用
+  // 不恢复上次的手机视图：启动永远是正常桌面窗口（prefs 里若是旧值留着的 phoneView，忽略即可）
   return win;
 }
 
@@ -272,6 +285,53 @@ const PAGE_PROBE = `(async () => {
   };
 })()`;
 
+// 手机视图下的探针：这时候页面走手机单栏、桌面键大多隐藏，**但"退出手机视图"那个键必须还在**
+// （否则用户进了手机视图就没有看得见的出路）——所以单独量一次它的存在、尺寸与可点性。
+const PHONE_PROBE = `(async () => {
+  const tick = () => new Promise((r) => setTimeout(r, 160));
+  const until = async (fn, ms) => {
+    const t = Date.now();
+    for (;;) {
+      const v = fn();
+      if (v) return v;
+      if (Date.now() - t > ms) return null;
+      await tick();
+    }
+  };
+  const btn = await until(() => document.querySelector('[aria-label*="手机"]'), 3000);
+  const r = btn ? btn.getBoundingClientRect() : null;
+  const desc = (el) => (el ? el.tagName + "." + String((el.getAttribute && el.getAttribute("class")) || "") : "");
+  const side = document.querySelector(".sidebar");
+  // 手机断点下左侧栏是抽屉：默认 translateX(-100%) 藏在屏外，只有 .mobile-open 才滑出来。
+  // **但隐藏窗口的 CSS 过渡不会自己推进**（没有帧），一读样式才前进一格——所以这里轮询到它
+  // 真的滑出屏外再量下面的命中，否则量到的是"过渡半途横在屏幕左边"的假象（踩过一次）。
+  const settled = await until(() => {
+    if (!side) return true;
+    return side.getBoundingClientRect().x < -100;
+  }, 4000);
+  const hit = r ? document.elementFromPoint(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)) : null;
+  const all = Array.from(document.querySelectorAll('[aria-label*="手机"]')).map((el) => {
+    const b = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const h = document.elementFromPoint(Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2));
+    return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height),
+            cs.display, cs.pointerEvents, desc(h)].join("/");
+  });
+  const sr = side ? side.getBoundingClientRect() : null;
+  return {
+    exitBtn: !!btn,
+    exitLabel: btn ? String(btn.getAttribute("aria-label")) : "",
+    rect: r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null,
+    hitOk: !!(hit && hit.closest && hit.closest(".desktop-btn")),
+    hit: desc(hit),
+    all,
+    sideRect: sr ? [Math.round(sr.x), Math.round(sr.width)] : null,
+    sideOpen: !!(side && side.classList.contains("mobile-open")),
+    sideSettled: !!settled,
+    innerWidth: window.innerWidth,
+  };
+})()`;
+
 async function selftestWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -310,6 +370,18 @@ async function selftestWindow() {
   const mobileLayout = await win.webContents.executeJavaScript(
     "window.matchMedia('(max-width: 640px)').matches"
   );
+  const pv = await win.webContents.executeJavaScript(PHONE_PROBE);   // 手机视图下必须还有"退出"键
+  if (process.env.DSH_SHOT_PHONE) {
+    // 手机视图也留一张图：顶栏那个"退出"键到底有没有被别的东西盖住，看图最快
+    if (!win.isVisible()) win.showInactive();
+    await new Promise((r) => setTimeout(r, 400));
+    try {
+      fs.writeFileSync(process.env.DSH_SHOT_PHONE, (await win.webContents.capturePage()).toPNG());
+    } catch (e) {
+      log(`手机视图截图失败：${e.message}`);
+    }
+    win.hide();
+  }
   win.setContentSize(500, 900);            // 往宽里拖：宽度应当被钳住
   const clampedWidth = win.getContentSize()[0];
   win.setContentSize(PHONE_WIDTH, 1000);   // 高度应当能改
@@ -318,11 +390,20 @@ async function selftestWindow() {
   setPhoneView(false);
   await new Promise((r) => setTimeout(r, 300));
   const back = win.getContentSize();
+
+  // 被污染的"桌面尺寸"（跟手机一样宽，早期版本存进去过）不该被恢复成那个小尺寸
+  win.setContentSize(400, 860);
+  desktopBounds = null;
+  setPhoneView(true);
+  setPhoneView(false);
+  await new Promise((r) => setTimeout(r, 300));
+  const repaired = win.getContentSize();
   return {
-    bridge, desktopWidth, ui,
+    bridge, desktopWidth, ui, pv,
     phoneSize: { width: phoneSize[0], height: phoneSize[1] },
     phoneWidth, mobileLayout, clampedWidth, tallerHeight,
     backWidth: back[0], backHeight: back[1],
+    repairedWidth: repaired[0],
   };
 }
 
@@ -393,6 +474,11 @@ if (!app.requestSingleInstanceLock()) {
           + `顶栏手机键 ${u.phoneBtnInTopBar} 主题键 ${u.themeBtn} 顶栏已无配置键 ${u.noConfigInTopBar} | `
           + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
         log(`selftest 尺寸 | 面板 ${u.panelRect} 手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
+        log(`selftest 手机视图 | 退出键 ${probe.pv.exitBtn} 文案「${probe.pv.exitLabel}」 `
+          + `位置尺寸 ${probe.pv.rect} 可点 ${probe.pv.hitOk} 命中 ${probe.pv.hit} 其父 ${probe.pv.hitParent} `
+          + `页面宽 ${probe.pv.innerWidth}px | 污染尺寸恢复实测宽 ${probe.repairedWidth}px`);
+        log(`selftest 手机键全量 | ${probe.pv.all.join(" ; ")} | `
+          + `抽屉 x=${probe.pv.sideRect} open=${probe.pv.sideOpen} 已归位=${probe.pv.sideSettled}`);
 
         // 自检是要当闸门用的：不满足就非零退出，别让它"跑完就算过"
         const bad = [];
@@ -415,6 +501,15 @@ if (!app.requestSingleInstanceLock()) {
         if (Math.abs(probe.clampedWidth - PHONE_WIDTH) > 2) bad.push(`手机视图宽度没锁住（${probe.clampedWidth}）`);
         if (probe.tallerHeight < 950) bad.push(`手机视图高度改不动（${probe.tallerHeight}）`);
         if (!probe.mobileLayout) bad.push("手机布局没生效");
+        // 手机视图下必须还有看得见的出路，且它得真的能点
+        if (probe.pv.exitBtn !== true) bad.push("手机视图下没有退出键");
+        if (probe.pv.exitLabel.indexOf("退出") < 0) bad.push(`手机视图下退出键文案不对（${probe.pv.exitLabel}）`);
+        if (!probe.pv.rect || probe.pv.rect[2] < 24 || probe.pv.rect[3] < 24) {
+          bad.push(`手机视图下退出键尺寸不对（${probe.pv.rect}）`);
+        }
+        if (probe.pv.hitOk !== true) bad.push(`手机视图下退出键被挡住（命中 ${probe.pv.hit}，抽屉 ${probe.pv.sideRect} 已归位 ${probe.pv.sideSettled}）`);
+        // 存档里被污染的"桌面尺寸"（跟手机一样宽）不该被当成恢复目标
+        if (!(probe.repairedWidth > 800)) bad.push(`污染尺寸没被纠正（恢复成 ${probe.repairedWidth}px）`);
         if (bad.length) {
           log(`selftest 断言失败：${bad.join("、")}`);
           app.isQuiting = true;
