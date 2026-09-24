@@ -12,6 +12,7 @@
   --accent: #9370db;                        /* 主色：中紫（MediumPurple） */
   --accent-dark: #7a55c8;                   /* 浅色主题里的"深一档"：强调文字、hover 边框 */
   --accent-soft: rgba(147, 112, 219, 0.16); /* 浅紫底：选中态、badge 背景 */
+  --avatar-bg: #e9e2f8;                     /* 头像占位底色：不透明（见 .avatar） */
   --accent-ring: rgba(147, 112, 219, 0.4);  /* 聚焦光圈 / 拖拽高亮 */
   --hover: #f0f2f6;
   --hover-soft: #eceef2;
@@ -53,6 +54,7 @@
   --accent: #a98cea;                        /* 深色底上提亮一档，保持 #9370DB 的紫 */
   --accent-dark: #c9b4f7;                   /* 深色主题里这一档是"更亮"（与浅色相反） */
   --accent-soft: rgba(169, 140, 234, 0.2);
+  --avatar-bg: #3b3352;                     /* 头像占位底色：不透明 */
   --accent-ring: rgba(169, 140, 234, 0.45);
   --hover: #282e3a;
   --hover-soft: #232936;
@@ -424,11 +426,14 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1 1 0;     /* 宽度交给这一行分配：隔壁真没地方了才省略号 */
+  /* 宽度就是文字本身的宽度（flex-basis: auto + 可收缩）：别让它把整行都占成"可重命名区"，
+     否则点名字右边老远也会进重命名（用户报过"似乎是直接填充的"）。
+     行内真放不下时它照样按 flex-shrink 收缩并打省略号 */
+  flex: 0 1 auto;
   min-width: 0;
 }
-/* 重命名时的输入框 + 计数也是这样 */
-.title-counted { flex: 1 1 0; min-width: 0; }
+/* 重命名时的输入框 + 计数也是这样：盒子贴着输入框，不要撑满 */
+.title-counted { flex: 0 1 auto; min-width: 0; }
 .title.muted { color: var(--text-soft); cursor: default; }
 
 .title-input {
@@ -796,7 +801,8 @@ html, body {
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: var(--accent-soft);
+  /* 没上传头像时的占位底色：**不透明**（原来是半透明的 accent-soft，在深色气泡旁边发灰） */
+  background: var(--avatar-bg);
   color: var(--accent);
   display: inline-flex;
   align-items: center;

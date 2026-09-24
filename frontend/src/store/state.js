@@ -33,7 +33,9 @@ export const store = reactive({
       // 初始化时有哪几步没加载上（顶栏常驻提示用；底部错误条只在打开会话时才渲染）
       initError: "",
       sideCollapsed: false,
-      panelCollapsed: false,
+      // 右侧面板**默认收起**：没打开会话时它本来就没内容（整条只有图标列），而"打开会话就自己
+      // 展开"会很顶人（用户要求"点会话不要自动展开"）。要看设定点一下图标列即可。
+      panelCollapsed: true,
       // 手机断点（≤640px）下的抽屉 / 底部面板 / 更多菜单 / 折叠搜索条开关；桌面端不使用
       mobileSideOpen: false,
       mobilePanelOpen: false,

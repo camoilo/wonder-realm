@@ -1040,11 +1040,13 @@ _session_src = js[js.index("async openSession("):]
 _next = re.search(r"\n  async ", _session_src)
 check("切换会话不碰右侧面板的开合",
       "panelCollapsed" not in (_session_src[: _next.start()] if _next else _session_src), True)
-# 顶栏标题：旁边真有空位就别打省略号（工具条换行后标题该用满那一行）
-check("标题宽度交给 flex 分配",
-      "flex: 1 1 0;" in css_block(".title-area") and "flex: 1 1 0;" in css_block(".title")
+# 顶栏标题：宽度就是文字本身的宽度（别把整行变成"可重命名区"），真放不下才省略号
+check("标题宽度按内容（不是撑满整行）",
+      "flex: 0 1 auto;" in css_block(".title") and "flex: 0 1 auto;" in css_block(".title-counted")
       and "max-width: 320px;" not in css_block(".title")
       and "max-width: 220px" not in css and "max-width: 38vw" not in css, True)
+# 右侧面板默认收起：打开会话不该自己冒出来（用户要求）
+check("右侧面板默认收起", "panelCollapsed: true," in js, True)
 # 自绘标题栏：三条约束缺一不可——壳开 titleBarOverlay、标题栏进 .wco（拖拽区 + 让出右上角）、
 # 高度常量与 CSS 变量同值（不同值系统三键就会跟页面按钮错开）
 check("壳开了自绘标题栏",

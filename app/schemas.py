@@ -184,7 +184,7 @@ class MemoryEdit(BaseModel):
 
 
 # 对话区背景图：每角色至多这么多张
-BACKGROUND_MAX_COUNT = 5
+BACKGROUND_MAX_COUNT = 10
 # 单张上限。前端已把长边压到 1920、重编码为 JPEG，实际通常远小于此
 BACKGROUND_MAX_CHARS = 1536 * 1024
 

@@ -48,7 +48,7 @@ export const AVATAR_MAX_PIXELS = 40 * 1000 * 1000; // 原图像素总量上限
 export const AVATAR_QUALITY = 0.85;
 
 // 对话区背景图：不裁剪，只等比缩到长边不超过 BG_MAX_PX（不放大），重编码为 JPEG。
-export const BG_MAX_COUNT = 5;
+export const BG_MAX_COUNT = 10;
 export const BG_MAX_PX = 1920;
 export const BG_MIN_LONG_SIDE = 640; // 长边下限：再小铺在对话区只会糊成一片
 export const BG_QUALITY = 0.85;
