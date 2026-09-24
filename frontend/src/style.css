@@ -3,7 +3,7 @@
 :root {
   color-scheme: light;
   --bg: #f4f5f7;
-  --titlebar-h: 56px;   /* 自绘标题栏高度；desktop/main.js 的 TITLEBAR_H 必须同值 */
+  --titlebar-h: 32px;   /* 窗口标题栏行高；与 Windows 原生标题栏同高，desktop/main.js 的 TITLEBAR_H 必须同值 */
   --panel: #ffffff;
   --panel-soft: #fafbfd;
   --border: #e3e5ea;
@@ -96,6 +96,15 @@ html, body {
 /* 三栏分离布局：左栏 | 对话区 | 右栏，两侧栏收起后对话区自动重新居中 */
 #app {
   height: 100%;
+  display: flex;
+  flex-direction: column;   /* 第一行是窗口标题栏（壳里才有），下面是 .app-body */
+  overflow: hidden;
+}
+
+/* 标题栏下面那一整块：左栏 + 内容（原来的 #app 横向布局搬到这一层） */
+.app-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   overflow: hidden;
 }
@@ -1337,24 +1346,10 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 /* 手机端"＋"收纳键：桌面断点不需要收纳，直接隐藏（外观与 jump-btn 同款，见手机断点里的规则） */
 .aux-toggle { display: none; }
 
-/* ---------- 桌面端（Electron 壳）的东西：配置 + 手机视图（见 DEVELOPMENT §7.4） ---------- */
-/* 手机视图键只在壳里渲染（网页端与手机浏览器没有 window.dshDesktop），手机视图下也隐藏。
-   ⚠ 尺寸与可见性必须写死：`.icon-btn` 默认 opacity:0（悬停才现形），里面的内联 SVG 又没有
-   固有尺寸 —— 两样叠一起就是一个"看不见的 10px 小方块"（实测踩到过）。
-   这里照移动端那几个键（.mobile-*-btn）的写法钉住。 */
-.desktop-btn {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 1;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-}
-.desktop-btn svg { display: block; width: 18px; height: 18px; }
-.desktop-btn.on { color: var(--accent-dark); border-color: var(--accent); background: #eef2ff; }
-/* 「配置」小面板：挂在顶栏（也就是自绘标题栏那排）下方，触发键是右上角的 ⚙。
+/* ---------- 桌面端（Electron 壳）的东西：窗口键在标题栏那一行（见 DEVELOPMENT 3.3） ---------- */
+/* 那两个键只在壳里渲染（网页端与手机浏览器没有 window.dshDesktop），样式见上面的 .win-btn */
+
+/* 「配置」小面板：挂在标题栏下方，触发键是右上角的 ⚙（.win-btn）。
    层级高于消息与浮层、低于弹窗遮罩（1000） */
 .desktop-config {
   position: absolute;
@@ -1465,6 +1460,11 @@ html[data-theme="dark"] .desktop-btn.on { background: #26304a; }
   border-left: 1px solid var(--border);
 }
 .panel.collapsed { width: var(--rail-w); }
+/* 没打开会话时内容区不挂载（见 Panel.vue），图标列不该继续占着 330px 的空白。
+   只在桌面断点生效：手机断点下 .panel 是整屏宽的底部弹层 */
+@media (min-width: 641px) {
+  .panel.no-session { width: var(--rail-w); }
+}
 
 .panel-box {
   flex: none;
@@ -1914,21 +1914,54 @@ mark.search-hit.current {
 }
 .rail-btn:hover { background: var(--hover); color: var(--text); }
 /* ---------------- 自绘标题栏（Windows 的 Window Controls Overlay，见 DEVELOPMENT 3.3） ----------------
-   壳把系统标题栏交给页面画，于是「配置 / 手机视图」能跟最小化/最大化/关闭排在同一行。
-   三件事：① 整条顶栏当拖拽区（里面的控件要 no-drag，否则点不动）；② 高度固定成 --titlebar-h
-   （壳那边 TITLEBAR_H 必须同值，否则两排按钮错位）；③ 右侧给系统那三个按钮让出宽度。 */
-.topbar.wco {
-  position: relative;   /* 手机视图下顶栏会占两行，要压住下面那块 sticky 的属性浮层（z-index 300） */
-  z-index: 400;
+   壳里窗口最上面那一行就是标题栏：左边图标 + 应用名，右边主题 / 配置 / 手机视图，再往右是系统画的
+   最小化、最大化、关闭。整行拖拽区（里面的控件要 no-drag，否则点不动）。
+   窗口键（.win-btn）照系统那三个按钮的样子做：无圆角、满高、悬停浅灰、细图标——
+   这样同一行里两种按钮看起来才是一套。 */
+.titlebar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   height: var(--titlebar-h);
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
+  padding-left: 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.titlebar.wco {
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px));
   -webkit-app-region: drag;
 }
-.topbar.wco :is(button, input, select, a, .title-area, .search-box, .desktop-config, .mobile-more) {
-  -webkit-app-region: no-drag;
+.titlebar :is(button, .desktop-config) { -webkit-app-region: no-drag; }
+.titlebar .brand-mark { color: var(--accent); font-size: 15px; line-height: 1; }
+.titlebar-name { font-size: 13px; color: var(--text-soft); }
+.titlebar-gap { flex: 1; }
+
+.win-btn {
+  flex: none;
+  width: 46px;
+  height: var(--titlebar-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
 }
+.win-btn svg { display: block; width: 15px; height: 15px; }
+.win-btn:hover { background: var(--hover); }
+.win-btn:active { background: var(--border); }
+.win-btn.on { color: var(--accent); }
+html[data-theme="dark"] .win-btn:hover { background: rgba(255, 255, 255, 0.08); }
+html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14); }
+/* 手机视图那一屏很窄：标题栏只留窗口键，图标与应用名让位（见下面手机断点） */
+
 /* 没打开会话时图标列照旧常驻，只是上面那排标签禁用 */
 .rail-btn:disabled { opacity: 0.38; cursor: not-allowed; }
 .rail-btn:disabled:hover { background: transparent; color: var(--text-soft); }
@@ -2589,21 +2622,10 @@ body { overscroll-behavior: none; }
     gap: 8px;
     padding: 10px 12px calc(10px + var(--sat));
   }
-  /* 自绘标题栏的壳里，手机视图这一屏会被右上角那三个系统按钮挤掉约 138px：
-     一行放不下 ☰ + 标题 + 手机那几个键，于是自然折行。这里让"退出手机视图"所在的
-     .toolbar 独占**第一行**（右端正好挨着系统那三个按钮，高度与标题栏对齐），
-     下面各行才是手机自己的顶栏控件 —— 跟真实 App 的"标题栏 + 工具条"一个样子。
-     高度也不能锁死在 --titlebar-h，否则折出来的行会飘到对话区上面。 */
-  .topbar.wco {
-    height: auto;
-    min-height: var(--titlebar-h);
-    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
-  }
-  .topbar.wco .toolbar {
-    order: -1;
-    flex-basis: 100%;
-    min-height: var(--titlebar-h);
-  }
+  /* 手机视图这一屏很窄（390 减去系统按钮占的 ~138px）：标题栏只留窗口键，
+     图标与应用名让位，页面自己的工具条照旧在下面那一行 */
+  .titlebar .brand-mark,
+  .titlebar .titlebar-name { display: none; }
   .title { max-width: 38vw; font-size: 15px; }
   .chip { display: none; }
   .toolbar .search-box,

@@ -2,7 +2,8 @@
 <!-- 图标列（.panel-rail）**常驻**：没有会话时它也在这里，只是上面那排标签禁用 ——
      否则"配置"（局域网 / 手机扫码 / 日志）在空状态下就找不到了。
      内容区（.panel-box）仍只在该有内容时才挂载：里面的标签页会读 activeSession。 -->
-<aside class="panel" :class="{collapsed: panelCollapsed, 'mobile-open': mobilePanelOpen}">
+<aside class="panel"
+       :class="{collapsed: panelCollapsed, 'mobile-open': mobilePanelOpen, 'no-session': !activeSession}">
     <!-- 内容面板：点图标滑出/收起。滚动容器只包住标签内容，
          "未保存 / 还原" 与保存键在它外面（见 .panel-footer） -->
     <div class="panel-box" v-if="activeSession">

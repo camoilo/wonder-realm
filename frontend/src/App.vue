@@ -1,5 +1,10 @@
 <template>
 
+<!-- 窗口标题栏（壳里才有）：横跨整个窗口，左边图标 + 应用名，右边窗口键 ——
+     它必须在最上层，所以放在 .app-body 外面（见 DEVELOPMENT 3.3） -->
+<TitleBar />
+
+<div class="app-body">
 <SideBar />
 
 <div class="main">
@@ -23,6 +28,7 @@
 
   </div><!-- /.work：对话区 + 面板这一行（顶栏在它上面，横跨整行） -->
 </div><!-- /.main -->
+</div><!-- /.app-body：标题栏下面那一整块（左栏 + 内容） -->
 
 <CharacterModal />
 <NewSessionModal />
@@ -49,6 +55,7 @@ import { onBeforeUnmount, onMounted, toRefs } from "vue";
 import { disposeApp, initApp, registerWatchers, store } from "./store.js";
 import { hintStyle, hintText } from "./composables/hint.js";
 import SideBar from "./components/SideBar.vue";
+import TitleBar from "./components/TitleBar.vue";
 import TopBar from "./components/TopBar.vue";
 import ChatArea from "./components/ChatArea.vue";
 import InputBar from "./components/InputBar.vue";

@@ -42,7 +42,7 @@ const DESKTOP_MIN = { width: 380, height: 520 };      // 与 createWindow 的 mi
 // 跟最小化 / 最大化 / 关闭排在同一行（见 DEVELOPMENT 3.3）。只有 Windows 支持得完整。
 // TITLEBAR_H 必须与 CSS 的 --titlebar-h 一致，否则系统那三个按钮会跟页面按钮错开半个身位。
 const WCO = process.platform === "win32";
-const TITLEBAR_H = 56;
+const TITLEBAR_H = 32;   // 与 Windows 原生标题栏同高，系统那三个按钮就落在这一行里
 const TITLEBAR_LIGHT = { color: "#f4f5f7", symbolColor: "#3a3f4a" };   // 与 --bg / 文字色同源
 const TITLEBAR_DARK = { color: "#171a21", symbolColor: "#e6e8ec" };
 const SELFTEST = process.argv.includes("--selftest");
@@ -282,23 +282,25 @@ const PAGE_PROBE = `(async () => {
   };
   // 图标列必须常驻（没有会话时也在），那排标签则在"没有会话"时禁用。会话是不是自动打开的
   // 不一定，所以不做绝对断言，而是查**两个状态是否自洽**：内容区没挂载 ⇔ 那排标签禁用。
-  // 「配置」键在顶栏（自绘标题栏那排），它必须**任何时候都在** —— 没会话时也点得到。
-  const cfgBtnNoSession = !!document.querySelector('.topbar [aria-label="配置"]');
+  // 「配置」键在**窗口标题栏那一行**（.titlebar），它必须任何时候都在——没会话时也点得到。
+  const titlebarEl = document.querySelector('.titlebar');
+  const cfgBtnNoSession = !!document.querySelector('.titlebar [aria-label="配置"]');
   const tabBtns = Array.from(document.querySelectorAll('.panel-rail .rail-btn'));
   const boxMounted = !!document.querySelector('.panel-box');
   const tabsDisabled = tabBtns.length > 0 && tabBtns.every((b) => b.disabled);
-  // 自绘标题栏：顶栏要有 .wco（拖拽区 + 给系统按钮留宽度），留出来的宽度得够放那三个按钮
-  const wcoOnTopbar = !!document.querySelector('.topbar.wco');
-  const topbarEl = document.querySelector('.topbar');
-  // 拖拽区没法用交互测，只能看计算样式：顶栏要 drag、里面的按钮要 no-drag
-  // （写反了的后果很直观：窗口拖不动，或者按钮点不动）
-  const dragRegion = wcoOnTopbar ? getComputedStyle(topbarEl).webkitAppRegion : "";
-  const noDragBtn = wcoOnTopbar
-    ? getComputedStyle(document.querySelector('.topbar [aria-label*="手机"]')).webkitAppRegion
-    : "";
-  const reservedRight = wcoOnTopbar
-    ? Math.round(parseFloat(getComputedStyle(topbarEl).paddingRight) || 0)
+  // 自绘标题栏：那一行要有 .wco（拖拽区 + 给系统按钮留宽度），留出来的宽度得够放那三个按钮；
+  // 拖拽没法交互测，只能看计算样式：行是 drag、里面的窗口键是 no-drag
+  const wcoOnTitlebar = !!document.querySelector('.titlebar.wco');
+  const titlebarText = titlebarEl ? titlebarEl.textContent.replace(/\\s+/g, ' ').trim() : "";
+  const dragRegion = wcoOnTitlebar ? getComputedStyle(titlebarEl).webkitAppRegion : "";
+  const winBtnEl = document.querySelector('.titlebar .win-btn');
+  const noDragBtn = wcoOnTitlebar && winBtnEl ? getComputedStyle(winBtnEl).webkitAppRegion : "";
+  const reservedRight = wcoOnTitlebar
+    ? Math.round(parseFloat(getComputedStyle(titlebarEl).paddingRight) || 0)
     : 0;
+  // 第二行（页面自己的工具条）里不该再出现窗口键：会话名/搜索/模型/思考才是它的内容
+  const topbar = document.querySelector('.topbar');
+  const topbarHasKeys = !!(topbar && topbar.querySelector('[aria-label="配置"], [aria-label*="手机"]'));
   // 等首屏数据到位（角色列表是异步拉的），再展开角色、打开它下面的第一个会话
   await until(() => document.querySelector('.char-row') || document.querySelector('.session-row'), 6000);
   const ch = document.querySelector('.char-row');
@@ -306,8 +308,8 @@ const PAGE_PROBE = `(async () => {
   const row = await until(() => document.querySelector('.session-row'), 4000);
   if (row) { row.click(); await tick(); await tick(); }
 
-  // 点右上角那个 ⚙ 开配置面板
-  const rail = await until(() => document.querySelector('.topbar [aria-label="配置"]'), 5000);
+  // 点标题栏里那个 ⚙ 开配置面板
+  const rail = await until(() => document.querySelector('.titlebar [aria-label="配置"]'), 5000);
   if (rail) { rail.click(); await tick(); await tick(); }
   const cfgRect = rail ? rail.getBoundingClientRect() : null;
 
@@ -322,32 +324,35 @@ const PAGE_PROBE = `(async () => {
   const sw = panel && panel.querySelector('.dc-switch');
   const top = document.querySelector('.topbar') || document.body;
   const status = panel && panel.querySelector('.dc-status');
-  const pb = top.querySelector('[aria-label*="手机"]');
+  const pb = document.querySelector('.titlebar [aria-label*="手机"]');   // 窗口键在标题栏那一行
   const pr = pb ? pb.getBoundingClientRect() : null;
   const hit = pr ? document.elementFromPoint(Math.round(pr.x + pr.width / 2), Math.round(pr.y + pr.height / 2)) : null;
   return {
     panelOpen: !!panel,
     panelRect: panel ? (() => { const r = panel.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; })() : null,
     phoneRect: pr ? [Math.round(pr.x), Math.round(pr.y), Math.round(pr.width), Math.round(pr.height)] : null,
-    // 点中心命中的可能是按钮里的 svg，所以要看祖先链上有没有 .desktop-btn
+    // 点中心命中的可能是按钮里的 svg，所以要看祖先链上有没有窗口键
     phoneHit: hit ? String(hit.tagName) : "",
-    phoneHitOk: !!(hit && hit.closest && hit.closest(".desktop-btn")),
+    phoneHitOk: !!(hit && hit.closest && hit.closest(".win-btn")),
     labels: panel ? Array.from(panel.querySelectorAll('.dc-label')).map((e) => e.textContent.trim()) : [],
     qrInk,
     qrDim: !!(qr && qr.classList.contains('dim')),
     lanOn: !!(sw && sw.getAttribute('aria-checked') === 'true'),
     statusText: status ? status.textContent.replace(/\\s+/g, ' ').trim() : '',
-    phoneBtnInTopBar: !!pb,
-    themeBtn: !!document.querySelector('.theme-toggle'),
-    configBtnInTopBar: !!top.querySelector('[aria-label="配置"]'),
-    // 点中心的命中链上要有 .desktop-btn（里面是 svg，直接比 className 会拿到 SVGAnimatedString）
+    phoneBtnInTitlebar: !!pb,
+    titlebarTheme: !!document.querySelector('.titlebar .win-btn[class*="theme-"]'),
+    themeInTopbar: !!(top && top.querySelector('.theme-toggle')),
+    topbarHasKeys,
+    titlebarText,
+    configBtnInTitlebar: !!document.querySelector('.titlebar [aria-label="配置"]'),
+    // 点中心的命中链上要有窗口键（里面是 svg，直接比 className 会拿到 SVGAnimatedString）
     cfgHitOk: !!(cfgRect && (() => {
       const h = document.elementFromPoint(Math.round(cfgRect.x + cfgRect.width / 2), Math.round(cfgRect.y + cfgRect.height / 2));
-      return h && h.closest && h.closest(".desktop-btn");
+      return h && h.closest && h.closest(".win-btn");
     })()),
     cfgRect: cfgRect ? [Math.round(cfgRect.x), Math.round(cfgRect.y), Math.round(cfgRect.width), Math.round(cfgRect.height)] : null,
     cfgBtnNoSession,
-    wcoOnTopbar,
+    wcoOnTitlebar,
     dragRegion,
     noDragBtn,
     reservedRight,
@@ -394,7 +399,7 @@ const PHONE_PROBE = `(async () => {
     exitBtn: !!btn,
     exitLabel: btn ? String(btn.getAttribute("aria-label")) : "",
     rect: r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null,
-    hitOk: !!(hit && hit.closest && hit.closest(".desktop-btn")),
+    hitOk: !!(hit && hit.closest && hit.closest(".win-btn")),
     hit: desc(hit),
     all,
     sideRect: sr ? [Math.round(sr.x), Math.round(sr.width)] : null,
@@ -545,13 +550,14 @@ if (!app.requestSingleInstanceLock()) {
           + `手机视图 ${probe.phoneSize.width}x${probe.phoneSize.height} 页面宽 ${probe.phoneWidth}px `
           + `手机布局 ${probe.mobileLayout} | 拖到 500 宽实测 ${probe.clampedWidth}px `
           + `高度改 1000 实测 ${probe.tallerHeight}px 退出后 ${probe.backWidth}x${probe.backHeight}px`);
-        log(`selftest 界面 | 配置键在顶栏 ${u.configBtnInTopBar} 可点 ${u.cfgHitOk} 面板打开 ${u.panelOpen} `
-          + `顶栏手机键 ${u.phoneBtnInTopBar} 主题键 ${u.themeBtn} | `
-          + `自绘标题栏 ${u.wcoOnTopbar} 右上留白 ${u.reservedRight}px | `
+        log(`selftest 标题栏 | 配置键 ${u.configBtnInTitlebar} 可点 ${u.cfgHitOk} 主题键 ${u.titlebarTheme} `
+          + `窗口手机键 ${u.phoneBtnInTitlebar} 那一行文字「${u.titlebarText}」 | 面板打开 ${u.panelOpen} | `
+          + `自绘 ${u.wcoOnTitlebar} 右上留白 ${u.reservedRight}px 拖拽 ${u.dragRegion}/${u.noDragBtn} | `
+          + `第二行还有窗口键 ${u.topbarHasKeys} 第二行有主题键 ${u.themeInTopbar} | `
           + `图标列标签 ${u.railTabs} 个 无会话时配置键仍在 ${u.cfgBtnNoSession} `
           + `内容区未挂载 ${!u.boxMounted} 标签禁用 ${u.tabsDisabled} | `
           + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
-        log(`selftest 尺寸 | 面板 ${u.panelRect} 手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
+        log(`selftest 尺寸 | 面板 ${u.panelRect} 窗口手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
         log(`selftest 手机视图 | 退出键 ${probe.pv.exitBtn} 文案「${probe.pv.exitLabel}」 `
           + `位置尺寸 ${probe.pv.rect} 可点 ${probe.pv.hitOk} 命中 ${probe.pv.hit} 其父 ${probe.pv.hitParent} `
           + `页面宽 ${probe.pv.innerWidth}px | 污染尺寸恢复实测宽 ${probe.repairedWidth}px`);
@@ -561,25 +567,28 @@ if (!app.requestSingleInstanceLock()) {
         // 自检是要当闸门用的：不满足就非零退出，别让它"跑完就算过"
         const bad = [];
         if (!probe.bridge) bad.push("preload 桥接没通");
-        // 「配置」键在顶栏（自绘标题栏那排）：必须在、必须点得到、且**没会话时也在**
-        if (u.configBtnInTopBar !== true) bad.push("顶栏没有配置键");
-        if (u.cfgHitOk !== true) bad.push("顶栏配置键点不到（被别的元素盖住）");
+        // 「配置」键在**窗口标题栏**那一行：必须在、必须点得到、且**没会话时也在**
+        if (u.configBtnInTitlebar !== true) bad.push("标题栏没有配置键");
+        if (u.cfgHitOk !== true) bad.push("标题栏配置键点不到（被别的元素盖住）");
         if (u.cfgBtnNoSession !== true) bad.push("没有会话时配置键不见了");
+        if (u.titlebarTheme !== true) bad.push("壳里的主题键不在标题栏上");
         if (u.panelOpen !== true) bad.push("配置面板点不开");
         if (!(u.railTabs >= 1)) bad.push("右侧图标列的标签没渲染");
-        // 自绘标题栏：顶栏要有 .wco、右上要真的给系统三个按钮留出宽度
+        // 第二行是页面自己的工具条：窗口键与主题键都不该再出现在那里
+        if (u.topbarHasKeys === true) bad.push("页面工具条里还留着窗口键");
+        if (u.themeInTopbar === true) bad.push("壳里第二行还留着主题键（浏览器才有它）");
+        // 自绘标题栏：那一行要有 .wco、右上要真的给系统三个按钮留出宽度，且拖拽/非拖拽写对了
         if (WCO) {
-          if (u.wcoOnTopbar !== true) bad.push("顶栏没进自绘标题栏模式（.wco）");
+          if (u.wcoOnTitlebar !== true) bad.push("标题栏没进自绘模式（.wco）");
           if (!(u.reservedRight > 100)) bad.push(`右上角没给系统按钮留出宽度（${u.reservedRight}px）`);
-          if (u.dragRegion !== "drag") bad.push(`顶栏不是拖拽区（${u.dragRegion}）`);
-          if (u.noDragBtn !== "no-drag") bad.push(`顶栏上的按钮没排除拖拽区（${u.noDragBtn}）`);
+          if (u.dragRegion !== "drag") bad.push(`标题栏不是拖拽区（${u.dragRegion}）`);
+          if (u.noDragBtn !== "no-drag") bad.push(`标题栏上的窗口键没排除拖拽区（${u.noDragBtn}）`);
         }
         if (!(u.qrInk > 50)) bad.push(`二维码没画出来（暗点 ${u.qrInk}）`);
         if (u.qrDim === u.lanOn) bad.push(`二维码置灰状态与局域网开关不一致（置灰 ${u.qrDim} 开关 ${u.lanOn}）`);
-        if (u.phoneBtnInTopBar !== true) bad.push("顶栏没有手机视图键");
-        if (!u.phoneRect || u.phoneRect[2] < 24 || u.phoneRect[3] < 24) bad.push(`顶栏手机键尺寸不对（${u.phoneRect}）`);
-        if (u.phoneHitOk !== true) bad.push(`顶栏手机键被挡住了（该点最上层 ${u.phoneHit}）`);
-        if (u.themeBtn !== true) bad.push("顶栏主题键不见了");
+        if (u.phoneBtnInTitlebar !== true) bad.push("标题栏没有手机视图键");
+        if (!u.phoneRect || u.phoneRect[2] < 24 || u.phoneRect[3] < 24) bad.push(`手机视图键尺寸不对（${u.phoneRect}）`);
+        if (u.phoneHitOk !== true) bad.push(`手机视图键被挡住了（该点最上层 ${u.phoneHit}）`);
         // "内容区没挂载"与"图标列标签禁用"必须一致（没会话时前者不挂载、后者禁用）
         if (u.tabsDisabled === u.boxMounted) {
           bad.push(`内容区挂载(${u.boxMounted})与标签禁用(${u.tabsDisabled})不一致`);

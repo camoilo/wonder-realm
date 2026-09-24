@@ -1,7 +1,9 @@
 <template>
 <aside class="sidebar" :class="{collapsed: sideCollapsed, 'mobile-open': mobileSideOpen}">
     <div class="sidebar-inner">
-      <div class="app-brand">
+      <!-- 品牌区（图标 + 应用名）：壳里这一行信息已经在窗口标题栏上了（见 TopBar.vue 的
+           .titlebar），所以这里只给浏览器/手机留一份，免得同一个名字出现两次 -->
+      <div v-if="!isDesktop" class="app-brand">
         <span class="brand-mark">◇</span>
         <span class="brand-stack">
           <span class="brand-name">多模式对话助手</span>
@@ -87,6 +89,7 @@ const {
   characters,
   expandedChars,
   directorSessions,
+  isDesktop,
   usesCharacter,
   mode,
   mobileSideOpen,

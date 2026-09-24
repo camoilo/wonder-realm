@@ -84,7 +84,28 @@ Object.assign(store, {
     store.theme = start;
     applyTheme(start);
   },
+  // 主题按钮的三个状态与图标：壳里它在窗口标题栏那一行，浏览器里在顶栏，所以放在 store 里共用
+  cycleTheme() {
+    const next = store.theme === "auto" ? "light" : store.theme === "light" ? "dark" : "auto";
+    store.setTheme(next);
+  },
+  themeIcon() {
+    return THEME_UI[store.theme].icon;
+  },
+  themeButtonTitle() {
+    return THEME_UI[store.theme].title;
+  },
+  themeLabel() {
+    return THEME_UI[store.theme].label;   // 手机 ⋯ 菜单里那个短名
+  },
 });
+
+// 主题三态：图标 / 悬停说明 / 手机 ⋯ 菜单里的短名
+const THEME_UI = {
+  auto:  { icon: "◐", title: "主题：跟随系统（点按切换）", label: "跟随系统" },
+  light: { icon: "☀", title: "主题：浅色", label: "浅色" },
+  dark:  { icon: "☾", title: "主题：深色", label: "深色" },
+};
 
 // matchMedia 只在浏览器存在：Node 纯逻辑测试（tests/test_*.mjs）import 时没有 window，
 // 退回 null。applyTheme 只在浏览器里被调用（initTheme/setTheme 来自 App.vue），到那时总有

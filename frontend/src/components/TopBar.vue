@@ -1,7 +1,7 @@
 <template>
-<!-- 壳用自绘标题栏（Windows）时给 header 加 .wco：整条顶栏变拖拽区、右侧给系统那三个按钮
-     留出宽度，「配置 / 手机视图」两个键就排在那三个按钮左边（见 DEVELOPMENT 3.3） -->
-<header class="topbar" :class="{wco}">
+<!-- 页面自己的工具条：会话名 / 搜索 / 模型 / 思考（浏览器里还有主题键）。
+     壳里它上面还有一行窗口标题栏（TitleBar.vue，见 DEVELOPMENT 3.3） -->
+<header class="topbar">
       <div class="title-area">
         <!-- 汉堡：桌面断点收起/展开左侧栏；手机断点打开抽屉（关闭走遮罩） -->
         <button class="icon-btn rail-toggle" v-hint="sideToggleHint()" :aria-label="sideToggleHint()"
@@ -45,36 +45,12 @@
                 :disabled="!currentModelSupportsThinking"
                 v-hint="thinkToggleTitle"
                 @click="toggleThinking">{{ disableThinking ? "思考：关" : "思考：开" }}</button>
-        <!-- 主题切换：跟随系统 → 浅色 → 深色 → 跟随系统 …。选择存本地，详见 store/ui.js 的 setTheme -->
-        <button class="theme-toggle" :class="'theme-' + theme"
+        <!-- 主题切换：跟随系统 → 浅色 → 深色 → 跟随系统 …。选择存本地，详见 store/ui.js 的 setTheme。
+             **壳里它在标题栏那一行**（见上面），这里只给浏览器/手机留一份 -->
+        <button v-if="!isDesktop" class="theme-toggle" :class="'theme-' + theme"
                 v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
                 @click="cycleTheme">{{ themeIcon() }}</button>
-        <!-- 桌面端（Electron 壳）专属：收纳成手机视图 / 退出手机视图。
-             **手机视图下也留着这个键**（置为选中态）：否则进去以后屏幕上就再没有看得见的出路
-             （菜单栏是 autoHideMenuBar，F9 与「视图 → 手机视图」都不显眼）。
-             网页端与手机浏览器没有 window.dshDesktop，这个键根本不渲染（见 DEVELOPMENT §3.3） -->
-        <button v-if="isDesktop" class="icon-btn desktop-btn" :class="{on: desktopPhoneView}"
-                v-hint="desktopPhoneView ? '退出手机视图（F9）' : '收纳成手机视图（F9）'"
-                :aria-label="desktopPhoneView ? '退出手机视图' : '收纳成手机视图'"
-                :aria-pressed="desktopPhoneView" @click="togglePhoneView">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round">
-            <rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/>
-          </svg>
-        </button>
-        <!-- 桌面端「配置」：跟系统那三个按钮排在同一行（自绘标题栏下），
-             这样"没打开会话时找不到配置"这个问题根本不存在 -->
-        <button v-if="isDesktop && !desktopPhoneView" class="icon-btn desktop-btn"
-                :class="{on: desktopConfigOpen}"
-                v-hint="'配置（局域网推送、手机扫码、日志）'" aria-label="配置"
-                :aria-expanded="desktopConfigOpen" @click="toggleDesktopConfig">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="12" cy="12" r="3.4"/>
-            <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.2 2.2M16.5 16.5l2.2 2.2M18.7 5.3l-2.2 2.2M7.5 16.5l-2.2 2.2"/>
-          </svg>
-        </button>
       </div>
-      <ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" />
       <!-- 手机端三个入口：放大镜（折叠搜索条）+ 面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
            桌面断点由 CSS 隐藏 -->
       <button class="icon-btn mobile-search-btn" aria-label="搜索当前会话" @click="toggleSearch">
@@ -116,15 +92,14 @@
         </div>
         <div class="more-row">
           <span class="more-label">主题</span>
-          <button class="ghost-btn mobile-theme" @click="cycleTheme">{{ themeIcon() }} {{ THEME_UI[theme].label }}</button>
+          <button class="ghost-btn mobile-theme" @click="cycleTheme">{{ themeIcon() }} {{ themeLabel() }}</button>
         </div>
       </div>
     </header>
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, toRefs } from "vue";
-import ConfigPanel from "./ConfigPanel.vue";
+import { toRefs } from "vue";
 import { store, MODES } from "../store.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
@@ -155,19 +130,7 @@ const {
   wco,
 } = toRefs(store);
 
-// 主题按钮的三个可用 handle（图标 / 标题 / 短名随模式变）
-const THEME_UI = {
-  auto:    { icon: "◐", title: "主题：跟随系统（点按切换）", label: "跟随系统" },
-  light:   { icon: "☀", title: "主题：浅色", label: "浅色" },
-  dark:    { icon: "☾", title: "主题：深色", label: "深色" },
-};
-const themeIcon = () => THEME_UI[theme.value].icon;
-const themeButtonTitle = () => THEME_UI[theme.value].title;
-
-function cycleTheme() {
-  const next = theme.value === "auto" ? "light" : theme.value === "light" ? "dark" : "auto";
-  store.setTheme(next);
-}
+// 主题三态的图标 / 短名来自 store（窗口标题栏那一行也在用，见 TitleBar.vue）
 
 // 汉堡：桌面断点收起/展开左侧栏；手机断点打开抽屉（关闭走遮罩）
 const sideToggleHint = () => window.innerWidth <= 640
@@ -187,28 +150,11 @@ function toggleMore() {
   store.mobileSearchOpen = false;
 }
 
-// 「配置」面板：点别处或按 Esc 关掉（与删除菜单、提示浮层同一套习惯）。
-// 触发它的 ⚙ 就在这条顶栏里（自绘标题栏下与系统那三个按钮同排），所以放过 .desktop-btn。
-function onDocClick(e) {
-  if (!store.desktopConfigOpen) return;
-  if (e.target.closest && e.target.closest(".desktop-config, .desktop-btn")) return;
-  store.closeDesktopConfig();
-}
-function onDocKeydown(e) {
-  if (e.key === "Escape") store.closeDesktopConfig();
-}
-onMounted(() => {
-  document.addEventListener("click", onDocClick);
-  document.addEventListener("keydown", onDocKeydown);
-});
-onBeforeUnmount(() => {
-  document.removeEventListener("click", onDocClick);
-  document.removeEventListener("keydown", onDocKeydown);
-});
-
-// 模板用到的方法（函数不是响应式的，直接解构）
+// 模板用到的方法（函数不是响应式的，直接解构）。
+// 「配置」面板的开合与"点外部就关"跟着窗口标题栏那一行走（TitleBar.vue），这里不再管。
 const {
   clearSearch,
+  cycleTheme,
   isNear,
   len,
   saveRename,
@@ -216,9 +162,10 @@ const {
   searchPrev,
   startRename,
   switchModel,
-  toggleDesktopConfig,
+  themeButtonTitle,
+  themeIcon,
+  themeLabel,
   toggleMobilePanel,
-  togglePhoneView,
   toggleThinking,
 } = store;
 </script>

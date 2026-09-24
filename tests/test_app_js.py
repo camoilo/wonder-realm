@@ -988,6 +988,7 @@ check("挂载前先认壳的标记（第一屏不闪桌面键）",
       "initDesktop()" in js and "initDesktop" in re.search(
           r'import \{([^}]*)\} from "./store.js"', main_js).group(1), True)
 _comp = dict(zip(VUE_ORDER, vue_sources))
+_titlebar = _comp["components/TitleBar.vue"]
 _topbar = _comp["components/TopBar.vue"]
 _panel = _comp["components/Panel.vue"]
 _config = _comp["components/ConfigPanel.vue"]
@@ -995,30 +996,43 @@ readme = (ROOT / "README.md").read_text(encoding="utf-8")
 shell_js = (ROOT / "desktop" / "main.js").read_text(encoding="utf-8")
 preload_js = (ROOT / "desktop" / "preload.js").read_text(encoding="utf-8")
 
-# 「配置 / 手机视图」两个键都在顶栏——而壳在 Windows 用**自绘标题栏**（Window Controls Overlay），
-# 所以那条顶栏就是标题栏：跟系统的最小化/最大化/关闭同排。图标列则只管面板标签。
-check("两个桌面键都在顶栏",
-      'aria-label="配置"' in _topbar and "收纳成手机视图" in _topbar
-      and 'class="icon-btn desktop-btn"' in _topbar
-      and "toggleDesktopConfig" in _topbar, True)
+# 「配置 / 手机视图」两个键都在**窗口标题栏那一行**（TitleBar.vue）——壳在 Windows 用自绘标题栏
+# （Window Controls Overlay），所以那一行就是标题栏，跟系统的最小化/最大化/关闭同排；
+# 第二行的顶栏是页面自己的工具条（会话名 / 搜索 / 模型 / 思考），不该再出现窗口键。
+check("两个桌面键都在窗口标题栏那一行",
+      'aria-label="配置"' in _titlebar and "收纳成手机视图" in _titlebar
+      and "toggleDesktopConfig" in _titlebar and 'class="win-btn"' in _titlebar, True)
+check("标题栏左边是图标 + 应用名",
+      'class="brand-mark"' in _titlebar and "多模式对话助手" in _titlebar, True)
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
-      "退出手机视图" in _topbar and ':class="{on: desktopPhoneView}"' in _topbar, True)
-check("配置面板挂在顶栏（标题栏）下方",
-      '<ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" />' in _topbar, True)
+      "退出手机视图" in _titlebar and ':class="{on: desktopPhoneView}"' in _titlebar, True)
+check("主题键在壳里搬到标题栏（浏览器留在顶栏）",
+      "cycleTheme" in _titlebar and 'v-if="!isDesktop" class="theme-toggle"' in _topbar, True)
+check("第二行顶栏不再有窗口键",
+      'aria-label="配置"' not in _topbar and 'aria-label*="手机"' not in _topbar, True)
+check("配置面板挂在标题栏下方",
+      '<ConfigPanel v-if="!desktopPhoneView && desktopConfigOpen" />' in _titlebar, True)
+check("标题栏横跨整个窗口（在 .app-body 外面）",
+      "<TitleBar />" in _comp["App.vue"] and 'class="app-body"' in _comp["App.vue"], True)
 check("图标列只管标签、常驻、没会话时禁用",
       'class="panel-rail"' in _panel and 'class="rail-btn rail-config"' not in _panel
       and "ConfigPanel" not in _panel
       and ':disabled="!activeSession"' in _panel
       and '<div class="panel-box" v-if="activeSession">' in _panel
       and ".rail-btn:disabled {" in css, True)
-# 自绘标题栏：三条约束缺一不可——壳开 titleBarOverlay、顶栏进 .wco（拖拽区 + 让出右上角）、
+# 没打开会话时内容区不挂载，图标列不该继续占着 330px 空白（只在桌面断点收窄）
+check("没有会话时右侧不该留大片空白",
+      "'no-session': !activeSession" in _panel and ".panel.no-session { width: var(--rail-w); }" in css, True)
+# 自绘标题栏：三条约束缺一不可——壳开 titleBarOverlay、标题栏进 .wco（拖拽区 + 让出右上角）、
 # 高度常量与 CSS 变量同值（不同值系统三键就会跟页面按钮错开）
 check("壳开了自绘标题栏",
       'titleBarStyle: "hidden"' in shell_js and "titleBarOverlay:" in shell_js
       and "setTitleBarOverlay(" in shell_js, True)
-check("顶栏在自绘标题栏下当拖拽区、并让出右上角",
-      ".topbar.wco {" in css and "-webkit-app-region: drag;" in css
-      and "env(titlebar-area-width" in css and ":class=\"{wco}\"" in _topbar, True)
+check("标题栏当拖拽区、并让出右上角",
+      ".titlebar.wco {" in css and "-webkit-app-region: drag;" in css
+      and "env(titlebar-area-width" in css and ':class="{wco}"' in _titlebar, True)
+check("窗口键照系统那三个的样子做（满高无圆角）",
+      ".win-btn {" in css and "height: var(--titlebar-h);" in css and "border-radius: 0;" in css, True)
 check("标题栏高度两处同值（壳的常量 vs CSS 变量）",
       re.search(r"TITLEBAR_H = (\d+)", shell_js).group(1)
       == re.search(r"--titlebar-h: (\d+)px", css).group(1), True)
@@ -1036,12 +1050,13 @@ check("二维码只在取到地址时画，局域网关着时置灰",
 check("配置面板层级在浮层与弹窗之间",
       ".desktop-config {" in css and "z-index: 600;" in css
       and css.index("z-index: 600;") < css.index(".modal-mask {"), True)
-# 桌面键曾被 .icon-btn 的 opacity:0 与"没有固有尺寸的内联 SVG"叠成看不见的 10px 方块（实测踩到），
-# 所以尺寸与可见性必须写死，别让它悄悄退回去
-_desktop_btn_css = css_code[css_code.index(".desktop-btn {"):css_code.index(".desktop-btn.on")]
-check("桌面键的尺寸与可见性写死",
-      "opacity: 1;" in _desktop_btn_css and "width: 34px;" in _desktop_btn_css
-      and ".desktop-btn svg { display: block; width: 18px; height: 18px; }" in css, True)
+# 窗口键踩过一次坑的变体：内联 SVG 没有固有尺寸 + 父级没有明确宽高 → 挤成看不见的小方块。
+# 所以 .win-btn 的宽高与图标的宽高都必须写死，且不能被 .icon-btn 那套 opacity:0 沾上
+_win_btn_css = css_code[css_code.index(".win-btn {"):css_code.index(".win-btn:hover")]
+check("窗口键的尺寸写死（别退回小方块）",
+      "width: 46px;" in _win_btn_css and "height: var(--titlebar-h);" in _win_btn_css
+      and "opacity: 0" not in _win_btn_css
+      and ".win-btn svg { display: block; width: 15px; height: 15px; }" in css, True)
 check("防火墙命令与 README 同源（改一处必须改另一处）",
       "netsh advfirewall firewall add rule" in js and "OllamaAgent 局域网访问" in js
       and "netsh advfirewall firewall add rule" in readme
@@ -1055,7 +1070,7 @@ check("初始状态从 /api/settings 读回来",
 check("手机视图交给壳去缩窗口，页面只跟着隐藏桌面键",
       "window.dshDesktop.togglePhoneView()" in js and "api.onPhoneView(" in js
       and "this.desktopPhoneView = !!on;" in js, True)
-check("桌面键与配置面板的样式在", ".desktop-btn {" in css and ".dc-switch.on .dc-knob {" in css, True)
+check("桌面键与配置面板的样式在", ".win-btn {" in css and ".dc-switch.on .dc-knob {" in css, True)
 # 壳侧：宽度锁死（min==max，按窗口尺寸算，要补边框差）、高度留自由；退出恢复桌面尺寸。
 # 早先手机尺寸被当成桌面尺寸存进 desktop.json，导致"在手机视图下退出后窗口再也回不到大尺寸"
 check("壳把手机视图宽度锁死、高度留自由",
@@ -1069,10 +1084,9 @@ check("壳日志能从面板里打开",
 # 不显式让 Python 吐 UTF-8，日志里后端的中文就是一片"��"（真踩过）
 check("壳 spawn 后端时明确 UTF-8 输出",
       'PYTHONIOENCODING: "utf-8"' in shell_js, True)
-# "手机视图"键在手机视图下也要在（否则进去就没有看得见的出路）；它只在 isDesktop 下渲染
+# "手机视图"键在手机视图下也要在（否则进去就没有看得见的出路）；它只在壳里渲染
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
-      'v-if="isDesktop"' in _topbar and "退出手机视图" in _topbar
-      and 'v-if="isDesktop && !desktopPhoneView"' not in _topbar.split("aria-label")[0], True)
+      "退出手机视图" in _titlebar and 'class="win-btn"' in _titlebar, True)
 # 脏的"手机大小桌面尺寸"（旧版本存进去过）不能被当成恢复目标
 check("壳会丢掉脏的桌面尺寸",
       "function desktopRestoreBounds()" in shell_js
@@ -1137,7 +1151,8 @@ check("折叠搜索条在（只保留输入/清空/计数，↑↓ 不重复）"
       'class="mobile-search"' in _tb and "mobileSearchOpen" in _tb, True)
 check("更多菜单收纳模型/思考/主题", 'class="mobile-more"' in _tb
       and "mobile-model" in _tb and "mobile-think" in _tb and "mobile-theme" in _tb, True)
-check("更多菜单共用主题切换", "THEME_UI[theme].label" in _tb, True)
+check("更多菜单共用主题切换", "themeIcon()" in _tb and "themeLabel()" in _tb
+      and "THEME_UI" in js, True)
 # 底部弹层的入口：面板走顶栏直达按钮；更多菜单里不再放"面板"行（避免重复入口）
 check("更多菜单不再有面板行（面板走顶栏直达）",
       'mobile-panel-btn' in _tb and "面板：{{ mobilePanelOpen" not in _tb, True)
