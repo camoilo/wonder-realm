@@ -13,7 +13,7 @@ import { initDesktop, store } from "./store.js";
 // 主题：挂载前先按"本地选择 / 系统偏好"定下 data-theme，避免一开始闪成默认浅色
 store.initTheme();
 
-// 桌面端（Electron 壳）：挂载前认一下壳的标记，第一屏就不会先闪出桌面专属键（§7.4）
+// 桌面端（Electron 壳）：挂载前认一下壳的标记，第一屏就不会先闪出桌面专属键（§3.3）
 initDesktop();
 
 // 悬停提示统一走 v-hint（不用原生 title，理由见 composables/hint.js）。

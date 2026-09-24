@@ -1,4 +1,4 @@
-// 桌面端（Electron 壳，见 DEVELOPMENT §7.4）。
+// 桌面端（Electron 壳，见 DEVELOPMENT §3.3）。
 //
 // 壳在 preload 里注入 `window.dshDesktop`（开窗口、缩放手机视图、算局域网地址都是壳的事）；
 // 网页端与手机浏览器没有这个对象，于是"配置 / 手机视图"两个键、以及复制局域网地址的能力
@@ -69,6 +69,31 @@ Object.assign(store, {
       setTimeout(() => { store.lanCopied = false; }, 1500);
     } catch (e) {
       store.error = `复制失败：${e.message}`;
+    }
+  },
+  // ---- 防火墙放行命令：只复制，不代跑（加规则要管理员权限，壳不该偷偷提权） ----
+  firewallCmd() {
+    const port = window.location.port || "17800";
+    return "netsh advfirewall firewall add rule "
+      + `name="OllamaAgent 局域网访问 ${port}" dir=in action=allow protocol=TCP localport=${port}`;
+  },
+  async copyFirewallCmd() {
+    try {
+      await navigator.clipboard.writeText(store.firewallCmd());
+      store.firewallCopied = true;
+      setTimeout(() => { store.firewallCopied = false; }, 1500);
+    } catch (e) {
+      store.error = `复制失败：${e.message}`;
+    }
+  },
+  // ---- 壳日志：只有壳能打开（网页端没有这个按钮） ----
+  async openLog() {
+    if (!window.dshDesktop || !window.dshDesktop.openLog) return;
+    try {
+      const ok = await window.dshDesktop.openLog();
+      if (!ok) store.error = "还没有日志文件（壳正常启动过一次就会有）";
+    } catch (e) {
+      store.error = `打开日志失败：${e.message}`;
     }
   },
 });

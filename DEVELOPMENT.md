@@ -27,6 +27,7 @@
 - **FastAPI**：原生 async + StreamingResponse，SSE 简单；自动 OpenAPI 文档
 - **SQLite + WAL**：单文件零部署，单用户无并发瓶颈，数据全本地
 - **Vue 3 + Vite**：产物提交进仓库，离线可用、可模块化组织。代价是多一个 Node 工具链、改前端要多一步构建（`start.bat` / `start_desktop.bat` 检测到 Node 时顺手重建）
+- **qrcode**（前端运行期依赖）：给手机扫的局域网二维码。用它而不是手搓编码器——一个码错一格就扫不出来，而"自己写的编码器"只能靠有限用例保证；换来的代价是产物 +27KB。**它随构建打进 `app/static/`，运行期不联网**（与 Vue 同一条原则）。正确性由 `tests/test_qr.mjs` 用另一套实现（`jsqr`，仅 devDependency）做生成→解码往返验证
 - **SSE 而非 WebSocket**：单向流（请求→生成流），SSE 足够且更简单
 
 ### 1.4 术语表
@@ -204,18 +205,21 @@ flowchart LR
 |---|---|
 | 起后端 | `spawn(.venv/Scripts/python.exe run.py --no-browser)`，`cwd` = 项目根；stdout/stderr 转进 `userData/desktop.log`；等 `GET /api/limits` 返回 200 再开窗口（端口已被别的实例占用也算就绪——和 `run.py` 同一套判断） |
 | 开窗口 | `loadURL("http://127.0.0.1:17800/")`：**与浏览器里那份完全同一个页面**；外链走系统浏览器；菜单只留"视图 / 窗口"两项（刷新、手机视图、缩放、开发者工具） |
-| 手机视图 | 把窗口缩到 **390×844**（`setContentSize`，顺便锁住拖动），页面按已有的 `≤640px` 断点自己变成手机单栏；进/出都通过 `desktop:phone-view` 事件告诉页面，页面据此**隐藏桌面专属键**；退出时恢复原窗口尺寸（记在 `userData/desktop.json`） |
+| 手机视图 | 把窗口收成手机大小：**宽度锁死 390**（`setMinimumSize`/`setMaximumSize` 都设 `PHONE_WIDTH + 边框差`，边框还能拖但尺寸被钳住，比 `setResizable(false)` 更符合预期）、**高度留给用户拖**（480–1400，默认 844，下次沿用上次高度），页面按已有的 `≤640px` 断点自己变成手机单栏；进/出都通过 `desktop:phone-view` 事件告诉页面，页面据此**隐藏桌面专属键**；退出时恢复进手机视图前的桌面尺寸 |
 | 单实例与退出 | `requestSingleInstanceLock()`：第二次双击只把已有窗口叫到前面；`before-quit` 杀掉后端子进程（后端是 `run.py` 自己开 uvicorn，一个进程，`kill()` 即可） |
-| 局域网地址 | `os.networkInterfaces()` 挑一个真实 IPv4（优先 `192.168.`/`10.`/`172.16-31.`）拼成 `http://<IP>:17800` 给页面复制；**拿不到就显示"没取到局域网地址"**，不猜 |
+| 局域网地址 | `os.networkInterfaces()` 挑一个真实 IPv4（优先 `192.168.`/`10.`/`172.16-31.`）拼成 `http://<IP>:17800` 交给页面：那里既显示地址（可复制）、也**画成二维码给手机扫**；**拿不到就显示"没取到局域网地址"**，不猜 |
+| 打开日志 | `ipcMain.handle("desktop:open-log")` → `shell.openPath(userData/desktop.log)`：配置面板里一个键就能用记事本打开它（排查时不用自己去翻 `%APPDATA%`） |
 
-**页面侧只有两样东西是"壳专属"**：顶栏的「配置」与「手机视图」两个键，靠 preload 注入的 `window.dshDesktop` 判定（`isDesktop`）——网页端与手机浏览器没有这个对象，于是它们根本不渲染（见 7.1）。
+**min/max 说的是窗口尺寸、`setContentSize` 说的是内容尺寸**：两者差一圈边框，直接拿 390 当上限会得到 378 内容宽（实测），所以先量出边框差再补上。
+
+**页面侧只有两样东西是"壳专属"**：顶栏的「手机视图」键与右侧图标列最低栏的「配置」键，靠 preload 注入的 `window.dshDesktop` 判定（`isDesktop`）——网页端与手机浏览器没有这个对象，于是它们根本不渲染（见 7.1）。
 **"推送局域网"不走壳**：它是后端 `app_settings.lan_enabled`（默认关），页面上的开关就是 `PUT /api/settings`，立即生效、不重启后端（见 8.3）。壳只提供"地址"和"手机视图"这两件后端做不到的事。
 
 **壳的日志与偏好**都在 `app.getPath("userData")`（Windows：`%APPDATA%\ollama-agent-desktop\`，目录名取自 `desktop/package.json` 的 `name`）：
 - `desktop.log`：壳自己做的事以 `[desktop] 本地时间 …` 开头，**后端的 stdout/stderr 也一并混进来**（前缀 `后端:` / `后端(err):`）——所以窗口没开出来、或打开后一片空白时，原因（Python traceback、端口占用、Ollama 没起来）都在这一个文件里。窗口这一步单独留一行：加载成功记 `窗口已打开：<url>`，失败记 `页面加载失败：<错误码> <描述> <url>`——有它才能一眼分清"壳没起来"和"壳起了、页面没出来"。只追加、不轮转（一次启动几 KB，可忽略）。
-- `desktop.json`：窗口尺寸与上次是不是手机视图。**自检（`--selftest`）刻意不写它**，否则"量一下尺寸"会把用户下次启动真的带进手机视图。
+- `desktop.json`：**桌面尺寸与手机高度分开存**（`{ bounds, phoneHeight, phoneView }`）。早先把手机尺寸当 `bounds` 写过，结果"在手机视图下退出应用"会让下次启动的窗口只有 390 宽、退出手机视图也回不到大尺寸（桌面尺寸被覆盖掉了）——现在只在非手机视图时写 `bounds`，手机视图下只写 `phoneHeight`（`persistWindowState()`，进出与关窗各写一次）。**自检（`--selftest`）刻意不写它**，否则"量一下尺寸"会把用户下次启动真的带进手机视图。
 
-自检：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径（preload 桥接、手机视图是否真的把 `innerWidth` 缩进 640px），全程不弹窗，用于改完壳之后确认没坏。开发期复用项目 `.venv` 里的 Python；**打包分发**（PyInstaller 收后端 + 安装包）留到 v2，见 10.9。
+自检：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径，**并且是当闸门用的**：断言不满足就非零退出。断的有 preload 桥接、手机视图尺寸（往宽里拖到 500 实测仍被钳在 390 附近、高度能改、退出后桌面尺寸原样恢复）、以及**真渲染出来的界面**：配置键在图标列最低栏（距底 ≤24px）、面板能点开、二维码真画出来了（数 canvas 暗点）、置灰状态与局域网开关一致、顶栏有手机视图键且没被挡住（尺寸 ≥24px、`elementFromPoint` 命中它）、面板里有推送局域网 / 手机视图行与状态行。设了环境变量 `DSH_SHOT=<png 路径>` 时会**短暂显示窗口并截图**（隐藏窗口的 `capturePage` 只能拿到首帧缓存，截出来是空状态）。开发期复用项目 `.venv` 里的 Python；**打包分发**（PyInstaller 收后端 + 安装包）留到 v2，见 10.9。
 
 **入口脚本 `start_desktop.bat`**（8.1）：先按与 `start.bat` 完全相同的判断重建一次前端（装了 Node 且 `frontend/node_modules` 在），再拉起 `electron.exe desktop`。窗口与它起的后端都挂在那个 cmd 窗口下，**关掉 cmd 窗口等于关掉应用**——所以它双击后"只有一行提示、看着像卡住"是正常的，界面窗口由 Electron 单独弹出。
 
@@ -452,10 +456,10 @@ event: error  {"message"}                       # 中断发送并结束流
 - **三栏并排**（flex 固定宽项，非覆盖浮层），收起宽度过渡到 0
 - **顶栏横跨"对话区+面板"**：`.main` 里 `.topbar` 再 `.work`（左 `.work-main`、右 `.panel`）。面板开合不影响顶栏宽度。代价（已接受）：面板展开时搜索/模型/思考在面板上方而非贴对话区右缘
 - **居中留白**：对话与输入共用 `--chat-max:860px`、`margin:0 auto`，两侧留白对称
-- **顶栏**：最左左栏收起钮；标题+模式标签；然后会话内搜索框、模型下拉、**思考开关**、**主题按钮**（☾/☀/◐ 循环，见 9.6）。搜索命中用 `<mark class="search-hit">` 标黄、当前处加 `.current`；计数/清空/↑↓ 始终占位（框宽不随输入变，无内容置灰）。**不做手填模型名**（拼错只得报错）。**无面板开关**——进出统一由右侧竖排图标栏负责。**桌面端（Electron 壳）里另有两个键**（`.desktop-btn`）：「配置」弹出 `.desktop-config` 小面板（推送局域网开关 + 局域网地址 + 复制 + 防火墙提示）、「手机视图」交给壳缩窗口；两者只在 `isDesktop && !desktopPhoneView` 时渲染，见 3.3
+- **顶栏**：最左左栏收起钮；标题+模式标签；然后会话内搜索框、模型下拉、**思考开关**、**主题按钮**（☾/☀/◐ 循环，见 9.6）、**桌面端「手机视图」键**（`.desktop-btn`）。搜索命中用 `<mark class="search-hit">` 标黄、当前处加 `.current`；计数/清空/↑↓ 始终占位（框宽不随输入变，无内容置灰）。**不做手填模型名**（拼错只得报错）。**无面板开关**——进出统一由右侧竖排图标栏负责。桌面端的另一个键「配置」在**图标列最低栏**（见 3.3 与右栏那条），顶栏只留一个兜底：没有会话时图标列整块不存在，那时顶栏才出现 ⚙。`.desktop-btn` 必须写死尺寸与 `opacity:1`——`.icon-btn` 默认 `opacity:0`（悬停才现形）、里面的内联 SVG 又没有固有尺寸，两样叠一起就是个"看不见的 10px 方块"（实测踩到过）
 - **左栏（260px）**："模式选择"标题 + 三模式 Tab；hover/聚焦模式按钮浮出介绍（`.mode-tip`，**朝按钮行上方弹**——下方是会话列表，向下会遮住会话）。聊天/沉浸为"角色列表→会话"两级，导演直接会话列表。底按钮按模式新建
 - **输入区**：沉浸分两栏——「情境说明（可选）」36% +「话语」（必填）；其余单输入框。Enter 发送、Shift+Enter 换行；话语空则发送禁用。&#8595; 键平滑滚回最新（scrolling）。导演模式发送列上方多"继续"键（自动发 `CONTINUE_PROMPT`="继续"、不清空输入框、发'有可续回复且未生成时置灰）
-- **右侧面板 = 竖排图标栏 + 点击滑出的内容**：最右一竖条 `.panel-rail`（44px）**常驻**（收起也可见），五个图标（24px 线性 SVG，`v-hint` 页名 + `aria-label`）；点图标在该栏左侧滑出 `.panel-box`（330px）内容，再点当前图标收起（宽度过渡）。无标题行、无顶栏开关。哪页有未保存改动在图标右上角点小圆点（`.tab-dot`）。五个页：生成要求 / 世界设定（三模式都显示）/ 角色设定（仅聊天沉浸）/ 我的设定（仅聊天沉浸）/ 记忆查看编辑。底部统一「保存当前配置」+「未保存/还原」。切到无某页的会话由 `fixPanelTab()` 兜回"生成要求"。```.panel-body>*` 的 `flex:0 0 auto` 防记忆框被挤扁，`.panel-tab-pane` 内部自声明 flex column + gap:12px
+- **右侧面板 = 竖排图标栏 + 点击滑出的内容**：最右一竖条 `.panel-rail`（44px）**常驻**（收起也可见），五个图标（24px 线性 SVG，`v-hint` 页名 + `aria-label`）；点图标在该栏左侧滑出 `.panel-box`（330px）内容，再点当前图标收起（宽度过渡）。无标题行、无顶栏开关。哪页有未保存改动在图标右上角点小圆点（`.tab-dot`）。五个页：生成要求 / 世界设定（三模式都显示）/ 角色设定（仅聊天沉浸）/ 我的设定（仅聊天沉浸）/ 记忆查看编辑。底部统一「保存当前配置」+「未保存/还原」。切到无某页的会话由 `fixPanelTab()` 兜回"生成要求"。```.panel-body>*` 的 `flex:0 0 auto` 防记忆框被挤扁，`.panel-tab-pane` 内部自声明 flex column + gap:12px。**桌面端在图标列最低栏多一个 ⚙「配置」**（`.rail-config`，`margin-top:auto` 顶到底）：弹出 `ConfigPanel.vue` 那份 `.desktop-config`（贴 rail 左下展开，`.at-rail`），内容见 3.3 / 8.3。图标列只在有会话时存在，所以顶栏留了个 `!activeSession` 才出现的兜底 ⚙
 - **字数提示**：输入框外层 `.counted`（relative），计数绝对定位右下角；单行 `.inline` 垂直居中，多行 `right:16px` 让开缩放柄。输入框让位：单行 `padding-right:64px`、多行 `padding-bottom:24px`（覆盖规则放样式表最后）。上限来自 `f.max`/`limits.xxx`
 - **角色 "让模型生成"（`.gen-box`）**：仅新建时出现（编辑时再生成=换角色）。提示词输入 + 开放/探索单选 + 生成按钮（有草稿变"换一个"）；生成中禁用；改模式清草稿（探索草稿前端拿不到隐藏字段，不能互相顶替）。保存失败弹窗内就地提示（新建常无会话，底部错误条不可靠）
 - **探索模式锁定占位（`.locked-box`）**：`locked` 时三字段完全不渲染，留"已锁定"说明 +「公开角色设定」按钮；解锁走 `ask()`，文案写明永久不可恢复。解锁成功同时写表单与快照
@@ -531,7 +535,7 @@ ollama_agent/
 │       ├── store/（state/helpers/api/session/chat/search/panel/character/presets/attrs/ui）
 │       ├── composables/（maskClose/hint）
 │       ├── App.vue
-│       └── components/（SideBar/TopBar/ChatArea/MessageItem/InputBar/Panel/
+│       └── components/（SideBar/TopBar/ChatArea/MessageItem/InputBar/Panel/ConfigPanel/
 │                        TermEditor/AttrEditor/AttrPanel + panes/ + modals/）
 ├── tests/              # 见 9.8
 └── data/chatbot.db     # SQLite（路径由 config.yaml 指定，不入版本库）
@@ -570,10 +574,11 @@ data_dir: ./data                  # 直接指定
 | 推送开关 | `lan_enabled`，**默认关**（新库、老库补列都关）：关着时非本机来源一律 **403**，本机永远放行 |
 | 闸门位置 | `app/main.py` 的 `lan_gate` 中间件按 `app/net.py is_loopback()` 判来源。**放应用层而不是改监听地址重启**：桌面端的按钮要能立即开关，重启后端会打断正在进行的生成 |
 | 403 的样子 | `/api/*` 回 JSON（前端好提示），页面请求回一段人话——手机浏览器直接打开时看到"电脑端当前没有开启局域网访问"比一串 JSON 明白 |
-| 怎么开关 | ① 桌面端顶栏「配置」（见 3.3）；② `run.py --lan` / `--no-lan`（命令行用户的路径）；③ `PUT /api/settings {"lan_enabled": …}`——**只有本机来源能改**（手机端改不了这道闸门） |
+| 怎么开关 | ① 桌面端 ⚙ 配置（右侧图标列**最低栏**；没打开会话时在顶栏，见 3.3 / 7.1）；② `run.py --lan` / `--no-lan`（命令行用户的路径）；③ `PUT /api/settings {"lan_enabled": …}`——**只有本机来源能改**（手机端改不了这道闸门） |
 | 首次默认 | `config.yaml` 的 `server.lan`（默认 `false`）只在**首次建库**时写进库；之后以库为准（与模型选择同一条约定） |
-| 防火墙 | Windows 需放行入站 TCP 17800：`netsh advfirewall firewall add rule name="OllamaAgent 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`（收回：`… delete rule name="…"`）。**这条规则不在代码里**，换机器/重装系统要重加；桌面端的「配置」面板会提示它 |
-| 手机访问 | 同一 WiFi → 手机浏览器打开 `http://<电脑局域网IP>:17800`（IP 用 `ipconfig` 查；桌面端「配置」面板直接给出并可复制）。后端是同一份：会话、角色、设置在手机与电脑上是同一套数据，页面也就是同一份（手机按 ≤640px 断点走单栏，见 7.1） |
+| 防火墙 | Windows 需放行入站 TCP 17800：`netsh advfirewall firewall add rule name="OllamaAgent 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`（收回：`… delete rule name="…"`）。**这条规则不在代码里**，换机器/重装系统要重加；配置面板里有一个「复制防火墙命令」键（`store/desktop.js` 的 `firewallCmd()`，**文案与 README 同源，改一处必须改另一处**，`test_app_js.py` 盯着） |
+| 手机访问 | 同一 WiFi → 手机浏览器打开 `http://<电脑局域网IP>:17800`（IP 用 `ipconfig` 查；配置面板直接给出并可复制，**还画成二维码**给手机扫）。后端是同一份：会话、角色、设置在手机与电脑上是同一套数据，页面也就是同一份（手机按 ≤640px 断点走单栏，见 7.1） |
+| 面板里的状态行 | 端口 / Ollama（已连接 · N 个模型 / 未连接）/ 局域网开·关，数据都取界面本来就在用的 `models`/`modelWarning`/`lanEnabled`，不额外发请求 |
 | 安全 | **应用没有账号体系**：开关打开时，能连到这个端口的人都能读写你的会话。只在可信的家庭/办公网络开启，公共 WiFi 建议关掉（一键，不用重启） |
 
 ## 9. 开发约定与强调
@@ -640,11 +645,11 @@ data_dir: ./data                  # 直接指定
 - 源码 `frontend/`、产物提交 `app/static/`：改源码必须 `npm run build`，产物别手改
 
 ### 9.8 测试与验证
-- **清单**：14 个纯 Python + 3 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`，需先装前端依赖）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
-- **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、模式介绍浮层、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件；新结构约定顺手补断言
+- **清单**：14 个纯 Python + 4 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`/`test_qr.mjs`，需先装前端依赖；`test_qr.mjs` 用 `createRequire` 指到 `frontend/` 解析依赖——它装在 `frontend/node_modules`，仓库根目录找不到裸包名）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
+- **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、模式介绍浮层、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件（配置键在图标列最低栏、面板内容、二维码只在有地址时画、防火墙命令与 README 同源、壳侧"宽度锁死/尺寸分开存"）；新结构约定顺手补断言
 - **启动脚本的编码约定也上守卫**（`test_bats.py`）：根目录 `*.bat` 必须 CRLF、GBK 编码、可执行行里不许有 `chcp 65001`，并钉住电脑端入口的三处结构（查 `electron.exe` 本体、两种缺失各一条提示、顺手重建前端）
 - **后端"闸门/边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机——网络来源相关的规则都照这个套路测
-- **壳（Electron）用自带的自检**：`electron . --selftest` 起后端 + 开隐藏窗口，验证 preload 桥接与"手机视图真的把页面缩进 640px"，全程不弹窗
+- **壳（Electron）用自带的自检，且是闸门**：`electron . --selftest` 起后端 + 开隐藏窗口，断言不过就非零退出。除 preload 桥接与手机视图尺寸（宽度被钳、高度可改、退出恢复）外，**还验真渲染出来的界面**：配置键在图标列最低栏、面板点得开、二维码真画出来（数 canvas 暗点）、边框与开关状态一致、顶栏手机键没被挡住。加 `DSH_SHOT=<png>` 会短暂显示窗口并截图（隐藏窗口截到的是首帧缓存）
 - **守卫反向验证**：故意删被保护的东西确认报红（"碰巧通过"≠"抓得住"）
 - 界面改动要真渲染证据：dev（Vue 警告开）+ 生产产物各跑一遍，控制台零 warning/error；涉及函数名/导入/绑定**只跑构建会漏**
 - 探针：`MutationObserver` 挂载（`--virtual-time-budget` 下定时器抢跑）；每步等状态稳定；收尾只执行一次（否则不空闲、浏览器不退）；查倍数用"接口条数−DOM 数"
@@ -661,5 +666,5 @@ data_dir: ./data                  # 直接指定
 6. **锁定字段无"部分公开"**：要么全锁要么全公开；需要则把 `locked` 改按字段记录
 7. **词库不能拖拽调序**：目前只能增删（顺序即添加序）；可照背景图拖拽加一遍，存储已是数组
 8. **一次会话只能绑一份世界**：导演会话各自一份，聊天/沉浸同角色仅一份（跟角色走）；若要角色在不同会话处于不同世界，需把绑定从角色挪到会话（`sessions.world_id` 列与接口已备，缺的是聊天/沉浸带上它）
-9. **电脑端打包**：Electron 外壳 v1 已能用（复用项目 `.venv` 的 Python，见 3.3 / 10.9 与 8.1），**待做的是打包分发**：PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`——这样别人的机器上不必装 Python 与 uv。同时值得顺手做的还有：桌面端「配置」里**一键添加防火墙规则**（要管理员，做成"复制命令"或提权二选一）、Ollama 未安装时的引导、以及最小化到托盘
+9. **电脑端打包**：Electron 外壳 v1 已能用（复用项目 `.venv` 的 Python，见 3.3 / 10.9 与 8.1），**待做的是打包分发**：PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`——这样别人的机器上不必装 Python 与 uv。同时值得顺手做的还有：**一键添加防火墙规则**（现在只做到"复制命令"，真要免提权就得走 UAC 提权，二者选一）、Ollama 未安装时的引导、以及最小化到托盘
 10. **应用名不统一**：网页标签页（`frontend/index.html` 的 `<title>`）是「多模式对话助手」，而 README / DEVELOPMENT 的标题与 `desktop/main.js` 里的窗口标题写的是「多模式对话机器人」。窗口标题实际跟随网页（Electron 默认让 `document.title` 覆盖 `BrowserWindow` 的 `title`），所以 `main.js` 那行目前是失效的。**名字定下来后一起改**（含两份文档的标题），暂不动

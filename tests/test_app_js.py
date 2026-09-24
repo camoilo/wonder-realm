@@ -987,13 +987,53 @@ check("用户气泡不再用强调色实底",
 check("挂载前先认壳的标记（第一屏不闪桌面键）",
       "initDesktop()" in js and "initDesktop" in re.search(
           r'import \{([^}]*)\} from "./store.js"', main_js).group(1), True)
-_desktop = dict(zip(VUE_ORDER, vue_sources))["components/TopBar.vue"]
-check("两个桌面键都只在自己的标记下渲染",
-      html.count('v-if="isDesktop && !desktopPhoneView"') == 1
-      and 'class="icon-btn desktop-btn"' in _desktop, True)
-check("配置面板内容齐全（开关 / 地址 / 复制）",
-      'class="dc-switch"' in _desktop and 'class="dc-url"' in _desktop
-      and "copyLanUrl" in _desktop and "lanEnabled" in _desktop, True)
+_comp = dict(zip(VUE_ORDER, vue_sources))
+_topbar = _comp["components/TopBar.vue"]
+_panel = _comp["components/Panel.vue"]
+_config = _comp["components/ConfigPanel.vue"]
+readme = (ROOT / "README.md").read_text(encoding="utf-8")
+shell_js = (ROOT / "desktop" / "main.js").read_text(encoding="utf-8")
+preload_js = (ROOT / "desktop" / "preload.js").read_text(encoding="utf-8")
+
+# 顶栏只留「手机视图」（在主题键旁）；「配置」搬到右侧图标列**最低栏**（rail 底部），
+# 而没有会话时整条图标列不存在（Panel.vue 以 activeSession 为条件）——所以顶栏还留了一个
+# 只在 !activeSession 时出现的兜底 ⚙，否则空状态那一屏就再也进不去配置
+check("顶栏只留手机视图键（配置键已搬走）",
+      'aria-label="收纳成手机视图"' in _topbar
+      and 'class="icon-btn desktop-btn"' in _topbar, True)
+check("顶栏兜底配置键只在没有会话时出现",
+      _topbar.count('v-if="isDesktop && !desktopPhoneView && !activeSession"') == 1
+      and _topbar.count('aria-label="配置"') == 1, True)
+check("配置键在图标列最低栏（margin-top:auto 顶到底）",
+      'class="rail-btn rail-config"' in _panel
+      and ".rail-config { margin-top: auto; }" in css, True)
+check("面板挂在图标列左下（无会话时挂顶栏）",
+      '<ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" class="at-rail" />' in _panel
+      and ('<ConfigPanel v-if="isDesktop && !desktopPhoneView && !activeSession '
+           '&& desktopConfigOpen" />') in _topbar, True)
+check("配置面板内容齐全（开关 / 状态 / 二维码 / 地址 / 手机视图 / 防火墙 / 日志）",
+      all(k in _config for k in ('class="dc-switch"', 'class="dc-status"', 'class="dc-qr"',
+                                 'class="dc-url"', 'class="dc-label"', "togglePhoneView",
+                                 "copyFirewallCmd", "openLog")), True)
+check("二维码是 qrcode 画在 canvas 上（不手搓、不用 v-html）",
+      "QRCode.toCanvas(" in _config and "v-html" not in _config, True)
+check("二维码只在取到地址时画，局域网关着时置灰",
+      "if (lanUrl.value) paint();" in _config and ':class="{dim: !lanEnabled}"' in _config, True)
+check("配置面板层级在浮层与弹窗之间",
+      ".desktop-config {" in css and "z-index: 600;" in css
+      and css.index("z-index: 600;") < css.index(".modal-mask {"), True)
+check("面板贴图标列时向左展开",
+      ".desktop-config.at-rail {" in css and "right: calc(100% + 10px);" in css, True)
+# 桌面键曾被 .icon-btn 的 opacity:0 与"没有固有尺寸的内联 SVG"叠成看不见的 10px 方块（实测踩到），
+# 所以尺寸与可见性必须写死，别让它悄悄退回去
+_desktop_btn_css = css_code[css_code.index(".desktop-btn {"):css_code.index(".desktop-btn.on")]
+check("桌面键的尺寸与可见性写死",
+      "opacity: 1;" in _desktop_btn_css and "width: 34px;" in _desktop_btn_css
+      and ".desktop-btn svg { display: block; width: 18px; height: 18px; }" in css, True)
+check("防火墙命令与 README 同源（改一处必须改另一处）",
+      "netsh advfirewall firewall add rule" in js and "OllamaAgent 局域网访问" in js
+      and "netsh advfirewall firewall add rule" in readme
+      and "OllamaAgent 局域网访问" in readme, True)
 check("开关写的是后端设置里的 lan_enabled",
       'jsonOpts("PUT", { lan_enabled: !this.lanEnabled })' in js
       and "this.lanEnabled = !!s.lan_enabled;" in js, True)
@@ -1003,11 +1043,16 @@ check("初始状态从 /api/settings 读回来",
 check("手机视图交给壳去缩窗口，页面只跟着隐藏桌面键",
       "window.dshDesktop.togglePhoneView()" in js and "api.onPhoneView(" in js
       and "this.desktopPhoneView = !!on;" in js, True)
-# 层级：属性浮层 300 < 桌面配置面板 600 < 弹窗遮罩 1000（见 9.6 的浮层层级表）
-check("配置面板层级在浮层与弹窗之间",
-      ".desktop-config {" in css and "z-index: 600;" in css
-      and css.index("z-index: 600;") < css.index(".modal-mask {"), True)
 check("桌面键与配置面板的样式在", ".desktop-btn {" in css and ".dc-switch.on .dc-knob {" in css, True)
+# 壳侧：宽度锁死（min==max，按窗口尺寸算，要补边框差）、高度留自由；退出恢复桌面尺寸。
+# 早先手机尺寸被当成桌面尺寸存进 desktop.json，导致"在手机视图下退出后窗口再也回不到大尺寸"
+check("壳把手机视图宽度锁死、高度留自由",
+      "PHONE_WIDTH + frameW" in shell_js and "setMaximumSize(0, 0)" in shell_js
+      and "setContentSize(PHONE_WIDTH," in shell_js, True)
+check("桌面尺寸与手机高度分开存",
+      "phoneHeight: win.getContentSize()[1]" in shell_js and "persistWindowState()" in shell_js, True)
+check("壳日志能从面板里打开",
+      "openLog:" in preload_js and 'ipcMain.handle("desktop:open-log"' in shell_js, True)
 
 # ---- 移动端适配（DEVELOPMENT §7.1 / §9.6：三断点 + 抽屉/底部弹层 + 触屏约定） ----
 _mobile = css[css.index("@media (max-width: 640px) {"):]

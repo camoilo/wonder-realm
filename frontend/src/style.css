@@ -1336,17 +1336,34 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 /* 手机端"＋"收纳键：桌面断点不需要收纳，直接隐藏（外观与 jump-btn 同款，见手机断点里的规则） */
 .aux-toggle { display: none; }
 
-/* ---------- 桌面端（Electron 壳）的两样东西：配置 + 手机视图（见 DEVELOPMENT §7.4） ---------- */
-/* 这两个键只在壳里渲染（网页端与手机浏览器没有 window.dshDesktop），手机视图下也隐藏 */
-.desktop-btn { flex: none; }
+/* ---------- 桌面端（Electron 壳）的东西：配置 + 手机视图（见 DEVELOPMENT §7.4） ---------- */
+/* 手机视图键只在壳里渲染（网页端与手机浏览器没有 window.dshDesktop），手机视图下也隐藏。
+   ⚠ 尺寸与可见性必须写死：`.icon-btn` 默认 opacity:0（悬停才现形），里面的内联 SVG 又没有
+   固有尺寸 —— 两样叠一起就是一个"看不见的 10px 小方块"（实测踩到过）。
+   这里照移动端那几个键（.mobile-*-btn）的写法钉住。 */
+.desktop-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+.desktop-btn svg { display: block; width: 18px; height: 18px; }
 .desktop-btn.on { color: var(--accent-dark); border-color: var(--accent); background: #eef2ff; }
-/* 「配置」小面板：挂在顶栏右下方，层级高于消息与浮层、低于弹窗遮罩（1000） */
+/* 「配置」小面板：平时挂在右侧图标列最低栏的 ⚙ 上（.at-rail，见 Panel.vue）；
+   没有会话时那一列整块不存在，改为挂在顶栏右下方兜底（默认定位，见 TopBar.vue）。
+   层级高于消息与浮层、低于弹窗遮罩（1000） */
 .desktop-config {
   position: absolute;
   top: calc(100% + 6px);
   right: 14px;
   z-index: 600;
-  width: 320px;
+  width: 330px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1355,6 +1372,12 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+/* 挂在图标列底部时：向左展开（rail 在窗口最右），底边与那个 ⚙ 对齐 */
+.desktop-config.at-rail {
+  top: auto;
+  right: calc(100% + 10px);
+  bottom: 10px;
 }
 .dc-row {
   display: flex;
@@ -1405,6 +1428,29 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   padding: 6px 8px;
 }
 .dc-copy { flex: none; padding: 6px 10px; font-size: 12.5px; }
+/* 状态行：端口 / Ollama / 局域网，只读信息不放控件 */
+.dc-status {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+/* 二维码：白底黑码（库画的是透明底黑模块，白底靠这里给），外面那圈白边就是静区 */
+.dc-qr {
+  align-self: center;
+  width: 148px;
+  height: 148px;
+  margin: 2px 0;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+.dc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dc-act { padding: 6px 10px; font-size: 12.5px; }
+/* 局域网没开时二维码置灰：地址是真的，但手机此刻连不上 */
+.dc-qr.dim { opacity: 0.35; }
 /* 深色主题下这两处浅底要跟着变量走，否则白花花一块 */
 html[data-theme="dark"] .dc-url { background: #23262e; }
 html[data-theme="dark"] .dc-switch { background: #3a3f4a; }
@@ -1844,6 +1890,7 @@ mark.search-hit.current {
    选中图标的提示文字与悬停文字都走 v-hint */
 .panel-rail {
   flex: none;
+  position: relative;   /* 「配置」小面板要贴着它的左下角弹（.desktop-config.at-rail） */
   width: var(--rail-w);
   display: flex;
   flex-direction: column;
@@ -1853,6 +1900,8 @@ mark.search-hit.current {
   border-left: 1px solid var(--border);
   background: var(--rail-bg);
 }
+/* 图标列最低栏的 ⚙（桌面端配置）：margin-top:auto 把它顶到底部，与上面那排 tab 图标分开 */
+.rail-config { margin-top: auto; }
 
 .rail-btn {
   position: relative;
