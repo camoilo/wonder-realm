@@ -5,7 +5,7 @@
        浏览器与手机没有 window.dshDesktop —— 这一整行不渲染，品牌区由左栏自己显示。 -->
   <div v-if="isDesktop" class="titlebar" :class="{wco}">
     <span class="brand-mark">&#9671;</span>
-    <span class="titlebar-name">多模式对话助手</span>
+    <span class="titlebar-name">Wonder Realm（奇想界域）</span>
     <span class="titlebar-gap"></span>
     <button v-if="!desktopPhoneView" class="win-btn" :class="'theme-' + theme"
             v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"

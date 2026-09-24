@@ -13,7 +13,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 PREFIX = "chatbot-"
 SUFFIX = ".db"

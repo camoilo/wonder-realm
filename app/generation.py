@@ -18,7 +18,7 @@ from .database import (
 from .parser import parse_attrs as parse_attr_block, parse_output, split_attrs
 from .prompts import build_messages, chat_options
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 _bg_tasks: set = set()
 

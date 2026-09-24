@@ -1,4 +1,4 @@
-# 多模式对话机器人
+# Wonder Realm（奇想界域）
 
 一个完全在本机运行的对话应用：模型走本地 Ollama，数据存本地 SQLite，不依赖任何云端 API。支持三种对话模式，带角色设定、可随时调整的生成要求、跨会话的长期记忆，以及完整的消息编辑与重生成能力。
 
@@ -240,9 +240,11 @@ start_desktop.bat                 :: 以后双击这个就行
 2. **打开"推送局域网"**：电脑端（Electron）点标题栏那排（系统按钮左边）的 ⚙ 配置 → 打开开关；如果用的是网页版/命令行，执行 `uv run run.py --lan`（或启动后 `curl` 调一次 `PUT /api/settings`）。**默认是关的**，这是安全默认值；
 3. 手机浏览器**扫一下配置面板里的二维码**（或手输 `http://<电脑IP>:17800`）——看到的是**同一份数据**（会话、角色、设定全都在这台电脑上，手机只是浏览器）；面板里也给出这个地址，可一键复制；
 4. 打不开多半是防火墙：用**管理员** PowerShell 放行入站 17800（一次就够）：
-   `netsh advfirewall firewall add rule name="OllamaAgent 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`
+   `netsh advfirewall firewall add rule name="Wonder Realm 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`
 
-**不想让局域网访问**：把「推送局域网」开关关掉（立即生效，不用重启、也不用删防火墙规则）；想连端口都不对外，再把 `server.host` 改回 `127.0.0.1` 并重启，最后可删掉上面那条规则（`… delete rule name="OllamaAgent 局域网访问 17800"`）。手机自适应布局与这个开关**互不影响**。
+**不想让局域网访问**：把「推送局域网」开关关掉（立即生效，不用重启、也不用删防火墙规则）；想连端口都不对外，再把 `server.host` 改回 `127.0.0.1` 并重启，最后可删掉上面那条规则（`… delete rule name="Wonder Realm 局域网访问 17800"`）。手机自适应布局与这个开关**互不影响**。
+
+> 这个项目以前叫「多模式对话机器人」，改名之前加过的防火墙规则名是 `OllamaAgent 局域网访问 17800`——把上面那条 delete 命令里的名字换成旧的执行一次，再按新名字加一遍即可。（同理，壳的日志与窗口偏好从 `%APPDATA%\ollama-agent-desktop\` 挪到了 `%APPDATA%\wonder-realm-desktop\`，旧的可以删掉。）
 
 **安全提醒**：应用**没有账号体系**，同一网络里能访问这个端口的人都能读写你的会话。只在可信的家庭/办公网络开放，公共 WiFi 请改回 `127.0.0.1`。
 
@@ -341,7 +343,7 @@ node tests/test_mask_close.mjs             # 弹窗"点窗口外"判定：选文
 ## 目录结构
 
 ```
-ollama_agent/
+wonder-realm/
 ├── DEVELOPMENT.md          # 开发文档：需求、技术选型、数据模型、核心机制、开发约定
 ├── README.md               # 本文件
 ├── config.yaml             # 运行配置

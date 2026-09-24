@@ -4,7 +4,7 @@ from . import ollama_client
 from .config import get_config
 from .database import connect, now
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 COMPRESS_PROMPT = """以下是关于角色「{name}」的现有记忆：
 {old_memory}

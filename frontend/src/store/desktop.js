@@ -84,7 +84,7 @@ Object.assign(store, {
   firewallCmd() {
     const port = window.location.port || "17800";
     return "netsh advfirewall firewall add rule "
-      + `name="OllamaAgent 局域网访问 ${port}" dir=in action=allow protocol=TCP localport=${port}`;
+      + `name="Wonder Realm 局域网访问 ${port}" dir=in action=allow protocol=TCP localport=${port}`;
   },
   async copyFirewallCmd() {
     try {

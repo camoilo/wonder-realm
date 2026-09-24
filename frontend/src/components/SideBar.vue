@@ -6,8 +6,8 @@
       <div v-if="!isDesktop" class="app-brand">
         <span class="brand-mark">◇</span>
         <span class="brand-stack">
-          <span class="brand-name">多模式对话助手</span>
-          <span class="brand-sub">本地 · Ollama</span>
+          <span class="brand-name">Wonder Realm</span>
+          <span class="brand-sub">奇想界域 · 本地 Ollama</span>
         </span>
       </div>
       <div class="side-label">模式选择</div>

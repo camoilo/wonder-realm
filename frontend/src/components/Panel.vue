@@ -43,20 +43,20 @@
       </div>
     </div>
 
-    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起、甚至没打开会话时也在这里。
+    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起时也在。
          点某个图标展开对应面板，再点当前激活图标收起。悬停显示文字提示。
-         **五个位置固定**（每个模式能用的页不同，但图标不跟着挪位）：当前模式用不到的只留空位、
-         禁用、不画图标；没有会话时整排禁用（内容区也不挂载）。「配置」不在这里，
-         它在窗口标题栏（见 DEVELOPMENT 3.3），所以空状态也不会找不到它。 -->
+         **没打开会话时一个图标都不显示**（只留这条空着的竖条，位置不挪，整排禁用）；
+         选了会话就照旧按模式显示该有的那几个（图标本来就按模式隔离，能出现的就会用到，
+         所以不做"置灰"。「配置」不在这里，它在窗口标题栏，见 DEVELOPMENT 3.3）。 -->
     <div class="panel-rail">
-      <button v-for="t in tabs" :key="t.key" class="rail-btn"
-              :class="{on: !panelCollapsed && panelTab === t.key, blank: !tabAvailable(t)}"
-              :disabled="!activeSession || !tabAvailable(t)"
+      <button v-for="t in railTabs" :key="t.key" class="rail-btn"
+              :class="{on: !panelCollapsed && panelTab === t.key, blank: !activeSession}"
+              :disabled="!activeSession"
               v-hint="tabHint(t)" :aria-label="tabLabel(t)"
               :aria-pressed="!panelCollapsed && panelTab === t.key"
               @click="onRailClick(t.key)">
-        <span v-if="tabAvailable(t)" class="rail-svg" v-html="t.icon"></span>
-        <span v-if="tabAvailable(t) && tabDirty(t)" class="tab-dot"></span>
+        <span v-if="activeSession" class="rail-svg" v-html="t.icon"></span>
+        <span v-if="activeSession && tabDirty(t)" class="tab-dot"></span>
       </button>
     </div>
   </aside>
@@ -68,7 +68,7 @@ import WorldPane from "./panes/WorldPane.vue";
 import CharPane from "./panes/CharPane.vue";
 import ProfilePane from "./panes/ProfilePane.vue";
 import MemoryPane from "./panes/MemoryPane.vue";
-import { toRefs } from "vue";
+import { computed, toRefs } from "vue";
 import { store } from "../store.js";
 
 // 图标统一 24px 线性风格，随按钮颜色走（currentColor）
@@ -93,21 +93,21 @@ const tabs = [
   { key: "memory", label: "会话记忆", icon: I.memory },
 ];
 
-// 这一页在当前场景下能不能用（不能用就留空位、禁用），**不改变图标的位置**：
-// 无角色 → 角色设定 / 我的设定用不上，无记忆范围 → 记忆用不上
+// 这一页在当前场景下用得上吗（图标按模式隔离：无角色就没有角色/我的设定，无记忆范围就没有记忆）。
+// 用不到的直接不出现，不做"置灰"——能出现的就一定用得到
 function tabAvailable(t) {
   if (t.key === "char" || t.key === "profile") return !!store.activeSession?.character;
   if (t.key === "memory") return !!store.memoryScope;
   return true;
 }
+// 没打开会话时保留全部五个位置（只是不画图标、整排禁用），免得"开了会话图标才出现"时位置乱跳
+const railTabs = computed(() => (store.activeSession ? tabs.filter(tabAvailable) : tabs));
 function tabLabel(t) {
   return t.key === "memory" ? (store.memoryScope?.label || "记忆") : t.label;
 }
-// 禁用时提示里说清原因（别让人以为界面坏了）
+// 没打开会话时标签是禁用的，提示里说清原因（别让人以为界面坏了）
 function tabHint(t) {
-  if (!store.activeSession) return `${tabLabel(t)}（先打开一个会话）`;
-  if (!tabAvailable(t)) return `${t.label}（这个模式下用不到）`;
-  return tabLabel(t);
+  return store.activeSession ? tabLabel(t) : `${t.label}（先打开一个会话）`;
 }
 function tabDirty(t) {
   switch (t.key) {

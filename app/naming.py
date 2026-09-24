@@ -5,7 +5,7 @@ from . import ollama_client
 from .config import get_config
 from .database import connect
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 NAME_PROMPT = """请根据用户在下面这些发言，概括这次对话的主题并起一个标题。
 要求：不超过 {max_chars} 个字，只写标题本身，不要标点、引号或"标题："之类的前缀。

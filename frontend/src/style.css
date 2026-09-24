@@ -9,9 +9,10 @@
   --border: #e3e5ea;
   --text: #26282e;
   --text-soft: #8a8f9a;
-  --accent: #3f6ad8;
-  --accent-dark: #345cb8;
-  --accent-soft: rgba(63, 106, 216, 0.12);
+  --accent: #9370db;                        /* 主色：中紫（MediumPurple） */
+  --accent-dark: #7a55c8;                   /* 浅色主题里的"深一档"：强调文字、hover 边框 */
+  --accent-soft: rgba(147, 112, 219, 0.16); /* 浅紫底：选中态、badge 背景 */
+  --accent-ring: rgba(147, 112, 219, 0.4);  /* 聚焦光圈 / 拖拽高亮 */
   --hover: #f0f2f6;
   --hover-soft: #eceef2;
   --field: #ffffff;
@@ -28,7 +29,7 @@
   --modal-mask: rgba(20, 22, 28, 0.42);
   --icon-faint: #c6cad2;
   --scrollbar: #c3c8d1;
-  --primary-disabled: #b9c4e4;
+  --primary-disabled: #cfc0ec;
   --disabled-text: #a9aeb8;
   --warn-dot: #d98324;
   --search-hit: #fff3a3;
@@ -49,9 +50,10 @@
   --border: #2f3542;
   --text: #e7eaf1;
   --text-soft: #98a0b0;
-  --accent: #5b8def;
-  --accent-dark: #79a2ff;
-  --accent-soft: rgba(91, 141, 239, 0.14);
+  --accent: #a98cea;                        /* 深色底上提亮一档，保持 #9370DB 的紫 */
+  --accent-dark: #c9b4f7;                   /* 深色主题里这一档是"更亮"（与浅色相反） */
+  --accent-soft: rgba(169, 140, 234, 0.2);
+  --accent-ring: rgba(169, 140, 234, 0.45);
   --hover: #282e3a;
   --hover-soft: #232936;
   --field: #1a1e26;
@@ -68,7 +70,7 @@
   --modal-mask: rgba(0, 0, 0, 0.55);
   --icon-faint: #3a4150;
   --scrollbar: #40485a;
-  --primary-disabled: #2a3348;
+  --primary-disabled: #3b3352;
   --disabled-text: #5a6170;
   --warn-dot: #e0883a;
   --search-hit: #3a3a1a;
@@ -327,7 +329,7 @@ html, body {
 }
 .session-row:hover { background: var(--hover); }
 .session-row.active {
-  background: rgba(91, 141, 239, 0.12);
+  background: var(--accent-soft);
   color: var(--accent-dark);
   font-weight: 500;
 }
@@ -465,7 +467,7 @@ html, body {
   cursor: pointer;
   font-family: inherit;
 }
-.model-select:focus { outline: 2px solid rgba(91, 141, 239, 0.3); }
+.model-select:focus { outline: 2px solid var(--accent-ring); }
 .model-select:disabled { background: var(--field-disabled); color: var(--text-soft); cursor: not-allowed; }
 
 /* 思考模式开关：关掉时用灰底表示"已关闭"，模型不支持时置灰不可点 */
@@ -782,7 +784,7 @@ html, body {
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: rgba(91, 141, 239, 0.14);
+  background: var(--accent-soft);
   color: var(--accent);
   display: inline-flex;
   align-items: center;
@@ -907,7 +909,7 @@ html, body {
 }
 .bg-thumb.dragging { opacity: 0.45; }
 /* 拖到哪一张上就把哪一张标出来，落点才看得出来 */
-.bg-thumb.over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.4); }
+.bg-thumb.over { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
 
 .bg-num {
   position: absolute;
@@ -1446,7 +1448,6 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 /* 深色主题下这两处浅底要跟着变量走，否则白花花一块 */
 html[data-theme="dark"] .dc-url { background: #23262e; }
 html[data-theme="dark"] .dc-switch { background: #3a3f4a; }
-html[data-theme="dark"] .desktop-btn.on { background: #26304a; }
 
 /* ---------- 右侧面板（第三栏，与对话区并排而非覆盖） ---------- */
 /* 面板 = 内容区（.panel-box，可收起）+ 竖排图标栏（.panel-rail，常驻）。
@@ -1590,7 +1591,7 @@ mark.search-hit.current {
   color: var(--text);
   cursor: pointer;
 }
-.preset-select:focus { outline: 2px solid rgba(91, 141, 239, 0.3); }
+.preset-select:focus { outline: 2px solid var(--accent-ring); }
 .preset-row .ghost-btn { flex: none; padding: 6px 10px; font-size: 12.5px; }
 /* 四个预设动作键单独一行（下拉占一行）：平分宽度，330px 面板里一行放得下、不跳行 */
 .preset-actions { margin-top: 6px; }
@@ -1641,7 +1642,7 @@ mark.search-hit.current {
   font-family: inherit;
 }
 .preset-item:hover { background: var(--hover); }
-.preset-item.on { border-color: var(--accent); background: rgba(91, 141, 239, 0.14); }
+.preset-item.on { border-color: var(--accent); background: var(--accent-soft); }
 .preset-item-text { display: flex; flex-direction: column; min-width: 0; }
 .preset-item-name { font-size: 13px; }
 .preset-item-sub {
@@ -1968,7 +1969,7 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 /* 没打开会话时图标列照旧常驻，只是上面那排标签禁用 */
 .rail-btn:disabled { opacity: 0.38; cursor: not-allowed; }
 .rail-btn:disabled:hover { background: transparent; color: var(--text-soft); }
-/* 当前模式用不到的页：只留空位（不画图标），但仍然禁用以示"这里将来会有东西" */
+/* 没打开会话时这排标签只留空位（不画图标），但仍然禁用以示"这里将来会有东西" */
 .rail-btn.blank:disabled { opacity: 1; cursor: default; }
 .rail-btn.on {
   color: var(--accent-dark);

@@ -75,11 +75,11 @@ Object.assign(store, {
   // 下次启动仍有效；auto 下若系统偏好有变化，由下面 initTheme 的监听即时跟上）。
   setTheme(mode) {
     store.theme = mode;
-    localStorage.setItem("ollama_agent_theme", mode);
+    localStorage.setItem("wonder_realm_theme", mode);
     applyTheme(mode);
   },
   initTheme() {
-    const saved = localStorage.getItem("ollama_agent_theme");
+    const saved = localStorage.getItem("wonder_realm_theme");
     const start = saved === "light" || saved === "dark" ? saved : "auto";
     store.theme = start;
     applyTheme(start);

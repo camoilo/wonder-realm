@@ -1,4 +1,4 @@
-// 多模式对话机器人的电脑端外壳（Electron），见 DEVELOPMENT §3.3。
+// Wonder Realm（奇想界域）的电脑端外壳（Electron），见 DEVELOPMENT §3.3。
 //
 // 职责就三件：
 //   1. 起后端：spawn 项目里的 run.py --no-browser（**不重新实现任何业务**）；
@@ -280,7 +280,7 @@ function createWindow() {
     minWidth: 380,
     minHeight: 520,
     backgroundColor: "#f4f5f7",
-    title: "多模式对话机器人",
+    title: "Wonder Realm（奇想界域）",
     autoHideMenuBar: true,
     ...wcoOptions(),
     webPreferences: {

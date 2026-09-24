@@ -13,7 +13,7 @@ from .config import get_config
 from .database import connect, parse_attr_defs
 from .prompts import TEMPERATURE_LEVELS
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 # 探索模式下对用户隐藏的三个字段
 HIDDEN_FIELDS = ("personality", "speech_style", "backstory")

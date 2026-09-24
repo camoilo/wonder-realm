@@ -1,4 +1,4 @@
-# 多模式对话机器人开发文档
+# Wonder Realm（奇想界域）开发文档
 
 基于本地 Ollama 的三模式对话应用：聊天 / 沉浸 / 导演。记录需求、数据模型、核心机制、API 与界面设计。**本文档只描述当前状态，不记录变更历史**；面向使用者的说明见 [README.md](./README.md)。
 
@@ -218,7 +218,7 @@ flowchart LR
 **「手机视图」键在手机视图下**不隐藏（只是变成选中态、文案改成"退出手机视图"）：反过来的话进去就没有看得见的出路了——菜单栏是 `autoHideMenuBar`，F9 与菜单项都不显眼（用户报过"没有切换页面大小的按钮"）。手机视图那一屏只显示窗口键（图标与应用名让位），390 减去系统按钮那 ~136px 正好放得下。
 **"推送局域网"不走壳**：它是后端 `app_settings.lan_enabled`（默认关），页面上的开关就是 `PUT /api/settings`，立即生效、不重启后端（见 8.3）。壳只提供"地址"和"手机视图"这两件后端做不到的事。
 
-**壳的日志与偏好**都在 `app.getPath("userData")`（Windows：`%APPDATA%\ollama-agent-desktop\`，目录名取自 `desktop/package.json` 的 `name`）：
+**壳的日志与偏好**都在 `app.getPath("userData")`（Windows：`%APPDATA%\wonder-realm-desktop\`，目录名取自 `desktop/package.json` 的 `name`）：
 - `desktop.log`：壳自己做的事以 `[desktop] 本地时间 …` 开头，**后端的 stdout/stderr 也一并混进来**（前缀 `后端:` / `后端(err):`）——所以窗口没开出来、或打开后一片空白时，原因（Python traceback、端口占用、Ollama 没起来）都在这一个文件里。窗口这一步单独留一行：加载成功记 `窗口已打开：<url>`，失败记 `页面加载失败：<错误码> <描述> <url>`——有它才能一眼分清"壳没起来"和"壳起了、页面没出来"。只追加、不轮转（一次启动几 KB，可忽略）。
 - `desktop.json`：**只存桌面尺寸与手机视图的高度**（`{ bounds, phoneHeight }`）。**启动一律桌面视图**——手机视图是"预览/收纳"用的临时状态，让它延续到下次启动只会让人以为坏了（用户先报过"启动是手机页面"，所以定了这条）；手机视图的高度记着，下次进去接着用。**手机视图下也要把桌面尺寸写进 `bounds`**：否则"在手机视图里关掉应用"会让下次启动回到默认大小（用户报过"切回来就变成默认了"）。早先把手机尺寸当 `bounds` 写过，结果"在手机视图下退出应用"会让下次启动的窗口只有 390 宽、退出手机视图也回不到大尺寸（桌面尺寸被覆盖掉了）——现在只在非手机视图时写"当前窗口尺寸"，手机视图时写的是进手机视图前那份桌面尺寸。**旧值里那种"跟手机一样宽"的桌面尺寸要当脏数据丢掉**：`desktopRestoreBounds()` 与建窗时都判一下（宽度 ≤ `PHONE_WIDTH + 60` 就不认），否则用户会觉得"退出了还是个小窗口"。**默认尺寸 `DEFAULT_SIZE`（1180×780）与存档尺寸都会按显示器工作区收一下**（`fitInWorkArea()`）：矮屏上 1280×860 会顶到任务栏（用户报过"视图太大"）。**自检（`--selftest`）刻意不写它**。
 
@@ -509,7 +509,7 @@ event: error  {"message"}                       # 中断发送并结束流
 
 ### 8.1 目录结构
 ```
-ollama_agent/
+wonder-realm/
 ├── DEVELOPMENT.md / README.md / .gitignore / config.yaml
 ├── pyproject.toml / uv.lock        # uv 管理：fastapi/uvicorn/httpx/pyyaml
 ├── run.py                          # uv run run.py → 建库 → 确保 Ollama → uvicorn.run；起后开浏览器
@@ -581,7 +581,7 @@ data_dir: ./data                  # 直接指定
 | 403 的样子 | `/api/*` 回 JSON（前端好提示），页面请求回一段人话——手机浏览器直接打开时看到"电脑端当前没有开启局域网访问"比一串 JSON 明白 |
 | 怎么开关 | ① 桌面端 ⚙ 配置（在标题栏那排，见 3.3 / 7.1）；② `run.py --lan` / `--no-lan`（命令行用户的路径）；③ `PUT /api/settings {"lan_enabled": …}`——**只有本机来源能改**（手机端改不了这道闸门） |
 | 首次默认 | `config.yaml` 的 `server.lan`（默认 `false`）只在**首次建库**时写进库；之后以库为准（与模型选择同一条约定） |
-| 防火墙 | Windows 需放行入站 TCP 17800：`netsh advfirewall firewall add rule name="OllamaAgent 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`（收回：`… delete rule name="…"`）。**这条规则不在代码里**，换机器/重装系统要重加；配置面板里有一个「复制防火墙命令」键（`store/desktop.js` 的 `firewallCmd()`，**文案与 README 同源，改一处必须改另一处**，`test_app_js.py` 盯着） |
+| 防火墙 | Windows 需放行入站 TCP 17800：`netsh advfirewall firewall add rule name="Wonder Realm 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`（收回：`… delete rule name="…"`）。**这条规则不在代码里**，换机器/重装系统要重加；配置面板里有一个「复制防火墙命令」键（`store/desktop.js` 的 `firewallCmd()`，**文案与 README 同源，改一处必须改另一处**，`test_app_js.py` 盯着） |
 | 手机访问 | 同一 WiFi → 手机浏览器打开 `http://<电脑局域网IP>:17800`（IP 用 `ipconfig` 查；配置面板直接给出并可复制，**还画成二维码**给手机扫）。后端是同一份：会话、角色、设置在手机与电脑上是同一套数据，页面也就是同一份（手机按 ≤640px 断点走单栏，见 7.1） |
 | 面板里的状态行 | 端口 / Ollama（已连接 · N 个模型 / 未连接）/ 局域网开·关，数据都取界面本来就在用的 `models`/`modelWarning`/`lanEnabled`，不额外发请求 |
 | 安全 | **应用没有账号体系**：开关打开时，能连到这个端口的人都能读写你的会话。只在可信的家庭/办公网络开启，公共 WiFi 建议关掉（一键，不用重启） |
@@ -672,4 +672,3 @@ data_dir: ./data                  # 直接指定
 7. **词库不能拖拽调序**：目前只能增删（顺序即添加序）；可照背景图拖拽加一遍，存储已是数组
 8. **一次会话只能绑一份世界**：导演会话各自一份，聊天/沉浸同角色仅一份（跟角色走）；若要角色在不同会话处于不同世界，需把绑定从角色挪到会话（`sessions.world_id` 列与接口已备，缺的是聊天/沉浸带上它）
 9. **电脑端打包**：Electron 外壳 v1 已能用（复用项目 `.venv` 的 Python，见 3.3 / 10.9 与 8.1），**待做的是打包分发**：PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`——这样别人的机器上不必装 Python 与 uv。同时值得顺手做的还有：**一键添加防火墙规则**（现在只做到"复制命令"，真要免提权就得走 UAC 提权，二者选一）、Ollama 未安装时的引导、以及最小化到托盘
-10. **应用名不统一**：网页标签页（`frontend/index.html` 的 `<title>`）是「多模式对话助手」，而 README / DEVELOPMENT 的标题与 `desktop/main.js` 里的窗口标题写的是「多模式对话机器人」。窗口标题实际跟随网页（Electron 默认让 `document.title` 覆盖 `BrowserWindow` 的 `title`），所以 `main.js` 那行目前是失效的。**名字定下来后一起改**（含两份文档的标题），暂不动

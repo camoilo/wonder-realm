@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 # 只有本机地址才由我们去拉起来：base_url 指向别的机器时，那不是我们能启动的
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}

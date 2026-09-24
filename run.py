@@ -12,7 +12,7 @@ from app import backup, database
 from app import ollama_boot
 from app.config import get_config
 
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 
 def port_in_use(host: str, port: int) -> bool:

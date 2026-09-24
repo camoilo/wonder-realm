@@ -23,7 +23,7 @@ from .routes import (
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("ollama_agent")
+log = logging.getLogger("wonder_realm")
 
 
 def _lan_forbidden(path: str):
@@ -74,7 +74,7 @@ def create_app():
             log.warning("模型 %s 未安装，请在界面右上角切换已安装的模型", current)
         yield
 
-    app = FastAPI(title="多模式对话机器人", lifespan=lifespan)
+    app = FastAPI(title="Wonder Realm（奇想界域）", lifespan=lifespan)
 
     @app.middleware("http")
     async def no_store(request, call_next):

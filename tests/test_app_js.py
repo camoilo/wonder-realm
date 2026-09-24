@@ -1006,7 +1006,7 @@ check("两个桌面键都在窗口标题栏那一行",
       'aria-label="配置"' in _titlebar and "收纳成手机视图" in _titlebar
       and "toggleDesktopConfig" in _titlebar and 'class="win-btn"' in _titlebar, True)
 check("标题栏左边是图标 + 应用名",
-      'class="brand-mark"' in _titlebar and "多模式对话助手" in _titlebar, True)
+      'class="brand-mark"' in _titlebar and "Wonder Realm（奇想界域）" in _titlebar, True)
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
       "退出手机视图" in _titlebar and ':class="{on: desktopPhoneView}"' in _titlebar, True)
 check("主题键在壳里搬到标题栏（浏览器留在顶栏）",
@@ -1017,12 +1017,15 @@ check("配置面板挂在标题栏下方",
       '<ConfigPanel v-if="!desktopPhoneView && desktopConfigOpen" />' in _titlebar, True)
 check("标题栏横跨整个窗口（在 .app-body 外面）",
       "<TitleBar />" in _comp["App.vue"] and 'class="app-body"' in _comp["App.vue"], True)
-check("图标列只管标签、常驻、用不到时留空位且禁用",
+check("图标列只管标签、常驻、没会话时整排空着",
       'class="panel-rail"' in _panel and 'class="rail-btn rail-config"' not in _panel
       and "ConfigPanel" not in _panel
-      and ':disabled="!activeSession || !tabAvailable(t)"' in _panel
-      and 'v-for="t in tabs"' in _panel          # 五个位置固定，图标不跟着模式挪位
-      and "tabAvailable(t)" in _panel and "function tabAvailable(t)" in _panel
+      # 没会话：位置留着但一个图标都不显示（整排禁用）；有会话：照旧按模式显示该有的那几个
+      # （图标本来就按模式隔离，能出现的就会用到，所以不做"置灰"）
+      and 'v-for="t in railTabs"' in _panel
+      and ':disabled="!activeSession"' in _panel
+      and 'v-if="activeSession" class="rail-svg"' in _panel
+      and "store.activeSession ? tabs.filter(tabAvailable) : tabs" in _panel
       and '<div class="panel-box" v-if="activeSession">' in _panel
       and ".rail-btn.blank:disabled {" in css, True)
 # 没打开会话时内容区不挂载，图标列不该继续占着 330px 空白（只在桌面断点收窄）
@@ -1067,9 +1070,9 @@ check("窗口键的尺寸写死（别退回小方块）",
       and "opacity: 0" not in _win_btn_css
       and ".win-btn svg { display: block; width: 15px; height: 15px; }" in css, True)
 check("防火墙命令与 README 同源（改一处必须改另一处）",
-      "netsh advfirewall firewall add rule" in js and "OllamaAgent 局域网访问" in js
+      "netsh advfirewall firewall add rule" in js and "Wonder Realm 局域网访问" in js
       and "netsh advfirewall firewall add rule" in readme
-      and "OllamaAgent 局域网访问" in readme, True)
+      and "Wonder Realm 局域网访问" in readme, True)
 check("开关写的是后端设置里的 lan_enabled",
       'jsonOpts("PUT", { lan_enabled: !this.lanEnabled })' in js
       and "this.lanEnabled = !!s.lan_enabled;" in js, True)
