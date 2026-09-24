@@ -15,7 +15,21 @@ const os = require("node:os");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");           // 项目根目录（后端在它下面）
-const PORT = Number(process.env.DSH_PORT || 17800);
+
+// 后端端口：壳必须和后端用同一个端口，而"换端口"是用户在 config.yaml 的 server.port 里做的，
+// 所以这里也读它（只要未注释的 `port:` 行——配置文件里那些默认值都是注释掉的）。
+// 环境变量 DSH_PORT 优先（临时换端口/多实例用），都拿不到就回默认 17800。
+function backendPort() {
+  const env = Number(process.env.DSH_PORT);
+  if (env > 0) return env;
+  try {
+    const m = fs.readFileSync(path.join(ROOT, "config.yaml"), "utf8").match(/^\s*port:\s*(\d+)/m);
+    const n = m ? Number(m[1]) : 0;
+    if (n > 0) return n;
+  } catch (e) { /* 配置读不到就用默认值，不能让壳因此起不来 */ }
+  return 17800;
+}
+const PORT = backendPort();
 const URL = `http://127.0.0.1:${PORT}/`;
 // 手机视图：**宽度锁死**（一拖宽就跳出手机单栏布局），**高度留给用户拖**（看长内容方便）。
 // 做法是 min==max==PHONE_WIDTH：边框还能拖，但尺寸被钳住，比 setResizable(false) 更符合预期。
@@ -236,6 +250,13 @@ const PAGE_PROBE = `(async () => {
       await tick();
     }
   };
+  // 图标列必须常驻（没有会话时也在），上面那排标签则在"没有会话"时禁用。
+  // 会话是不是自动打开的不一定，所以不做绝对断言，而是查**两个状态是否自洽**：
+  // 内容区（.panel-box）没挂载 ⇔ 那排标签禁用。
+  const railNoSession = !!document.querySelector('.rail-config');
+  const tabBtns = Array.from(document.querySelectorAll('.panel-rail .rail-btn:not(.rail-config)'));
+  const boxMounted = !!document.querySelector('.panel-box');
+  const tabsDisabled = tabBtns.length > 0 && tabBtns.every((b) => b.disabled);
   // 等首屏数据到位（角色列表是异步拉的），再展开角色、打开它下面的第一个会话
   await until(() => document.querySelector('.char-row') || document.querySelector('.session-row'), 6000);
   const ch = document.querySelector('.char-row');
@@ -282,6 +303,9 @@ const PAGE_PROBE = `(async () => {
     phoneBtnInTopBar: !!pb,
     themeBtn: !!document.querySelector('.theme-toggle'),
     noConfigInTopBar: !top.querySelector('[aria-label="配置"]'),
+    railNoSession,
+    boxMounted,
+    tabsDisabled,
   };
 })()`;
 
@@ -472,6 +496,7 @@ if (!app.requestSingleInstanceLock()) {
           + `高度改 1000 实测 ${probe.tallerHeight}px 退出后 ${probe.backWidth}x${probe.backHeight}px`);
         log(`selftest 界面 | 配置键在图标列 ${u.railConfig} 距底 ${u.railBottom}px 面板打开 ${u.panelOpen} `
           + `顶栏手机键 ${u.phoneBtnInTopBar} 主题键 ${u.themeBtn} 顶栏已无配置键 ${u.noConfigInTopBar} | `
+          + `无会话时内容区未挂载 ${!u.boxMounted} 标签禁用 ${u.tabsDisabled} | `
           + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
         log(`selftest 尺寸 | 面板 ${u.panelRect} 手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
         log(`selftest 手机视图 | 退出键 ${probe.pv.exitBtn} 文案「${probe.pv.exitLabel}」 `
@@ -493,6 +518,11 @@ if (!app.requestSingleInstanceLock()) {
         if (u.phoneHitOk !== true) bad.push(`顶栏手机键被挡住了（该点最上层 ${u.phoneHit}）`);
         if (u.themeBtn !== true) bad.push("顶栏主题键不见了");
         if (u.noConfigInTopBar !== true) bad.push("有会话时顶栏还留着配置键");
+        // 没有会话时图标列也得在（配置键不能找不到），而"内容区没挂载"与"标签禁用"必须一致
+        if (u.railNoSession !== true) bad.push("图标列不存在（配置键会找不到）");
+        if (u.tabsDisabled === u.boxMounted) {
+          bad.push(`内容区挂载(${u.boxMounted})与标签禁用(${u.tabsDisabled})不一致`);
+        }
         if (u.labels.indexOf("推送局域网") < 0) bad.push("面板缺推送局域网行");
         if (u.labels.indexOf("手机视图") < 0) bad.push("面板缺手机视图行");
         if (!/端口 \d+/.test(u.statusText)) bad.push(`面板状态行没有端口（${u.statusText}）`);
@@ -528,7 +558,7 @@ if (!app.requestSingleInstanceLock()) {
       }
       return;
     }
-    // 端口已在监听（例如用户自己用 start.bat 起过）也照样开窗口——后端探测会立刻通过
+    // 端口已在监听（例如用户自己用 `uv run run.py` 起过）也照样开窗口——后端探测会立刻通过
     try {
       await waitForBackend();
     } catch (e) {

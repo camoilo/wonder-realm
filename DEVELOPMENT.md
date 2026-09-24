@@ -9,7 +9,7 @@
 - 三模式：**聊天**（扮演角色对话）、**沉浸**（角色 + 情境演绎）、**导演**（自由剧本生成）
 - 记忆分两层：会话内消息历史（短期）+ 跨会话长期记忆（按角色或按会话绑定，自动压缩）
 - 消息可编辑、删除、重新生成，用户完全掌控上下文
-- 交付形态：本机运行（`start.bat` / `run.py`），**手机可走局域网用同一份网页端**（见 8.3）；同一份网页也有**电脑端外壳**（Electron，双击 `start_desktop.bat`，见 3.3）
+- 交付形态：本机运行（**电脑端 Electron 外壳，双击 `start_desktop.bat`**，见 3.3；也可 `uv run run.py` 用浏览器）；**手机走局域网用同一份网页端**（见 8.3）
 
 ### 1.2 运行环境
 
@@ -26,7 +26,7 @@
 ### 1.3 技术选型理由
 - **FastAPI**：原生 async + StreamingResponse，SSE 简单；自动 OpenAPI 文档
 - **SQLite + WAL**：单文件零部署，单用户无并发瓶颈，数据全本地
-- **Vue 3 + Vite**：产物提交进仓库，离线可用、可模块化组织。代价是多一个 Node 工具链、改前端要多一步构建（`start.bat` / `start_desktop.bat` 检测到 Node 时顺手重建）
+- **Vue 3 + Vite**：产物提交进仓库，离线可用、可模块化组织。代价是多一个 Node 工具链、改前端要多一步构建（`start_desktop.bat` 检测到 Node 时顺手重建）
 - **qrcode**（前端运行期依赖）：给手机扫的局域网二维码。用它而不是手搓编码器——一个码错一格就扫不出来，而"自己写的编码器"只能靠有限用例保证；换来的代价是产物 +27KB。**它随构建打进 `app/static/`，运行期不联网**（与 Vue 同一条原则）。正确性由 `tests/test_qr.mjs` 用另一套实现（`jsqr`，仅 devDependency）做生成→解码往返验证
 - **SSE 而非 WebSocket**：单向流（请求→生成流），SSE 足够且更简单
 
@@ -222,7 +222,7 @@ flowchart LR
 
 自检：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径，**并且是当闸门用的**：断言不满足就非零退出。断的有 preload 桥接、手机视图尺寸（往宽里拖到 500 实测仍被钳在 390 附近、高度能改、退出后桌面尺寸原样恢复、脏的"手机大小桌面尺寸"被纠正）、**手机视图下"退出手机视图"那个键还在且点得到**、以及**真渲染出来的界面**：配置键在图标列最低栏（距底 ≤24px）、面板能点开、二维码真画出来了（数 canvas 暗点）、置灰状态与局域网开关一致、顶栏手机视图键没被挡住（尺寸 ≥24px、`elementFromPoint` 命中它）、面板里有推送局域网 / 手机视图行与状态行。设了环境变量 `DSH_SHOT=<png 路径>`（桌面态）或 `DSH_SHOT_PHONE=<png 路径>`（手机视图态）时会**短暂显示窗口并截图**（隐藏窗口的 `capturePage` 只能拿到首帧缓存）。**注意隐藏窗口里 CSS 过渡不会自己推进**（没有帧），量"抽屉滑出屏外"这类状态得先轮询到它归位再量，否则量到的是过渡半途的假象。开发期复用项目 `.venv` 里的 Python；**打包分发**（PyInstaller 收后端 + 安装包）留到 v2，见 10.9。
 
-**入口脚本 `start_desktop.bat`**（8.1）：先按与 `start.bat` 完全相同的判断重建一次前端（装了 Node 且 `frontend/node_modules` 在），再拉起 `electron.exe desktop`。窗口与它起的后端都挂在那个 cmd 窗口下，**关掉 cmd 窗口等于关掉应用**——所以它双击后"只有一行提示、看着像卡住"是正常的，界面窗口由 Electron 单独弹出。
+**入口脚本 `start_desktop.bat`**（8.1）：先判断依赖与前端产物、需要时重建一次前端，再拉起 `electron.exe desktop`。窗口与它起的后端都挂在那个 cmd 窗口下，**关掉 cmd 窗口等于关掉应用**——所以它双击后"只有一行提示、看着像卡住"是正常的，界面窗口由 Electron 单独弹出。文件本身是 **GBK + CRLF**（这样它自己的中文提示在本机控制台显示正常），但**末尾会切到 `chcp 65001`**：Electron 的输出是 UTF-8 字节，936 控制台会把它们显示成"鍚姩鍚庣"那种乱码（真踩过；日志文件本身是好的，乱的只是终端显示）。**切换之后文件余下的行必须是纯 ASCII**（cmd 在 65001 下读多字节内容会按字节错位解析，也踩过），`test_bats.py` 盯着这一条。
 
 **依赖安装的真实坑**（踩过）：`desktop` 只有 electron 一个依赖，但它的 `postinstall` 要另下约 110MB 运行时、解压出 268MB（73 个文件）。国内直连 GitHub 容易卡住或被打断，结果就是"`npm install` 报成功、`node_modules` 也在，唯独 `electron.exe` 没下来"。所以入口脚本的依赖检查落在 `node_modules/electron/dist/electron.exe` 这个**文件**上（不是目录），并把"目录都没有"与"目录在、本体缺"分成两种提示、各自给出命令；装前先 `set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`，装后用 `…\electron.exe --version` 验证。npm 11 的 `allow-scripts` 警告（`electron@33.4.11 (postinstall: node install.js)` 未审批）**只是警告**，实测脚本照跑，不必理会——`npm approve-scripts` 在这里反而会往 `package.json` 塞一个空的 `allowScripts: {}`，已还原。zip 缓存在 `%LOCALAPPDATA%\electron\Cache`，补装通常几秒。**另外记一笔未定位的怪事**：2026-09-24 早上发现整棵 `desktop/node_modules` 在无人操作的情况下消失了（目录 mtime 指向前一晚跑过一次 `start_desktop.bat` 的时刻，壳本身没有任何删文件代码），怀疑是前一晚被中途 kill 掉的 `npm install` 残留进程事后回滚；若再复现，先看 `%LOCALAPPDATA%\npm-cache\_logs` 里最新的日志。
 
@@ -460,7 +460,7 @@ event: error  {"message"}                       # 中断发送并结束流
 - **顶栏**：最左左栏收起钮；标题+模式标签；然后会话内搜索框、模型下拉、**思考开关**、**主题按钮**（☾/☀/◐ 循环，见 9.6）、**桌面端「手机视图」键**（`.desktop-btn`）。搜索命中用 `<mark class="search-hit">` 标黄、当前处加 `.current`；计数/清空/↑↓ 始终占位（框宽不随输入变，无内容置灰）。**不做手填模型名**（拼错只得报错）。**无面板开关**——进出统一由右侧竖排图标栏负责。桌面端的另一个键「配置」在**图标列最低栏**（见 3.3 与右栏那条），顶栏只留一个兜底：没有会话时图标列整块不存在，那时顶栏才出现 ⚙。`.desktop-btn` 必须写死尺寸与 `opacity:1`——`.icon-btn` 默认 `opacity:0`（悬停才现形）、里面的内联 SVG 又没有固有尺寸，两样叠一起就是个"看不见的 10px 方块"（实测踩到过）
 - **左栏（260px）**："模式选择"标题 + 三模式 Tab；hover/聚焦模式按钮浮出介绍（`.mode-tip`，**朝按钮行上方弹**——下方是会话列表，向下会遮住会话）。聊天/沉浸为"角色列表→会话"两级，导演直接会话列表。底按钮按模式新建
 - **输入区**：沉浸分两栏——「情境说明（可选）」36% +「话语」（必填）；其余单输入框。Enter 发送、Shift+Enter 换行；话语空则发送禁用。&#8595; 键平滑滚回最新（scrolling）。导演模式发送列上方多"继续"键（自动发 `CONTINUE_PROMPT`="继续"、不清空输入框、发'有可续回复且未生成时置灰）
-- **右侧面板 = 竖排图标栏 + 点击滑出的内容**：最右一竖条 `.panel-rail`（44px）**常驻**（收起也可见），五个图标（24px 线性 SVG，`v-hint` 页名 + `aria-label`）；点图标在该栏左侧滑出 `.panel-box`（330px）内容，再点当前图标收起（宽度过渡）。无标题行、无顶栏开关。哪页有未保存改动在图标右上角点小圆点（`.tab-dot`）。五个页：生成要求 / 世界设定（三模式都显示）/ 角色设定（仅聊天沉浸）/ 我的设定（仅聊天沉浸）/ 记忆查看编辑。底部统一「保存当前配置」+「未保存/还原」。切到无某页的会话由 `fixPanelTab()` 兜回"生成要求"。```.panel-body>*` 的 `flex:0 0 auto` 防记忆框被挤扁，`.panel-tab-pane` 内部自声明 flex column + gap:12px。**桌面端在图标列最低栏多一个 ⚙「配置」**（`.rail-config`，`margin-top:auto` 顶到底）：弹出 `ConfigPanel.vue` 那份 `.desktop-config`（贴 rail 左下展开，`.at-rail`），内容见 3.3 / 8.3。图标列只在有会话时存在，所以顶栏留了个 `!activeSession` 才出现的兜底 ⚙
+- **右侧面板 = 竖排图标栏 + 点击滑出的内容**：最右一竖条 `.panel-rail`（44px）**常驻**——面板收起时在、**没打开会话时也在**（那排标签禁用、`.rail-btn:disabled` 置灰；内容区 `.panel-box` 才按 `activeSession` 挂载，因为标签页会读 `activeSession`）。要点：**⚙ 配置不能因为没有会话就进不去**，所以图标列不做整体 `v-if`。点图标在该栏左侧滑出 `.panel-box`（330px）内容，再点当前图标收起（宽度过渡）。无标题行、无顶栏开关。哪页有未保存改动在图标右上角点小圆点（`.tab-dot`）。五个页：生成要求 / 世界设定（三模式都显示）/ 角色设定（仅聊天沉浸）/ 我的设定（仅聊天沉浸）/ 记忆查看编辑。底部统一「保存当前配置」+「未保存/还原」。切到无某页的会话由 `fixPanelTab()` 兜回"生成要求"。```.panel-body>*` 的 `flex:0 0 auto` 防记忆框被挤扁，`.panel-tab-pane` 内部自声明 flex column + gap:12px。**桌面端在图标列最低栏多一个 ⚙「配置」**（`.rail-config`，`margin-top:auto` 顶到底）：弹出 `ConfigPanel.vue` 那份 `.desktop-config`（贴 rail 左下展开，`.at-rail`），内容见 3.3 / 8.3
 - **字数提示**：输入框外层 `.counted`（relative），计数绝对定位右下角；单行 `.inline` 垂直居中，多行 `right:16px` 让开缩放柄。输入框让位：单行 `padding-right:64px`、多行 `padding-bottom:24px`（覆盖规则放样式表最后）。上限来自 `f.max`/`limits.xxx`
 - **角色 "让模型生成"（`.gen-box`）**：仅新建时出现（编辑时再生成=换角色）。提示词输入 + 开放/探索单选 + 生成按钮（有草稿变"换一个"）；生成中禁用；改模式清草稿（探索草稿前端拿不到隐藏字段，不能互相顶替）。保存失败弹窗内就地提示（新建常无会话，底部错误条不可靠）
 - **探索模式锁定占位（`.locked-box`）**：`locked` 时三字段完全不渲染，留"已锁定"说明 +「公开角色设定」按钮；解锁走 `ask()`，文案写明永久不可恢复。解锁成功同时写表单与快照
@@ -488,7 +488,7 @@ event: error  {"message"}                       # 中断发送并结束流
 - **切换模式 Tab**：列表与当前会话一起换，恢复 `activeByMode`，无则清空对话区；生成中禁止切换；聊天/沉浸无角色时显示"创建第一个角色"引导
 
 ### 7.3 前端技术约定
-- **Vue 3 + Vite**：源码 `frontend/`，`npm run build` 产物落 `app/static/`（提交进仓库，运行无需 Node；`start.bat` / `start_desktop.bat` 检测到 Node 顺手重建）
+- **Vue 3 + Vite**：源码 `frontend/`，`npm run build` 产物落 `app/static/`（提交进仓库，运行无需 Node；`start_desktop.bat` 检测到 Node 顺手重建）
 - **文件布局**：`src/store.js` 只是 barrel；逻辑按领域分 `store/` 下（`state`/`helpers`/`api`/`session`/`chat`/`search`/`panel`/`character`/`presets`/`attrs`/`ui`）；`composables/` 放无关具体界面的复用（`maskClose`/`hint`）；`App.vue` 只留布局骨架；`components/` 按区域分（含 `panes/`、`modals/`）
 - **store 依赖星形**：各领域模块只 `import { store } from "./state.js"`，彼此不互相 import（结构上无循环依赖）；跨领域走 `store.xxx`。`let` 声明可变私有状态留在唯一使用它的模块
 - **组件拿状态**：`import { store }`，`toRefs(store)` 暴露模板用到的成员（方法解构用 `const {...} = store`），模板保持裸名字，与单文件原文件逐字一致；漏声明=模板拿 undefined。`tests/test_app_js.py` 守卫"模板引用的 store 成员 ⊆ 声明过的绑定"
@@ -509,7 +509,6 @@ ollama_agent/
 ├── pyproject.toml / uv.lock        # uv 管理：fastapi/uvicorn/httpx/pyyaml
 ├── run.py                          # uv run run.py → 建库 → 确保 Ollama → uvicorn.run；起后开浏览器
 │                                   #   --no-browser 给桌面端用；--lan/--no-lan 切"推送局域网"（8.3）
-├── start.bat                       # 双击启动网页版（GBK 适配中文控制台；顺手重建前端）
 ├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3；GBK 编码，同样重建前端）
 ├── app/
 │   ├── main.py        # FastAPI 实例、静态托管、lifespan 自检

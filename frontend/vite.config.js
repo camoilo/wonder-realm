@@ -3,7 +3,7 @@ import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
 // 构建产物直接落进后端的静态目录（app/static）：main.py 一行都不用改，
-// run.py / start.bat 也不需要 Node——没装 Node 就用仓库里已提交的产物。
+// run.py / start_desktop.bat 也不需要 Node——没装 Node 就用仓库里已提交的产物。
 export default defineConfig({
   plugins: [vue()],
   // 模板都在 .vue 单文件组件里，构建期就编译好了，所以**不需要**再 alias 到带编译器的

@@ -995,22 +995,21 @@ readme = (ROOT / "README.md").read_text(encoding="utf-8")
 shell_js = (ROOT / "desktop" / "main.js").read_text(encoding="utf-8")
 preload_js = (ROOT / "desktop" / "preload.js").read_text(encoding="utf-8")
 
-# 顶栏只留「手机视图」（在主题键旁）；「配置」搬到右侧图标列**最低栏**（rail 底部），
-# 而没有会话时整条图标列不存在（Panel.vue 以 activeSession 为条件）——所以顶栏还留了一个
-# 只在 !activeSession 时出现的兜底 ⚙，否则空状态那一屏就再也进不去配置
-check("顶栏留手机视图键（配置键已搬走）",
+# 顶栏只留「手机视图」（在主题键旁）；「配置」在右侧图标列最低栏。
+# 图标列**常驻**：没有会话时也在（那排标签禁用、⚙ 配置不禁用）——否则空状态那一屏就进不去配置。
+check("顶栏只留手机视图键（配置键已搬走）",
       "收纳成手机视图" in _topbar and 'class="icon-btn desktop-btn"' in _topbar
-      and "togglePhoneView" in _topbar, True)
-check("顶栏兜底配置键只在没有会话时出现",
-      _topbar.count('v-if="isDesktop && !desktopPhoneView && !activeSession"') == 1
-      and _topbar.count('aria-label="配置"') == 1, True)
+      and "togglePhoneView" in _topbar and 'aria-label="配置"' not in _topbar, True)
+check("图标列常驻、内容区按需挂载",
+      'class="panel-rail"' in _panel and '<div class="panel-box" v-if="activeSession">' in _panel, True)
+check("没有会话时标签禁用、⚙ 配置仍可用",
+      ':disabled="!activeSession"' in _panel and 'class="rail-btn rail-config"' in _panel
+      and ".rail-btn:disabled {" in css, True)
 check("配置键在图标列最低栏（margin-top:auto 顶到底）",
-      'class="rail-btn rail-config"' in _panel
-      and ".rail-config { margin-top: auto; }" in css, True)
-check("面板挂在图标列左下（无会话时挂顶栏）",
+      ".rail-config { margin-top: auto; }" in css, True)
+check("配置面板挂在图标列左下",
       '<ConfigPanel v-if="isDesktop && !desktopPhoneView && desktopConfigOpen" class="at-rail" />' in _panel
-      and ('<ConfigPanel v-if="isDesktop && !desktopPhoneView && !activeSession '
-           '&& desktopConfigOpen" />') in _topbar, True)
+      and "toggleDesktopConfig" in _panel, True)
 check("配置面板内容齐全（开关 / 状态 / 二维码 / 地址 / 手机视图 / 防火墙 / 日志）",
       all(k in _config for k in ('class="dc-switch"', 'class="dc-status"', 'class="dc-qr"',
                                  'class="dc-url"', 'class="dc-label"', "togglePhoneView",
@@ -1069,6 +1068,10 @@ check("壳会丢掉脏的桌面尺寸",
 # 隐藏窗口里 CSS 过渡不会自己推进：量抽屉归位前必须轮询
 check("自检等抽屉归位再量命中",
       "side.getBoundingClientRect().x < -100" in shell_js, True)
+# 壳必须和后端同一个端口：换端口是用户在 config.yaml 里做的，所以壳也读它
+check("壳的端口跟着 config.yaml 走",
+      "function backendPort()" in shell_js and 'match(/^\\s*port:\\s*(\\d+)/m)' in shell_js
+      and "process.env.DSH_PORT" in shell_js, True)
 # 启动一律桌面视图：手机视图是临时预览态，让下次启动变成手机样子只会让人以为坏了
 check("启动不沿用上次的手机视图",
       "if (prefs.phoneView) setPhoneView(true)" not in shell_js

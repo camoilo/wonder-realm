@@ -60,19 +60,7 @@
             <rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/>
           </svg>
         </button>
-        <!-- 没有会话时右侧图标列整块不存在（Panel.vue 以 activeSession 为条件），
-             配置就没人能打开了 —— 所以这一屏把 ⚙ 留在顶栏当兜底 -->
-        <button v-if="isDesktop && !desktopPhoneView && !activeSession" class="icon-btn desktop-btn"
-                :class="{on: desktopConfigOpen}"
-                v-hint="'配置（局域网推送、手机扫码、日志）'" aria-label="配置"
-                :aria-expanded="desktopConfigOpen" @click="toggleDesktopConfig">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="12" cy="12" r="3.4"/>
-            <path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.3 5.3l2.2 2.2M16.5 16.5l2.2 2.2M18.7 5.3l-2.2 2.2M7.5 16.5l-2.2 2.2"/>
-          </svg>
-        </button>
       </div>
-      <ConfigPanel v-if="isDesktop && !desktopPhoneView && !activeSession && desktopConfigOpen" />
       <!-- 手机端三个入口：放大镜（折叠搜索条）+ 面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
            桌面断点由 CSS 隐藏 -->
       <button class="icon-btn mobile-search-btn" aria-label="搜索当前会话" @click="toggleSearch">
@@ -122,7 +110,6 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, toRefs } from "vue";
-import ConfigPanel from "./ConfigPanel.vue";
 import { store, MODES } from "../store.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）

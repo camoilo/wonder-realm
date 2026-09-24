@@ -1,8 +1,11 @@
 <template>
-<aside class="panel" :class="{collapsed: panelCollapsed, 'mobile-open': mobilePanelOpen}" v-if="activeSession">
+<!-- 图标列（.panel-rail）**常驻**：没有会话时它也在这里，只是上面那排标签禁用 ——
+     否则"配置"（局域网 / 手机扫码 / 日志）在空状态下就找不到了。
+     内容区（.panel-box）仍只在该有内容时才挂载：里面的标签页会读 activeSession。 -->
+<aside class="panel" :class="{collapsed: panelCollapsed, 'mobile-open': mobilePanelOpen}">
     <!-- 内容面板：点图标滑出/收起。滚动容器只包住标签内容，
          "未保存 / 还原" 与保存键在它外面（见 .panel-footer） -->
-    <div class="panel-box">
+    <div class="panel-box" v-if="activeSession">
       <div class="panel-body">
         <div class="panel-tab-pane" v-show="panelTab === 'gen'">
         <GenPane />
@@ -39,14 +42,16 @@
       </div>
     </div>
 
-    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起时也可见。
+    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起、甚至没打开会话时也在这里。
          点某个图标展开对应面板，再点当前激活图标收起。悬停显示文字提示。
-         最下面那个 ⚙ 是桌面端「配置」（局域网 / 手机扫码 / 日志），用 margin-top:auto 顶到底部；
-         网页端与手机浏览器没有 window.dshDesktop，它不渲染（见 DEVELOPMENT §3.3） -->
+         没有会话时这排标签禁用（内容区也不挂载），但最下面那个 ⚙ 照样能用：
+         桌面端「配置」（局域网 / 手机扫码 / 日志）不能因为没有会话就进不去。
+         网页端与手机浏览器没有 window.dshDesktop，⚙ 不渲染（见 DEVELOPMENT §3.3） -->
     <div class="panel-rail">
       <button v-for="t in visibleTabs" :key="t.key" class="rail-btn"
               :class="{on: !panelCollapsed && panelTab === t.key}"
-              v-hint="tabLabel(t)" :aria-label="tabLabel(t)"
+              :disabled="!activeSession"
+              v-hint="tabHint(t)" :aria-label="tabLabel(t)"
               :aria-pressed="!panelCollapsed && panelTab === t.key"
               @click="onRailClick(t.key)">
         <span class="rail-svg" v-html="t.icon"></span>
@@ -105,6 +110,10 @@ function tabVisible(t) {
 }
 function tabLabel(t) {
   return t.key === "memory" ? (store.memoryScope?.label || "记忆") : t.label;
+}
+// 没有会话时标签是禁用的，提示里说清原因（别让人以为界面坏了）
+function tabHint(t) {
+  return store.activeSession ? tabLabel(t) : `${t.label}（先打开一个会话）`;
 }
 function tabDirty(t) {
   switch (t.key) {

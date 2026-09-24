@@ -4,8 +4,8 @@ rem 双击启动电脑端（Electron 外壳）。首次使用前先在项目根目录执行一次：
 rem   npm install --prefix desktop
 rem 依赖装好后，这个窗口会一直开着；关掉它等于关掉应用（后端与窗口一起退出）。
 cd /d "%~dp0"
-rem 本文件必须是 GBK 编码 + CRLF：cmd 在 65001 代码页下读多字节 bat 会按字节错位解析，
-rem 把半行中文当命令执行（这条踩过两次），所以不用 chcp 65001 而用 936。
+rem 本文件是 GBK 编码 + CRLF，前面用 chcp 936：这样下面这些中文提示在本机控制台显示正常。
+rem 但 Electron 的输出是 UTF-8 字节，936 控制台会显示成乱码 —— 所以启动前会再切到 65001（见文件末尾）。
 
 rem 依赖检查：npm 说"装好了"不等于真装好 —— electron 的 postinstall 还要另下 110MB，
 rem 国内直连 GitHub 常卡住或被打断，结果就是 node_modules 在、dist\electron.exe 不在。
@@ -43,5 +43,10 @@ if exist "frontend\node_modules" (
 )
 
 echo 启动电脑端…
+rem 下面一行把控制台切到 UTF-8：Electron 的输出是 UTF-8 字节，在 936 控制台里会显示成
+rem "鍚姩鍚庣"这种乱码（真踩过；日志文件本身是好的，乱的只是终端显示）。
+rem 注意：**从这里往下，本文件余下的行必须全是 ASCII** —— cmd 在 65001 代码页下读多字节
+rem 内容会按字节偏移错位解析、把半行中文当命令执行（也踩过），所以中文只能写在它前面。
+chcp 65001 >nul
 "desktop\node_modules\electron\dist\electron.exe" desktop
 if errorlevel 1 pause

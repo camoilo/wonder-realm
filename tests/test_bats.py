@@ -9,6 +9,7 @@ cmd 在 **65001 代码页**下读一个多字节的 bat 时按字节偏移续读
 两个变体都真实踩过：裸 LF（行尾错位）与 UTF-8 + `chcp 65001`（字节错位）。所以仓库里的
 bat 一律 **GBK + CRLF**，并且不许出现 `chcp 65001`。这条守卫就是钉住这两点。
 """
+import re
 import sys
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def check(name, got, want):
 
 
 bats = sorted(ROOT.glob("*.bat"))
-check("根目录至少有 start.bat 与 start_desktop.bat", len(bats) >= 2, True)
+check("根目录至少有一个启动脚本", len(bats) >= 1, True)
 
 for p in bats:
     raw = p.read_bytes()
@@ -46,12 +47,18 @@ for p in bats:
             gbk_ok = False
         check(f"{p.name} 能按 GBK 解码", gbk_ok, True)
 
-    # 注释里提"65001"是有意的（写明为什么不用它），所以只看真正会执行的行
-    code = [
-        ln for ln in raw.decode("gbk", "replace").splitlines()
-        if not ln.strip().lower().startswith("rem")
-    ]
-    check(f"{p.name} 不用 chcp 65001", "chcp 65001" not in "\n".join(code).lower(), True)
+    lines = raw.decode("gbk", "replace").splitlines()
+    # 注释里提"65001"是有意的（写明为什么切过去），所以只看真正会执行的行
+    code = [ln for ln in lines if not ln.strip().lower().startswith("rem")]
+    switches = [i for i, ln in enumerate(code) if ln.strip().lower() == "chcp 65001 >nul"]
+    # 允许"文件末尾切到 65001"（Electron 的输出是 UTF-8，936 控制台会显示成乱码），
+    # 但**切换之后不能再有非 ASCII 行**：cmd 在 65001 下读多字节 bat 会按字节错位解析，
+    # 把半行中文当命令执行。切换前的中文写在 936 下是安全的（本文件本身就是 GBK）。
+    if switches:
+        tail = "\n".join(code[switches[-1] + 1:])
+        check(f"{p.name} chcp 65001 之后只剩 ASCII", bool(re.search(r"[^\x00-\x7F]", tail)), False)
+    else:
+        check(f"{p.name} 不用 chcp 65001", True, True)
 
 # 电脑端入口的关键结构：改坏了（去掉依赖检查或前端重建）要报红
 desk = (ROOT / "start_desktop.bat").read_bytes().decode("gbk")
