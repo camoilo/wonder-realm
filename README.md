@@ -317,7 +317,7 @@ data_dir: ./data                  # 数据库目录
 
 ## 测试
 
-十三个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py`、`test_attrs.py`、`test_lan_gate.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
+十四个纯 Python 测试 + 三个 Node 测试，都不需要启动服务（`test_character_gen.py`、`test_profile.py`、`test_world.py`、`test_attrs.py`、`test_lan_gate.py` 会临时建库，不碰 `data/`）。**最下面那三个 Node 测试需要先装一次前端依赖**（它们直接 import 前端源码，那份逻辑依赖 Vue）：
 
 ```powershell
 uv run python tests/test_thinkfilter.py    # 流式 <think> 过滤状态机
@@ -349,7 +349,7 @@ ollama_agent/
 ├── pyproject.toml          # 依赖声明（uv.lock 锁定版本）
 ├── run.py                  # 启动入口（--no-browser 给桌面端，--lan/--no-lan 切"推送局域网"）
 ├── start.bat               # 双击启动：起服务并自动开浏览器（GBK 编码，适配中文控制台）
-├── start_desktop.bat       # 双击启动电脑端（Electron 外壳，需先 npm install --prefix desktop；同样顺手重建前端）
+├── start_desktop.bat       # 双击启动电脑端（Electron 外壳，需先 npm install --prefix desktop；GBK 编码，同样顺手重建前端）
 ├── desktop/                # 电脑端外壳：main.js / preload.js（依赖装到 desktop/node_modules，不入库）
 ├── app/
 │   ├── main.py             # FastAPI 实例、静态托管、启动自检

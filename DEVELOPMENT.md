@@ -505,7 +505,7 @@ ollama_agent/
 ├── run.py                          # uv run run.py → 建库 → 确保 Ollama → uvicorn.run；起后开浏览器
 │                                   #   --no-browser 给桌面端用；--lan/--no-lan 切"推送局域网"（8.3）
 ├── start.bat                       # 双击启动网页版（GBK 适配中文控制台；顺手重建前端）
-├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3；同上重建前端）
+├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3；GBK 编码，同样重建前端）
 ├── app/
 │   ├── main.py        # FastAPI 实例、静态托管、lifespan 自检
 │   ├── config.py      # 配置加载合并
@@ -640,14 +640,15 @@ data_dir: ./data                  # 直接指定
 - 源码 `frontend/`、产物提交 `app/static/`：改源码必须 `npm run build`，产物别手改
 
 ### 9.8 测试与验证
-- **清单**：12 个纯 Python + 3 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`，需先装前端依赖）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
+- **清单**：14 个纯 Python + 3 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`，需先装前端依赖）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
 - **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、模式介绍浮层、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件；新结构约定顺手补断言
+- **启动脚本的编码约定也上守卫**（`test_bats.py`）：根目录 `*.bat` 必须 CRLF、GBK 编码、可执行行里不许有 `chcp 65001`，并钉住电脑端入口的三处结构（查 `electron.exe` 本体、两种缺失各一条提示、顺手重建前端）
 - **后端"闸门/边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机——网络来源相关的规则都照这个套路测
 - **壳（Electron）用自带的自检**：`electron . --selftest` 起后端 + 开隐藏窗口，验证 preload 桥接与"手机视图真的把页面缩进 640px"，全程不弹窗
 - **守卫反向验证**：故意删被保护的东西确认报红（"碰巧通过"≠"抓得住"）
 - 界面改动要真渲染证据：dev（Vue 警告开）+ 生产产物各跑一遍，控制台零 warning/error；涉及函数名/导入/绑定**只跑构建会漏**
 - 探针：`MutationObserver` 挂载（`--virtual-time-budget` 下定时器抢跑）；每步等状态稳定；收尾只执行一次（否则不空闲、浏览器不退）；查倍数用"接口条数−DOM 数"
-- 环境：Windows 控制台 GBK，别打印 `✕` `‹` `›`；**`.bat` 一律 CRLF**（裸 LF 会让 cmd 按字节偏移错位解析，把半行中文当命令执行，且报错指向莫名其妙的位置）；沙箱 Vite 构建/npm install（缓存放工作区）/headless Chrome 需放宽权限
+- 环境：Windows 控制台 GBK，别打印 `✕` `‹` `›`；**`.bat` 一律 GBK 编码 + CRLF，且不许 `chcp 65001`**——cmd 在 65001 代码页下读多字节 bat 会按字节偏移错位解析，从半行中间当命令执行（UTF-8 + `chcp 65001`、GBK + 裸 LF 两个变体都真踩过，`test_bats.py` 有守卫）；沙箱 Vite 构建/npm install（缓存放工作区）/headless Chrome 需放宽权限
 - **只杀自己启动的浏览器**：探针 `Start-Process -PassThru` 拿 PID、`-Wait` 等退出，清理只 `taskkill /PID /T`；**绝不按进程名/启动时间筛 chrome**（会连用户浏览器渲染进程一起杀）
 - 改后端要重启应用（无 `--reload`）；改前端重新构建 + 刷新
 

@@ -1,45 +1,47 @@
 @echo off
-chcp 65001 >nul
-rem åŒå‡»å¯åŠ¨ç”µè„‘ç«¯ï¼ˆElectron å¤–å£³ï¼‰ã€‚é¦–æ¬¡ä½¿ç”¨å‰å…ˆåœ¨é¡¹ç›®æ ¹ç›®å½•æ‰§è¡Œä¸€æ¬¡ï¼š
+chcp 936 >nul
+rem Ë«»÷Æô¶¯µçÄÔ¶Ë£¨Electron Íâ¿Ç£©¡£Ê×´ÎÊ¹ÓÃÇ°ÏÈÔÚÏîÄ¿¸ùÄ¿Â¼Ö´ĞĞÒ»´Î£º
 rem   npm install --prefix desktop
-rem ä¾èµ–è£…å¥½åï¼Œè¿™ä¸ªçª—å£ä¼šä¸€ç›´å¼€ç€ï¼›å…³æ‰å®ƒç­‰äºå…³æ‰åº”ç”¨ï¼ˆåç«¯ä¸çª—å£ä¸€èµ·é€€å‡ºï¼‰ã€‚
+rem ÒÀÀµ×°ºÃºó£¬Õâ¸ö´°¿Ú»áÒ»Ö±¿ª×Å£»¹ØµôËüµÈÓÚ¹ØµôÓ¦ÓÃ£¨ºó¶ËÓë´°¿ÚÒ»ÆğÍË³ö£©¡£
 cd /d "%~dp0"
+rem ±¾ÎÄ¼ş±ØĞëÊÇ GBK ±àÂë + CRLF£ºcmd ÔÚ 65001 ´úÂëÒ³ÏÂ¶Á¶à×Ö½Ú bat »á°´×Ö½Ú´íÎ»½âÎö£¬
+rem °Ñ°ëĞĞÖĞÎÄµ±ÃüÁîÖ´ĞĞ£¨ÕâÌõ²È¹ıÁ½´Î£©£¬ËùÒÔ²»ÓÃ chcp 65001 ¶øÓÃ 936¡£
 
-rem ä¾èµ–æ£€æŸ¥ï¼šnpm è¯´"è£…å¥½äº†"ä¸ç­‰äºçœŸè£…å¥½ â€”â€” electron çš„ postinstall è¿˜è¦å¦ä¸‹ 110MBï¼Œ
-rem å›½å†…ç›´è¿ GitHub å¸¸å¡ä½æˆ–è¢«æ‰“æ–­ï¼Œç»“æœå°±æ˜¯ node_modules åœ¨ã€dist\electron.exe ä¸åœ¨ã€‚
-rem æ‰€ä»¥è¿™é‡ŒæŸ¥çš„æ˜¯é‚£ä¸ªå¯æ‰§è¡Œæ–‡ä»¶æœ¬èº«ï¼Œç¼ºäº†å°±åˆ†ä¸¤ç§æƒ…å†µç»™å‡ºå„è‡ªè¯¥è·‘çš„å‘½ä»¤ã€‚
+rem ÒÀÀµ¼ì²é£ºnpm Ëµ"×°ºÃÁË"²»µÈÓÚÕæ×°ºÃ ¡ª¡ª electron µÄ postinstall »¹ÒªÁíÏÂ 110MB£¬
+rem ¹úÄÚÖ±Á¬ GitHub ³£¿¨×¡»ò±»´ò¶Ï£¬½á¹û¾ÍÊÇ node_modules ÔÚ¡¢dist\electron.exe ²»ÔÚ¡£
+rem ËùÒÔÕâÀï²éµÄÊÇÄÇ¸ö¿ÉÖ´ĞĞÎÄ¼ş±¾Éí£¬È±ÁË¾Í·ÖÁ½ÖÖÇé¿ö¸ø³ö¸÷×Ô¸ÃÅÜµÄÃüÁî¡£
 if not exist "desktop\node_modules\electron\dist\electron.exe" (
   if exist "desktop\node_modules" (
-    echo [X] ä¾èµ–ç›®å½•åœ¨ï¼Œä½† electron æœ¬ä½“ç¼ºå¤±ï¼špostinstall æ²¡è·‘å®Œæˆ–ä¸­é€”è¢«æ‰“æ–­ã€‚
+    echo [X] ÒÀÀµÄ¿Â¼ÔÚ£¬µ« electron ±¾ÌåÈ±Ê§£ºpostinstall Ã»ÅÜÍê»òÖĞÍ¾±»´ò¶Ï¡£
   ) else (
-    echo [X] è¿˜æ²¡æœ‰å®‰è£…ç”µè„‘ç«¯ä¾èµ–ã€‚
+    echo [X] »¹Ã»ÓĞ°²×°µçÄÔ¶ËÒÀÀµ¡£
   )
   echo.
-  echo     åœ¨æœ¬ç›®å½•æ‰§è¡Œè¿™ä¸¤æ¡ï¼ˆç¬¬äºŒæ¡æ˜¯å›½å†…é•œåƒï¼Œçœæ‰å¡åœ¨ GitHub ä¸Šï¼‰ï¼š
+  echo     ÔÚ±¾Ä¿Â¼Ö´ĞĞÕâÁ½Ìõ£¨µÚ¶şÌõÊÇ¹úÄÚ¾µÏñ£¬Ê¡µô¿¨ÔÚ GitHub ÉÏ£©£º
   echo         set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
   echo         npm install --prefix desktop
   echo.
-  echo     è£…å®Œå…ˆç¡®è®¤è¿™æ¡èƒ½æ‰“å°ç‰ˆæœ¬å·ï¼Œå†åŒå‡»æœ¬æ–‡ä»¶ï¼š
+  echo     ×°ÍêÏÈÈ·ÈÏÕâÌõÄÜ´òÓ¡°æ±¾ºÅ£¬ÔÙË«»÷±¾ÎÄ¼ş£º
   echo         desktop\node_modules\electron\dist\electron.exe --version
   echo.
-  echo     ï¼ˆå®‰è£…æ—¶å‡ºç° allow-scripts è­¦å‘Šå¯ä»¥å¿½ç•¥ï¼Œè„šæœ¬ä»ä¼šæ‰§è¡Œã€‚ï¼‰
+  echo     £¨°²×°Ê±³öÏÖ allow-scripts ¾¯¸æ¿ÉÒÔºöÂÔ£¬½Å±¾ÈÔ»áÖ´ĞĞ¡££©
   pause
   exit /b 1
 )
 
-rem å‰ç«¯æ˜¯ Vue 3 + Vite æ„å»ºçš„ï¼šè£…äº† Node ä¸” npm install è¿‡å°±é¡ºæ‰‹é‡å»ºä¸€æ¬¡ï¼ˆçº¦ 1 ç§’ï¼‰ï¼Œ
-rem å¦åˆ™ç›´æ¥ç”¨ä»“åº“é‡Œå·²æäº¤çš„æ„å»ºäº§ç‰© â€”â€” æ²¡è£… Node ä¹Ÿèƒ½ç…§å¸¸å¯åŠ¨ã€‚
-rem åˆ¤æ–­ä¸ start.bat å®Œå…¨ä¸€è‡´ï¼Œæ”¹å®Œå‰ç«¯ç›´æ¥åŒå‡»è¿™ä¸ªå°±èƒ½çœ‹åˆ°æ•ˆæœã€‚
+rem Ç°¶ËÊÇ Vue 3 + Vite ¹¹½¨µÄ£º×°ÁË Node ÇÒ npm install ¹ı¾ÍË³ÊÖÖØ½¨Ò»´Î£¨Ô¼ 1 Ãë£©£¬
+rem ·ñÔòÖ±½ÓÓÃ²Ö¿âÀïÒÑÌá½»µÄ¹¹½¨²úÎï ¡ª¡ª Ã»×° Node Ò²ÄÜÕÕ³£Æô¶¯¡£
+rem ÅĞ¶ÏÓë start.bat ÍêÈ«Ò»ÖÂ£¬¸ÄÍêÇ°¶ËÖ±½ÓË«»÷Õâ¸ö¾ÍÄÜ¿´µ½Ğ§¹û¡£
 if exist "frontend\node_modules" (
   where node >nul 2>nul
   if not errorlevel 1 (
-    echo æ­£åœ¨é‡å»ºå‰ç«¯ ...
+    echo ÕıÔÚÖØ½¨Ç°¶Ë ...
     pushd frontend
     call npm run build
     popd
   )
 )
 
-echo å¯åŠ¨ç”µè„‘ç«¯â€¦
+echo Æô¶¯µçÄÔ¶Ë¡­
 "desktop\node_modules\electron\dist\electron.exe" desktop
 if errorlevel 1 pause
