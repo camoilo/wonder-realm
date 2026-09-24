@@ -219,6 +219,8 @@ flowchart LR
 
 **入口脚本 `start_desktop.bat`**（8.1）：先按与 `start.bat` 完全相同的判断重建一次前端（装了 Node 且 `frontend/node_modules` 在），再拉起 `electron.exe desktop`。窗口与它起的后端都挂在那个 cmd 窗口下，**关掉 cmd 窗口等于关掉应用**——所以它双击后"只有一行提示、看着像卡住"是正常的，界面窗口由 Electron 单独弹出。
 
+**依赖安装的真实坑**（踩过）：`desktop` 只有 electron 一个依赖，但它的 `postinstall` 要另下约 110MB 运行时、解压出 268MB（73 个文件）。国内直连 GitHub 容易卡住或被打断，结果就是"`npm install` 报成功、`node_modules` 也在，唯独 `electron.exe` 没下来"。所以入口脚本的依赖检查落在 `node_modules/electron/dist/electron.exe` 这个**文件**上（不是目录），并把"目录都没有"与"目录在、本体缺"分成两种提示、各自给出命令；装前先 `set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`，装后用 `…\electron.exe --version` 验证。npm 11 的 `allow-scripts` 警告（`electron@33.4.11 (postinstall: node install.js)` 未审批）**只是警告**，实测脚本照跑，不必理会——`npm approve-scripts` 在这里反而会往 `package.json` 塞一个空的 `allowScripts: {}`，已还原。zip 缓存在 `%LOCALAPPDATA%\electron\Cache`，补装通常几秒。**另外记一笔未定位的怪事**：2026-09-24 早上发现整棵 `desktop/node_modules` 在无人操作的情况下消失了（目录 mtime 指向前一晚跑过一次 `start_desktop.bat` 的时刻，壳本身没有任何删文件代码），怀疑是前一晚被中途 kill 掉的 `npm install` 残留进程事后回滚；若再复现，先看 `%LOCALAPPDATA%\npm-cache\_logs` 里最新的日志。
+
 ### 3.4 启动流程与 Ollama 自启
 
 `run.py` 的顺序：**留备份 → 探端口（已在监听就只开浏览器、不起第二个）→ 确保 Ollama 可用 → 开浏览器 → 起 uvicorn**。先确保 Ollama 再开浏览器是有意的：界面一加载就要拉模型列表，不等它就绪的话首屏会闪一句"无法连接 Ollama"。

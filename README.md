@@ -214,13 +214,13 @@ npm run dev            # http://127.0.0.1:5173，/api 自动代理到 17800
 除了"开浏览器用"，也可以把它当**电脑端应用**用：界面与网页版**完全一样**，只多两个键。
 
 ```bat
-npm install --prefix desktop      :: 只需一次（下载 Electron 运行时，约 100MB）
+npm install --prefix desktop      :: 只需一次（下载 Electron 运行时，约 110MB）
 start_desktop.bat                 :: 以后双击这个就行
 ```
 
 双击 `start_desktop.bat` 时会像 `start.bat` 那样**顺手重建一次前端**（判断逻辑完全一致：装了 Node 且 `frontend/node_modules` 在才做），所以改完前端直接双击它就能看到效果。
 
-下载慢的话加个国内镜像：`set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 再执行上面那条 `npm install`。
+下载慢的话加个国内镜像：`set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 再执行上面那条 `npm install`。装完建议确认一下 `desktop\node_modules\electron\dist\electron.exe --version` 能打印版本号（能打印才算装全）；zip 会缓存在 `%LOCALAPPDATA%\electron\Cache`，所以之后补装/重装通常只要几秒。
 
 多出来的两个键在顶栏右侧：
 
@@ -411,6 +411,9 @@ Ollama 没启动或端口不对。启动应用时会自动尝试拉起它（见�
 
 **手机连不上（打不开 `http://192.168.x.x:17800`）**
 依次查：① 手机与电脑在同一个 WiFi（公司/学校网络常禁止设备互访，换手机热点试）；② **「推送局域网」开关是不是开着**（电脑端顶栏 ⚙ 配置；命令行用户用 `run.py --lan`）——它默认关，这是最常见的原因；③ Windows 防火墙放行了入站 TCP 17800（管理员 PowerShell 执行上文那条 `netsh` 命令）；④ 地址抄错了——电脑端「配置」面板里给出的那个地址最准（也可以自己在电脑上 `ipconfig` 取 IPv4）。
+
+**双击 `start_desktop.bat` 提示要装依赖（可明明装过）**
+它检查的是 `desktop\node_modules\electron\dist\electron.exe` 这个**文件**，不是 `node_modules` 目录。electron 装完还要另外下约 110MB 的运行时，国内直连 GitHub 常卡住或被打断，于是出现"目录在、本体没下来"这种半装状态——按提示里那两条命令重装一次即可（先设镜像）。`npm install` 输出里的 `allow-scripts` 警告可以忽略，脚本仍会执行。
 
 **数据库误删了 / 想回到几天前的状态**
 去 `backups/` 里挑一份时间合适的备份，按上面"数据与备份"里的恢复步骤换回去即可（每次启动都会自动备一份，保留最近 14 天）。
