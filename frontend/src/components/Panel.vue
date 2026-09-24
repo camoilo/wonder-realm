@@ -43,21 +43,22 @@
       </div>
     </div>
 
-    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起时也在。
-         点某个图标展开对应面板，再点当前激活图标收起。悬停显示文字提示。
-         **没打开会话时一个图标都不显示**（只留这条空着的竖条，位置不挪，整排禁用）；
-         选了会话就照旧按模式显示该有的那几个（图标本来就按模式隔离，能出现的就会用到，
-         所以不做"置灰"。「配置」不在这里，它在窗口标题栏，见 DEVELOPMENT 3.3）。 -->
+    <!-- 竖排图标栏（icon rail）：常驻最右——面板收起时也在，宽度也留着。
+         **没打开会话时整排连按钮都不渲染**（只留这条空竖条）：否则那些空按钮还会冒悬浮提示、
+         第一个还会带上"当前页"的紫色底，看着像坏了。选了会话才按模式显示该有的那几个图标
+         （图标本来就按模式隔离，能出现的就会用到，所以不置灰）。「配置」不在这里，
+         它在窗口标题栏（见 DEVELOPMENT 3.3）。 -->
     <div class="panel-rail">
-      <button v-for="t in railTabs" :key="t.key" class="rail-btn"
-              :class="{on: !panelCollapsed && panelTab === t.key, blank: !activeSession}"
-              :disabled="!activeSession"
-              v-hint="tabHint(t)" :aria-label="tabLabel(t)"
-              :aria-pressed="!panelCollapsed && panelTab === t.key"
-              @click="onRailClick(t.key)">
-        <span v-if="activeSession" class="rail-svg" v-html="t.icon"></span>
-        <span v-if="activeSession && tabDirty(t)" class="tab-dot"></span>
-      </button>
+      <template v-if="activeSession">
+        <button v-for="t in railTabs" :key="t.key" class="rail-btn"
+                :class="{on: !panelCollapsed && panelTab === t.key}"
+                v-hint="tabLabel(t)" :aria-label="tabLabel(t)"
+                :aria-pressed="!panelCollapsed && panelTab === t.key"
+                @click="onRailClick(t.key)">
+          <span class="rail-svg" v-html="t.icon"></span>
+          <span v-if="tabDirty(t)" class="tab-dot"></span>
+        </button>
+      </template>
     </div>
   </aside>
 </template>
@@ -100,14 +101,10 @@ function tabAvailable(t) {
   if (t.key === "memory") return !!store.memoryScope;
   return true;
 }
-// 没打开会话时保留全部五个位置（只是不画图标、整排禁用），免得"开了会话图标才出现"时位置乱跳
-const railTabs = computed(() => (store.activeSession ? tabs.filter(tabAvailable) : tabs));
+// 只显示当前场景用得上的那几个（按钮只在有会话时渲染，见模板）
+const railTabs = computed(() => tabs.filter(tabAvailable));
 function tabLabel(t) {
   return t.key === "memory" ? (store.memoryScope?.label || "记忆") : t.label;
-}
-// 没打开会话时标签是禁用的，提示里说清原因（别让人以为界面坏了）
-function tabHint(t) {
-  return store.activeSession ? tabLabel(t) : `${t.label}（先打开一个会话）`;
 }
 function tabDirty(t) {
   switch (t.key) {

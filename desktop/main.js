@@ -325,14 +325,16 @@ const PAGE_PROBE = `(async () => {
       await tick();
     }
   };
-  // 图标列必须常驻（没有会话时也在），那排标签则在"没有会话"时禁用。会话是不是自动打开的
-  // 不一定，所以不做绝对断言，而是查**两个状态是否自洽**：内容区没挂载 ⇔ 那排标签禁用。
+  // 图标列：没有会话时**一个按钮都不该有**（空按钮会冒悬浮提示、第一个还会带"当前页"的紫底），
+  // 有会话时才按模式渲染那几个；内容区同理（.panel-box 按 activeSession 挂载）。
+  // 会话是不是自动打开的不一定，所以不做绝对断言，而是查两者自洽：
+  // 「有图标按钮」⇔「内容区已挂载」。
   // 「配置」键在**窗口标题栏那一行**（.titlebar），它必须任何时候都在——没会话时也点得到。
   const titlebarEl = document.querySelector('.titlebar');
   const cfgBtnNoSession = !!document.querySelector('.titlebar [aria-label="配置"]');
   const tabBtns = Array.from(document.querySelectorAll('.panel-rail .rail-btn'));
   const boxMounted = !!document.querySelector('.panel-box');
-  const tabsDisabled = tabBtns.length > 0 && tabBtns.every((b) => b.disabled);
+  const tabCount = tabBtns.length;
   // 自绘标题栏：那一行要有 .wco（拖拽区 + 给系统按钮留宽度），留出来的宽度得够放那三个按钮；
   // 拖拽没法交互测，只能看计算样式：行是 drag、里面的窗口键是 no-drag
   const wcoOnTitlebar = !!document.querySelector('.titlebar.wco');
@@ -420,8 +422,8 @@ const PAGE_PROBE = `(async () => {
     noDragBtn,
     reservedRight,
     boxMounted,
-    tabsDisabled,
-    railTabs: tabBtns.length,
+    tabCount,
+    railTabs: tabCount,
     tipRect,
     modeRect: modeRect ? [Math.round(modeRect.x), Math.round(modeRect.y),
                           Math.round(modeRect.width), Math.round(modeRect.height)] : null,
@@ -644,7 +646,7 @@ if (!app.requestSingleInstanceLock()) {
           + `自绘 ${u.wcoOnTitlebar} 右上留白 ${u.reservedRight}px 拖拽 ${u.dragRegion}/${u.noDragBtn} | `
           + `第二行还有窗口键 ${u.topbarHasKeys} 第二行有主题键 ${u.themeInTopbar} | `
           + `图标列标签 ${u.railTabs} 个 无会话时配置键仍在 ${u.cfgBtnNoSession} `
-          + `内容区未挂载 ${!u.boxMounted} 标签禁用 ${u.tabsDisabled} | `
+          + `没会话时图标列按钮 ${u.tabCount} 个 内容区未挂载 ${!u.boxMounted} | `
           + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
         log(`selftest 浮层 | 模式按钮 ${u.modeRect} 介绍浮层 ${u.tipRect} 标题栏下沿 ${u.titlebarBottom}`);
         log(`selftest 尺寸 | 面板 ${u.panelRect} 窗口手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
@@ -663,16 +665,21 @@ if (!app.requestSingleInstanceLock()) {
         if (u.cfgBtnNoSession !== true) bad.push("没有会话时配置键不见了");
         if (u.titlebarTheme !== true) bad.push("壳里的主题键不在标题栏上");
         if (u.panelOpen !== true) bad.push("配置面板点不开");
-        if (!(u.railTabs >= 1)) bad.push("右侧图标列的标签没渲染");
+        // 图标列按钮数由"有没有会话"决定（见上面那条自洽断言），这里不再单独要求 ≥1
         // 第二行是页面自己的工具条：窗口键与主题键都不该再出现在那里
         if (u.topbarHasKeys === true) bad.push("页面工具条里还留着窗口键");
         if (u.themeInTopbar === true) bad.push("壳里第二行还留着主题键（浏览器才有它）");
         // 自绘标题栏：那一行要有 .wco、右上要真的给系统三个按钮留出宽度，且拖拽/非拖拽写对了
         if (WCO) {
           if (u.wcoOnTitlebar !== true) bad.push("标题栏没进自绘模式（.wco）");
-          if (!(u.reservedRight > 100)) bad.push(`右上角没给系统按钮留出宽度（${u.reservedRight}px）`);
           if (u.dragRegion !== "drag") bad.push(`标题栏不是拖拽区（${u.dragRegion}）`);
           if (u.noDragBtn !== "no-drag") bad.push(`标题栏上的窗口键没排除拖拽区（${u.noDragBtn}）`);
+          // 留白靠 env(titlebar-area-*) 算，而这套变量只在窗口真的显示时才给值
+          // （隐藏窗口里取到的是兜底 100vw → 0px）。所以只在设了截图、窗口显示着的时候量它，
+          // 平时由 test_app_js 的静态守卫盯着那条 CSS 表达式。
+          if (win.isVisible() && !(u.reservedRight > 100)) {
+            bad.push(`右上角没给系统按钮留出宽度（${u.reservedRight}px）`);
+          }
         }
         if (!(u.qrInk > 50)) bad.push(`二维码没画出来（暗点 ${u.qrInk}）`);
         if (u.qrDim === u.lanOn) bad.push(`二维码置灰状态与局域网开关不一致（置灰 ${u.qrDim} 开关 ${u.lanOn}）`);
@@ -706,8 +713,9 @@ if (!app.requestSingleInstanceLock()) {
         if (!u.phoneRect || u.phoneRect[2] < 24 || u.phoneRect[3] < 24) bad.push(`手机视图键尺寸不对（${u.phoneRect}）`);
         if (u.phoneHitOk !== true) bad.push(`手机视图键被挡住了（该点最上层 ${u.phoneHit}）`);
         // "内容区没挂载"与"图标列标签禁用"必须一致（没会话时前者不挂载、后者禁用）
-        if (u.tabsDisabled === u.boxMounted) {
-          bad.push(`内容区挂载(${u.boxMounted})与标签禁用(${u.tabsDisabled})不一致`);
+        // 有会话才有图标按钮；没会话时按钮、悬浮提示、那个紫底当前页都不该出现
+        if ((u.tabCount > 0) !== u.boxMounted) {
+          bad.push(`图标列按钮数(${u.tabCount})与内容区挂载(${u.boxMounted})不一致`);
         }
         if (u.labels.indexOf("推送局域网") < 0) bad.push("面板缺推送局域网行");
         // 模式介绍浮层：桌面端要弹在按钮右侧，且不能跟标题栏重叠（原来朝上弹，被标题栏挡住）

@@ -409,7 +409,12 @@ html, body {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  /* 标题区吃掉剩下的宽度：工具条里面的东西换行之后，标题就该把那行的空位用满，
+     而不是像以前那样被 max-width 卡住、旁边明明有空位还打省略号（用户报过） */
+  flex: 1 1 0;
 }
+/* 标题区里除标题本体外都是固定宽度（汉堡、模式标签…），别让它们被压扁 */
+.title-area > * { flex: none; }
 
 .title {
   font-size: 16px;
@@ -419,8 +424,11 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  flex: 1 1 0;     /* 宽度交给这一行分配：隔壁真没地方了才省略号 */
+  min-width: 0;
 }
+/* 重命名时的输入框 + 计数也是这样 */
+.title-counted { flex: 1 1 0; min-width: 0; }
 .title.muted { color: var(--text-soft); cursor: default; }
 
 .title-input {
@@ -1969,8 +1977,7 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 /* 没打开会话时图标列照旧常驻，只是上面那排标签禁用 */
 .rail-btn:disabled { opacity: 0.38; cursor: not-allowed; }
 .rail-btn:disabled:hover { background: transparent; color: var(--text-soft); }
-/* 没打开会话时这排标签只留空位（不画图标），但仍然禁用以示"这里将来会有东西" */
-.rail-btn.blank:disabled { opacity: 1; cursor: default; }
+/* 没打开会话时这排按钮根本不渲染（见 Panel.vue），不用再为"空位"准备样式 */
 .rail-btn.on {
   color: var(--accent-dark);
   background: var(--field);
@@ -2545,7 +2552,7 @@ body { overscroll-behavior: none; }
 
 /* 紧凑桌面（竖屏平板 / 窄窗口）：保留三栏，只收紧顶栏与标题 */
 @media (min-width: 641px) and (max-width: 900px) {
-  .title { max-width: 220px; }
+  /* 标题不再单独封顶：旁边有没有空位交给 flex 判断（见 .title-area 的说明） */
   .toolbar { gap: 8px; }
   .model-select { max-width: 200px; }
 }
@@ -2591,9 +2598,10 @@ body { overscroll-behavior: none; }
     bottom: 0;
     top: auto;
     width: 100%;
-    /* 高度固定（不再随标签内容伸缩）：五个标签页切换时弹层尺寸稳定不跳变 */
-    height: 65vh;
-    max-height: 88vh;
+    /* 高度固定（不再随标签内容伸缩）：五个标签页切换时弹层尺寸稳定不跳变。
+       85vh 是"再高一点"的结果：矮屏上也能一屏看完设定，底部还留着 15vh 看得见对话 */
+    height: 85vh;
+    max-height: 94vh;
     flex-direction: column;
     border-left: none;
     border-top: 1px solid var(--border);
@@ -2632,7 +2640,7 @@ body { overscroll-behavior: none; }
      图标与应用名让位，页面自己的工具条照旧在下面那一行 */
   .titlebar .brand-mark,
   .titlebar .titlebar-name { display: none; }
-  .title { max-width: 38vw; font-size: 15px; }
+  .title { font-size: 15px; }
   .chip { display: none; }
   .toolbar .search-box,
   .toolbar .model-select,
@@ -2645,6 +2653,7 @@ body { overscroll-behavior: none; }
     align-items: center;
     justify-content: center;
     opacity: 1;
+    flex: none;          /* 标题区会吃掉剩余宽度，这几个键的尺寸不能被压缩 */
     width: 36px;
     height: 36px;
     padding: 0;

@@ -63,7 +63,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
       </button>
       <button class="icon-btn mobile-panel-btn" :class="{on: mobilePanelOpen}"
-              v-hint="'打开右侧面板'" aria-label="打开右侧面板"
+              v-hint="'打开控制面板'" aria-label="打开控制面板"
               :aria-pressed="mobilePanelOpen" @click="toggleMobilePanel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
       </button>

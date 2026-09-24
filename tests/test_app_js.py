@@ -1017,20 +1017,29 @@ check("配置面板挂在标题栏下方",
       '<ConfigPanel v-if="!desktopPhoneView && desktopConfigOpen" />' in _titlebar, True)
 check("标题栏横跨整个窗口（在 .app-body 外面）",
       "<TitleBar />" in _comp["App.vue"] and 'class="app-body"' in _comp["App.vue"], True)
-check("图标列只管标签、常驻、没会话时整排空着",
+check("图标列只管标签、常驻，没会话时连按钮都不渲染",
       'class="panel-rail"' in _panel and 'class="rail-btn rail-config"' not in _panel
       and "ConfigPanel" not in _panel
-      # 没会话：位置留着但一个图标都不显示（整排禁用）；有会话：照旧按模式显示该有的那几个
-      # （图标本来就按模式隔离，能出现的就会用到，所以不做"置灰"）
+      # 没会话：整排按钮都不渲染（否则空按钮会冒悬浮提示、第一个还带"当前页"的紫底）；
+      # 有会话：按模式显示该有的那几个（图标本来就按模式隔离，不做"置灰"）
+      and '<template v-if="activeSession">' in _panel
       and 'v-for="t in railTabs"' in _panel
-      and ':disabled="!activeSession"' in _panel
-      and 'v-if="activeSession" class="rail-svg"' in _panel
-      and "store.activeSession ? tabs.filter(tabAvailable) : tabs" in _panel
-      and '<div class="panel-box" v-if="activeSession">' in _panel
-      and ".rail-btn.blank:disabled {" in css, True)
+      and "const railTabs = computed(() => tabs.filter(tabAvailable));" in _panel
+      and '<div class="panel-box" v-if="activeSession">' in _panel, True)
 # 没打开会话时内容区不挂载，图标列不该继续占着 330px 空白（只在桌面断点收窄）
 check("没有会话时右侧不该留大片空白",
       "'no-session': !activeSession" in _panel and ".panel.no-session { width: var(--rail-w); }" in css, True)
+# 初始化顺序：设置（当前模型）必须在模型列表之前读 —— loadModels() 里那句"还没有选择模型"
+# 是拿 currentModel 比的，反过来会把"已经选过模型"误报成没选（真踩过，用户当场发现）
+check("先读设置再拉模型列表",
+      js.index('await this.api("/api/settings")') < js.index("await this.loadModels()"), True)
+# 打开会话就把右侧面板展开（面板收起时点会话，多半是想接着改设定）
+check("打开会话会展开右侧面板", "this.panelCollapsed = false;" in js, True)
+# 顶栏标题：旁边真有空位就别打省略号（工具条换行后标题该用满那一行）
+check("标题宽度交给 flex 分配",
+      "flex: 1 1 0;" in css_block(".title-area") and "flex: 1 1 0;" in css_block(".title")
+      and "max-width: 320px;" not in css_block(".title")
+      and "max-width: 220px" not in css and "max-width: 38vw" not in css, True)
 # 自绘标题栏：三条约束缺一不可——壳开 titleBarOverlay、标题栏进 .wco（拖拽区 + 让出右上角）、
 # 高度常量与 CSS 变量同值（不同值系统三键就会跟页面按钮错开）
 check("壳开了自绘标题栏",
@@ -1158,7 +1167,9 @@ check("放大镜与更多入口在", 'mobile-search-btn' in _tb and 'mobile-more
 # 面板有顶栏直达入口（不再只藏在更多菜单里）+ 弹层固定高度（标签切换不跳变）
 check("顶栏有面板直达按钮", 'class="icon-btn mobile-panel-btn"' in _tb
       and "toggleMobilePanel" in _tb and "mobilePanelOpen" in _tb, True)
-check("弹层手机端固定高度", "height: 65vh;" in _mobile, True)
+check("手机端这个键的提示叫「控制面板」", "打开控制面板" in _tb
+      and "打开右侧面板" not in _tb, True)
+check("弹层手机端固定高度（85vh，矮屏也够用）", "height: 85vh;" in _mobile, True)
 check("折叠搜索条在（只保留输入/清空/计数，↑↓ 不重复）",
       'class="mobile-search"' in _tb and "mobileSearchOpen" in _tb, True)
 check("更多菜单收纳模型/思考/主题", 'class="mobile-more"' in _tb

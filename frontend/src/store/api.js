@@ -119,8 +119,8 @@ Object.assign(store, {
     } catch (e) {
       /* 拿不到就用空值 */
     }
-    // 模型列表：失败只记一句提示，不带走整个初始化（顶栏那个"重试"也走同一个方法）
-    await store.loadModels();
+    // 设置（当前模型 / 思考开关 / 局域网开关）要在模型列表**之前**读：loadModels() 里那句
+    // "还没有选择模型"是拿 currentModel 比的，先拉列表就会把"已经选过模型"误报成没选（踩过）
     try {
       const s = await store.api("/api/settings");
       store.currentModel = s.model;
@@ -131,6 +131,8 @@ Object.assign(store, {
       // 设置读不到（例如库文件被删）不该带走整个初始化：下面的角色/会话照常拉
       failed.push({ label: "设置", msg: e.message });
     }
+    // 模型列表：失败只记一句提示，不带走整个初始化（顶栏那个"重试"也走同一个方法）
+    await store.loadModels();
     // 角色/会话/生成表单也各自容错：任何一个失败都不再让 init 抛出去
     // （initApp 没有 await 它，抛出来只会变成静默的 unhandledrejection）
     try {
