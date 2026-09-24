@@ -95,13 +95,66 @@ check("非本机地址不认",
 # ---- 7. 文案与配置 ----
 check("每种状态都有给人看的文案",
       [bool(ollama_boot.report(s, "http://localhost:11434")) for s in (
-          "running", "started", "started-timeout", "skipped-disabled", "skipped-remote",
-          "skipped-missing")], [True] * 6)
+          "running", "started", "started-timeout", "blocked-port", "serve-exited",
+          "skipped-disabled", "skipped-remote", "skipped-missing")], [True] * 8)
 check("没装 Ollama 的提示里给出下载地址",
       "ollama.com/download" in ollama_boot.report("skipped-missing", "http://localhost:11434"), True)
+check("端口被占 / 起不来时指向那份日志",
+      all("ollama-serve.log" in ollama_boot.report(s, "http://localhost:11434")
+          for s in ("blocked-port", "serve-exited")), True)
 check("配置默认开启自启", load_config()["ollama"]["auto_start"], True)
 
-# ---- 8. 真探针在本机跑一遍（只读：Ollama 在跑就该返回 True）----
+# ---- 8. 探针地址：localhost 要再探一次 127.0.0.1 ----
+# （有些环境 localhost 先解析到 ::1，而 Ollama 只听 IPv4 —— 那时会"明明在跑却被判成没跑"，
+#   于是白白去拉一次、还撞上端口占用）
+check("localhost 会补探 IPv4",
+      ollama_boot._ping_urls("http://localhost:11434"),
+      ["http://localhost:11434/api/tags", "http://127.0.0.1:11434/api/tags"])
+check("非 localhost 不补",
+      ollama_boot._ping_urls("http://192.168.1.50:11434"),
+      ["http://192.168.1.50:11434/api/tags"])
+check("自定端口的 localhost 也按端口补",
+      ollama_boot._ping_urls("http://localhost:11499")[1], "http://127.0.0.1:11499/api/tags")
+
+# ---- 9. serve 刚起就退出：从它的输出认出"端口被占"，给出能照做的提示 ----
+class DeadProc:
+    """假装是个立刻退出的子进程（poll() 返回退出码）。"""
+
+    def poll(self):
+        return 1
+
+
+def spawn_dead():
+    return DeadProc()
+
+
+tmp = Path(__file__).resolve().parent / ".test_ollama_tmp"
+tmp.mkdir(exist_ok=True)
+busy_log = tmp / "busy.log"
+busy_log.write_text(
+    "Error: listen tcp 127.0.0.1:11434: bind: Only one usage of each socket address "
+    "is normally permitted.\n", encoding="utf-8")
+quiet_log = tmp / "quiet.log"
+quiet_log.write_text("panic: something else\n", encoding="utf-8")
+
+check("端口被占：认得出 blocked-port",
+      ollama_boot.ensure_ollama("http://localhost:11434", probe=lambda *a, **k: False,
+                                spawn=spawn_dead, timeout=5, log_path=busy_log),
+      "blocked-port")
+check("输出里没有端口线索：算 serve-exited",
+      ollama_boot.ensure_ollama("http://localhost:11434", probe=lambda *a, **k: False,
+                                spawn=spawn_dead, timeout=5, log_path=quiet_log),
+      "serve-exited")
+check("进程活着就继续等（不会误判成退出）",
+      ollama_boot.ensure_ollama("http://localhost:11434", probe=seq_probe(False, True),
+                                spawn=lambda: type("P", (), {"poll": lambda self: None})(),
+                                timeout=5, log_path=busy_log),
+      "started")
+for f in (busy_log, quiet_log):
+    f.unlink(missing_ok=True)
+tmp.rmdir()
+
+# ---- 10. 真探针在本机跑一遍（只读：Ollama 在跑就该返回 True）----
 check("真探针不会误报（拿一个必然连不上的端口）",
       ollama_boot.ping("http://127.0.0.1:1", timeout=0.5), False)
 

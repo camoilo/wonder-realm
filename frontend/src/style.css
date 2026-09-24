@@ -470,6 +470,8 @@ html, body {
 
 /* 思考模式开关：关掉时用灰底表示"已关闭"，模型不支持时置灰不可点 */
 .think-btn { white-space: nowrap; padding: 6px 10px; font-size: 13px; }
+/* 顶栏那句模型警告旁边的"重试"（Ollama 起得比界面慢时点一下） */
+.retry-btn { flex: none; padding: 5px 10px; font-size: 12.5px; white-space: nowrap; }
 .think-btn.off { background: var(--field-disabled); color: var(--text-soft); border-color: var(--border); }
 .think-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -1353,8 +1355,8 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
    层级高于消息与浮层、低于弹窗遮罩（1000） */
 .desktop-config {
   position: absolute;
-  top: calc(100% + 6px);
-  right: 14px;
+  top: calc(100% + 4px);
+  right: 12px;
   z-index: 600;
   width: 330px;
   max-height: calc(100vh - 96px);
@@ -1919,6 +1921,7 @@ mark.search-hit.current {
    窗口键（.win-btn）照系统那三个按钮的样子做：无圆角、满高、悬停浅灰、细图标——
    这样同一行里两种按钮看起来才是一套。 */
 .titlebar {
+  position: relative;   /* 配置面板以它为定位基准（它里面 top:100% 指这一行底下） */
   flex: none;
   display: flex;
   align-items: center;

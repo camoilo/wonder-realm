@@ -7,7 +7,7 @@
 //
 // 局域网推送的开关**不在壳里**：它是后端 `app_settings.lan_enabled`（默认关），
 // 页面上的「配置」按钮直接 PUT /api/settings，立即生效、不重启后端。
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, screen, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -37,6 +37,7 @@ const PHONE_WIDTH = 390;
 const PHONE_DEFAULT_H = 844;                          // 没存过就用常见手机高度
 const PHONE_MIN_H = 480;
 const PHONE_MAX_H = 1400;
+const DEFAULT_SIZE = { width: 1180, height: 780 };   // 首次启动（或存档不可用时）的窗口大小，还会按工作区收一下
 const DESKTOP_MIN = { width: 380, height: 520 };      // 与 createWindow 的 minWidth/minHeight 一致
 // 自绘标题栏（Window Controls Overlay）：把系统标题栏让给页面画，好让「配置 / 手机视图」这两个键
 // 跟最小化 / 最大化 / 关闭排在同一行（见 DEVELOPMENT 3.3）。只有 Windows 支持得完整。
@@ -167,8 +168,13 @@ function waitForBackend(timeoutMs = 120000) {
 // 让下次启动莫名其妙变成手机样子，用户只会以为坏了；高度倒是记着，下次进来接着用。
 function persistWindowState() {
   if (SELFTEST || !win) return;   // 自检只是量尺寸，不该改用户的偏好
-  if (phoneView) writePrefs({ phoneHeight: win.getContentSize()[1] });
-  else writePrefs({ bounds: win.getBounds() });
+  if (phoneView) {
+    // 手机视图下**也要把桌面尺寸存着**：否则"在手机视图里关掉应用"会让下次启动回到默认大小
+    // （用户报过"切回来就变成默认了"）
+    writePrefs({ phoneHeight: win.getContentSize()[1], bounds: desktopRestoreBounds() });
+  } else {
+    writePrefs({ bounds: win.getBounds() });
+  }
 }
 
 // 退出手机视图时恢复到多大。**要防一手被污染的旧值**：早先版本把手机尺寸当桌面尺寸存过
@@ -176,24 +182,58 @@ function persistWindowState() {
 // 判据很简单：桌面窗口不会只有手机那么宽。
 function desktopRestoreBounds() {
   if (desktopBounds && desktopBounds.width > PHONE_WIDTH + 60) return desktopBounds;
-  return { width: 1280, height: 860 };
+  return { width: DEFAULT_SIZE.width, height: DEFAULT_SIZE.height };
+}
+
+// ---- 尺寸都往当前显示器的工作区里放 ----
+// 默认 1280x860 在 1366x768 这类屏幕上会顶到任务栏甚至超出屏幕（用户报过"电脑端视图太大、
+// 手机端太长"），所以建窗与进手机视图时都按工作区收一下，留点边距。
+function fitInWorkArea(width, height, margin = 80, ref = null) {
+  let wa = null;
+  try {
+    wa = (ref ? screen.getDisplayMatching(ref) : screen.getPrimaryDisplay()).workArea;
+  } catch (e) { /* 拿不到工作区就不缩，别因此起不来 */ }
+  if (!wa) return { width, height };
+  return {
+    width: Math.min(width, Math.max(360, wa.width - margin)),
+    height: Math.min(height, Math.max(420, wa.height - margin)),
+  };
+}
+
+// 按"中心不动"改窗口尺寸：切视图时看起来是围绕中心缩/涨，而不是从左上角缩/涨
+// （用户要求"切视图前后位置不变，居中扩展或者收缩"）。贴边时再夹一次，别把窗口推出屏幕。
+function setBoundsCentered(width, height) {
+  const b = win.getBounds();
+  const wa = (() => {
+    try { return screen.getDisplayMatching(b).workArea; } catch (e) { return null; }
+  })();
+  let x = Math.round(b.x + (b.width - width) / 2);
+  let y = Math.round(b.y + (b.height - height) / 2);
+  if (wa) {
+    x = Math.min(Math.max(x, wa.x), Math.max(wa.x, wa.x + wa.width - width));
+    y = Math.min(Math.max(y, wa.y), Math.max(wa.y, wa.y + wa.height - height));
+  }
+  win.setBounds({ x, y, width, height });
 }
 
 function setPhoneView(on) {
   phoneView = !!on;
   if (!win) return phoneView;
+  const frameW = Math.max(0, win.getBounds().width - win.getContentSize()[0]);
+  const frameH = Math.max(0, win.getBounds().height - win.getContentSize()[1]);
   if (phoneView) {
     if (!desktopBounds) desktopBounds = win.getBounds();
-    // min/max 说的是**窗口**尺寸，setContentSize 说的是**内容**尺寸，两者差一个边框宽度：
-    // 直接拿 PHONE_WIDTH 当上限会得到 378 内容宽（实测），所以先量出边框差再补上。
-    const frameW = Math.max(0, win.getBounds().width - win.getContentSize()[0]);
-    win.setMinimumSize(PHONE_WIDTH + frameW, PHONE_MIN_H);   // 先 min 后 max，避免 min > max 的瞬态
-    win.setMaximumSize(PHONE_WIDTH + frameW, PHONE_MAX_H);
-    win.setContentSize(PHONE_WIDTH, clampHeight(readPrefs().phoneHeight));
+    // 高度取"记住的那次"与工作区的较小值：默认 844 在矮屏上会超出屏幕（用户报过"手机端太长"）
+    const want = clampHeight(readPrefs().phoneHeight || PHONE_DEFAULT_H);
+    const h = fitInWorkArea(PHONE_WIDTH, want, 120).height;
+    win.setMinimumSize(PHONE_WIDTH + frameW, PHONE_MIN_H + frameH);   // 先 min 后 max，避免瞬态 min > max
+    win.setMaximumSize(PHONE_WIDTH + frameW, PHONE_MAX_H + frameH);
+    setBoundsCentered(PHONE_WIDTH + frameW, h + frameH);
   } else {
     win.setMinimumSize(DESKTOP_MIN.width, DESKTOP_MIN.height);
     win.setMaximumSize(0, 0);                       // 0 = 不限（回到普通窗口）
-    win.setBounds(desktopRestoreBounds());
+    const b = desktopRestoreBounds();
+    setBoundsCentered(b.width, b.height);
   }
   win.webContents.send("desktop:phone-view", phoneView);
   persistWindowState();
@@ -227,9 +267,11 @@ function createWindow() {
   const saved = prefs.bounds || {};
   // 旧版本把手机尺寸当桌面尺寸存过：那种尺寸不能拿来当窗口初始大小（否则一启动就"还是个手机窗口"）
   const bounds = saved.width > PHONE_WIDTH + 60 ? saved : {};
+  // 存档尺寸与默认尺寸都按工作区收一下：矮屏上 1280x860 会顶到任务栏（用户报过"视图太大"）
+  const size = fitInWorkArea(bounds.width || DEFAULT_SIZE.width, bounds.height || DEFAULT_SIZE.height);
   win = new BrowserWindow({
-    width: bounds.width || 1280,
-    height: bounds.height || 860,
+    width: size.width,
+    height: size.height,
     x: bounds.x,
     y: bounds.y,
     minWidth: 380,
@@ -359,6 +401,8 @@ const PAGE_PROBE = `(async () => {
     boxMounted,
     tabsDisabled,
     railTabs: tabBtns.length,
+    viewW: window.innerWidth,
+    viewH: window.innerHeight,
   };
 })()`;
 
@@ -430,6 +474,7 @@ async function selftestWindow() {
   );
   const desktopWidth = await win.webContents.executeJavaScript("window.innerWidth");
   const ui = await win.webContents.executeJavaScript(PAGE_PROBE);
+  const beforeBounds = win.getBounds();   // 切视图前后的"中心"要对得上（用户要求位置不变）
 
   if (process.env.DSH_SHOT) {
     // 给人眼看一眼配置面板长什么样（自检平时不截图，避免留垃圾文件）
@@ -444,6 +489,10 @@ async function selftestWindow() {
   setPhoneView(true);
   await new Promise((r) => setTimeout(r, 700)); // 等窗口尺寸与媒体查询生效
   const phoneSize = win.getContentSize();
+  const phoneBounds = win.getBounds();
+  const workArea = (() => {
+    try { return screen.getPrimaryDisplay().workArea; } catch (e) { return null; }
+  })();
   const phoneWidth = await win.webContents.executeJavaScript("window.innerWidth");
   const mobileLayout = await win.webContents.executeJavaScript(
     "window.matchMedia('(max-width: 640px)').matches"
@@ -464,10 +513,17 @@ async function selftestWindow() {
   const clampedWidth = win.getContentSize()[0];
   win.setContentSize(PHONE_WIDTH, 1000);   // 高度应当能改
   const tallerHeight = win.getContentSize()[1];
+  win.setContentSize(PHONE_WIDTH, phoneSize[1]);   // 还原：下面要量"切一圈中心偏没偏"
 
   setPhoneView(false);
   await new Promise((r) => setTimeout(r, 300));
   const back = win.getContentSize();
+  const afterBounds = win.getBounds();
+  // 切一圈回来，窗口中心应该还在原处（"居中扩展或者收缩"，不是从左上角缩/涨）
+  const centerShift = [
+    Math.round(Math.abs((beforeBounds.x + beforeBounds.width / 2) - (afterBounds.x + afterBounds.width / 2))),
+    Math.round(Math.abs((beforeBounds.y + beforeBounds.height / 2) - (afterBounds.y + afterBounds.height / 2))),
+  ];
 
   // 被污染的"桌面尺寸"（跟手机一样宽，早期版本存进去过）不该被恢复成那个小尺寸
   win.setContentSize(400, 860);
@@ -479,7 +535,9 @@ async function selftestWindow() {
   return {
     bridge, desktopWidth, ui, pv,
     phoneSize: { width: phoneSize[0], height: phoneSize[1] },
-    phoneWidth, mobileLayout, clampedWidth, tallerHeight,
+    phoneBounds: { width: phoneBounds.width, height: phoneBounds.height },
+    workArea: workArea ? { width: workArea.width, height: workArea.height } : null,
+    phoneWidth, mobileLayout, clampedWidth, tallerHeight, centerShift,
     backWidth: back[0], backHeight: back[1],
     repairedWidth: repaired[0],
   };
@@ -549,7 +607,9 @@ if (!app.requestSingleInstanceLock()) {
         log(`selftest ok | 桥接 ${probe.bridge} | 桌面宽 ${probe.desktopWidth}px | `
           + `手机视图 ${probe.phoneSize.width}x${probe.phoneSize.height} 页面宽 ${probe.phoneWidth}px `
           + `手机布局 ${probe.mobileLayout} | 拖到 500 宽实测 ${probe.clampedWidth}px `
-          + `高度改 1000 实测 ${probe.tallerHeight}px 退出后 ${probe.backWidth}x${probe.backHeight}px`);
+          + `高度改 1000 实测 ${probe.tallerHeight}px 退出后 ${probe.backWidth}x${probe.backHeight}px | `
+          + `切一圈中心偏移 ${probe.centerShift}px 手机窗口 ${probe.phoneBounds.width}x${probe.phoneBounds.height} `
+          + `工作区 ${probe.workArea ? probe.workArea.width + "x" + probe.workArea.height : "未知"}`);
         log(`selftest 标题栏 | 配置键 ${u.configBtnInTitlebar} 可点 ${u.cfgHitOk} 主题键 ${u.titlebarTheme} `
           + `窗口手机键 ${u.phoneBtnInTitlebar} 那一行文字「${u.titlebarText}」 | 面板打开 ${u.panelOpen} | `
           + `自绘 ${u.wcoOnTitlebar} 右上留白 ${u.reservedRight}px 拖拽 ${u.dragRegion}/${u.noDragBtn} | `
@@ -586,6 +646,29 @@ if (!app.requestSingleInstanceLock()) {
         }
         if (!(u.qrInk > 50)) bad.push(`二维码没画出来（暗点 ${u.qrInk}）`);
         if (u.qrDim === u.lanOn) bad.push(`二维码置灰状态与局域网开关不一致（置灰 ${u.qrDim} 开关 ${u.lanOn}）`);
+        // 配置面板必须真的落在视口里（它曾经因为父级没有定位上下文被摆到视口外面：
+        // "按钮点了没反应"其实就是面板开在屏幕外 —— 实测踩到）
+        const _pr = u.panelRect;
+        if (!(_pr && _pr[0] >= 0 && _pr[1] >= 0
+              && _pr[0] + _pr[2] <= u.viewW + 1 && _pr[1] + _pr[3] <= u.viewH + 1)) {
+          bad.push(`配置面板不在视口里（${_pr}，视口 ${u.viewW}x${u.viewH}）`);
+        }
+        // 切视图前后中心要对得上；手机视图不能超出屏幕（用户报过"切回来变默认了""手机端太长"）
+        if (probe.centerShift[0] > 4 || probe.centerShift[1] > 4) {
+          bad.push(`切一圈回来窗口中心偏了 ${probe.centerShift}`);
+        }
+        if (probe.workArea
+            && (probe.phoneBounds.height > probe.workArea.height
+                || probe.phoneBounds.width > probe.workArea.width)) {
+          bad.push(`手机视图超出屏幕（窗口 ${probe.phoneBounds} 工作区 ${probe.workArea}）`);
+        }
+        // 默认尺寸也得能装进屏幕（矮屏上 1280x860 会顶到任务栏，用户报过"视图太大"）
+        if (probe.workArea) {
+          const fitted = fitInWorkArea(DEFAULT_SIZE.width, DEFAULT_SIZE.height);
+          if (fitted.height > probe.workArea.height || fitted.width > probe.workArea.width) {
+            bad.push(`默认窗口尺寸超出屏幕（${fitted.width}x${fitted.height} 工作区 ${probe.workArea}）`);
+          }
+        }
         if (u.phoneBtnInTitlebar !== true) bad.push("标题栏没有手机视图键");
         if (!u.phoneRect || u.phoneRect[2] < 24 || u.phoneRect[3] < 24) bad.push(`手机视图键尺寸不对（${u.phoneRect}）`);
         if (u.phoneHitOk !== true) bad.push(`手机视图键被挡住了（该点最上层 ${u.phoneHit}）`);

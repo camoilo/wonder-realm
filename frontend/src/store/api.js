@@ -55,8 +55,30 @@ Object.assign(store, {
       }
     }
   },
+  // 拉模型列表：初始化时调一次，顶栏那个"重试"也调它。
+  // 为什么要有"重试"：Ollama 由启动器顺手拉起来时可能比界面慢（冷启动几十秒），
+  // 只拉一次的话界面会一直挂着"无法连接 Ollama"，看着像"根本没启动"（用户就这么报过）。
+  async loadModels() {
+    try {
+      store.models = await store.api("/api/models");
+    } catch (e) {
+      store.models = [];
+      store.modelWarning = "无法连接 Ollama，请确认服务已启动";
+      return false;
+    }
+    if (store.models.length === 0) {
+      store.modelWarning = "Ollama 中还没有可用模型，请先拉取一个";
+    } else if (!store.currentModel) {
+      // 首次使用不预选模型：给一句提示，但不拦着用户浏览界面
+      store.modelWarning = "还没有选择模型，生成前请先在左边选一个";
+    } else if (!store.models.some((m) => m.name === store.currentModel)) {
+      store.modelWarning = `所选模型 ${store.currentModel} 未安装，请在右侧重新选择`;
+    } else {
+      store.modelWarning = "";
+    }
+    return true;
+  },
   async init() {
-    let ollamaOk = true;
     // 有哪几步没加载上。各步独立容错：一步失败只影响它自己，界面照常出来
     // （以前 /api/settings 失败会直接 return，于是顶栏空、模型列表和角色列表都不拉）
     const failed = [];
@@ -84,12 +106,8 @@ Object.assign(store, {
     } catch (e) {
       /* 拿不到就用空值 */
     }
-    try {
-      store.models = await store.api("/api/models");
-    } catch (e) {
-      ollamaOk = false;
-      store.modelWarning = "无法连接 Ollama，请确认服务已启动";
-    }
+    // 模型列表：失败只记一句提示，不带走整个初始化（顶栏那个"重试"也走同一个方法）
+    await store.loadModels();
     try {
       const s = await store.api("/api/settings");
       store.currentModel = s.model;
@@ -99,16 +117,6 @@ Object.assign(store, {
     } catch (e) {
       // 设置读不到（例如库文件被删）不该带走整个初始化：下面的角色/会话照常拉
       failed.push({ label: "设置", msg: e.message });
-    }
-    if (ollamaOk) {
-      if (store.models.length === 0) {
-        store.modelWarning = "Ollama 中还没有可用模型，请先拉取一个";
-      } else if (!store.currentModel) {
-        // 首次使用不预选模型：给一句提示，但不拦着用户浏览界面
-        store.modelWarning = "还没有选择模型，生成前请先在左边选一个";
-      } else if (!store.models.some((m) => m.name === store.currentModel)) {
-        store.modelWarning = `所选模型 ${store.currentModel} 未安装，请在右侧重新选择`;
-      }
     }
     // 角色/会话/生成表单也各自容错：任何一个失败都不再让 init 抛出去
     // （initApp 没有 await 它，抛出来只会变成静默的 unhandledrejection）

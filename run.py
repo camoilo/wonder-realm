@@ -1,4 +1,5 @@
 import logging
+import os
 import socket
 import sys
 import threading
@@ -80,7 +81,10 @@ if __name__ == "__main__":
         # 先把 Ollama 弄起来再开浏览器：界面一加载就要拉模型列表，
         # 不先等它的话首屏会闪一句"无法连接 Ollama"（见 DEVELOPMENT §3.4）
         status = ollama_boot.ensure_ollama(
-            cfg["ollama"]["base_url"], cfg["ollama"].get("auto_start", True)
+            cfg["ollama"]["base_url"],
+            cfg["ollama"].get("auto_start", True),
+            # ollama serve 的输出落这里：起不来时原因就在它最后几行（端口被占之类）
+            log_path=os.path.join(cfg["data_dir"], "ollama-serve.log"),
         )
         print(ollama_boot.report(status, cfg["ollama"]["base_url"]))
         if not no_browser:
