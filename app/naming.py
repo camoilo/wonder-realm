@@ -7,11 +7,11 @@ from .database import connect
 
 log = logging.getLogger("wonder_realm")
 
-NAME_PROMPT = """请根据用户在下面这些发言，概括这次对话的主题并起一个标题。
+NAME_PROMPT = """请根据角色在下面这些回复，概括这次对话的主题并起一个标题。
 要求：不超过 {max_chars} 个字，只写标题本身，不要标点、引号或"标题："之类的前缀。
 
-用户说过的话：
-{user}"""
+角色说过的话：
+{said}"""
 
 _running: set[int] = set()
 
@@ -60,13 +60,18 @@ async def maybe_autoname(session_id: int) -> None:
             "WHERE session_id=? AND archived=0 ORDER BY id LIMIT 12",
             (session_id,),
         ).fetchall()
-        # 只取用户说过的话：角色回复本身是带着长期记忆生成的，
-        # 把回复喂给命名提示词会把旧记忆的内容混进标题，导致命名跑偏。
-        user_text = " / ".join(
-            r["content"].strip() for r in rows if r["role"] == "user" and r["content"].strip()
-        )
-        if len(user_text) < min_user_chars:
-            return  # 用户还没说出有信息量的内容，等下一轮生成再试
+        # 取**角色（模型）说过的话**来命名（用户要求：标题看模型那边的对话信息）。
+        # 一条回复都没有时（比如刚发出第一句、生成还没回来）再退回落到用户的话上，
+        # 否则这一段永远凑不出内容、标题也就永远起不来。
+        def said(role):
+            return " / ".join(
+                r["content"].strip() for r in rows
+                if r["role"] == role and r["content"].strip()
+            )
+
+        text = said("assistant") or said("user")
+        if len(text) < min_user_chars:
+            return  # 还没有有信息量的内容，等下一轮生成再试
         settings = con.execute(
             "SELECT model, memory_model FROM app_settings WHERE id=1"
         ).fetchone()
@@ -85,7 +90,7 @@ async def maybe_autoname(session_id: int) -> None:
     try:
         opts = dict(cfg["ollama"]["options"])
         opts["temperature"] = 0.3
-        prompt = NAME_PROMPT.format(max_chars=max_chars, user=user_text[:300])
+        prompt = NAME_PROMPT.format(max_chars=max_chars, said=text[:300])
         raw = await ollama_client.chat_once(
             [{"role": "user", "content": prompt}], model, opts
         )

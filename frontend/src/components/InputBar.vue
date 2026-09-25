@@ -72,7 +72,7 @@
             <button v-if="streaming" class="stop-btn" @click="stop">
               <span class="stop-square"></span>停止
             </button>
-            <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
+            <button v-else class="send-btn" :disabled="!canSend" @click="send">发送</button>
           </div>
         </div>
       </div>
@@ -94,6 +94,7 @@ const {
   bgImages,
   bgIndex,
   canContinue,
+  canSend,
   error,
   input,
   inputScenario,

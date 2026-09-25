@@ -15,19 +15,17 @@
     </div>
     <p class="dc-status">{{ statusText }}</p>
 
-    <template v-if="lanUrl">
-      <!-- 取到地址就画，不管开关开没开：关着时置灰并给一句"先打开开关"，
-           省得用户以为要先去别处找地址（自检也据此验证二维码真的画出来了） -->
-      <canvas ref="qrEl" class="dc-qr" :class="{dim: !lanEnabled}"
-              width="232" height="232" aria-label="手机访问二维码"></canvas>
+    <!-- 二维码**只在局域网开着时才画**（用户要求）：关着时给一句说明就行，
+         不摆一个扫不出来的码，也不必让用户去猜"是不是坏了" -->
+    <template v-if="lanUrl && lanEnabled">
+      <canvas ref="qrEl" class="dc-qr" width="232" height="232" aria-label="手机访问二维码"></canvas>
       <div class="dc-row">
         <span class="dc-url">{{ lanUrl }}</span>
         <button class="ghost-btn dc-copy" @click="copyLanUrl">{{ lanCopied ? "已复制" : "复制" }}</button>
       </div>
-      <p class="hint">{{ lanEnabled
-        ? "手机连同一个 WiFi，扫码或直接打开这个地址即可。"
-        : "手机现在打不开——先把上面的开关打开。" }}</p>
+      <p class="hint">手机连同一个 WiFi，扫码或直接打开这个地址即可。</p>
     </template>
+    <p v-else-if="lanUrl" class="hint">打开上面的开关后，这里会出现手机扫码用的二维码。</p>
     <p v-else class="hint">没取到局域网地址（用 ipconfig 看一眼本机 IPv4，确认连着 WiFi/网线）。</p>
 
     <div class="dc-actions">
@@ -80,9 +78,9 @@ async function paint() {
     store.error = `二维码生成失败：${e.message}`;
   }
 }
-onMounted(() => { if (lanUrl.value) paint(); });
+onMounted(() => { if (lanUrl.value && lanEnabled.value) paint(); });
 watch([lanUrl, lanEnabled], async () => {
-  await nextTick();          // 等 v-if 里的 canvas 真的挂上再画
-  if (lanUrl.value) paint();
+  await nextTick();          // 等 v-if 里的 canvas 真的挂上再画（开关一开才挂载）
+  if (lanUrl.value && lanEnabled.value) paint();
 });
 </script>

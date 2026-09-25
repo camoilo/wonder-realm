@@ -95,8 +95,8 @@ Object.assign(store, {
   },
   async send() {
     const text = store.input.trim();
-    if (!store.canSendText(text)) return;
-    // 情境只有沉浸模式有，且可选；"话语"是必填的那一栏
+    if (!store.canSend) return;
+    // 情境只有沉浸模式有；**两个框至少有一个要有内容**（沉浸模式允许只写情境）
     const scenario = store.isImmersiveMode ? store.inputScenario.trim() : "";
     // 通过校验后才清空，发不出去时不会把草稿弄丢
     store.input = "";
@@ -333,6 +333,13 @@ Object.assign(store, {
       el.scrollTop = el.scrollHeight; // 兜底：极老的浏览器不支持带 options 的 scrollTo
     }
   },
+});
+
+store.canSend = computed(() => {
+      // 话语与情境**至少有一个有内容**：沉浸模式允许只写情境（用户要求），
+      // 其它模式仍然要求话语（那时根本没有情境框）
+      if (store.canSendText(store.input)) return true;
+      return !!store.isImmersiveMode && store.canSendText(store.inputScenario);
 });
 
 store.canContinue = computed(() => {

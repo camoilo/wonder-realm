@@ -93,7 +93,14 @@ function showModeTip(key, e) {
   if (!el || typeof el.getBoundingClientRect !== "function") return;
   const r = el.getBoundingClientRect();
   if (window.innerWidth <= 640) {
-    tipStyle.value = { top: `${Math.round(r.bottom + 6)}px`, left: `${Math.round(r.left)}px` };
+    // 手机端放下方，并且**左右各留 8px**：手机视图这一屏很窄（375），
+    // 按按钮左边定位会把提示的右侧顶出屏幕（导演模式那行字最长，最明显）
+    tipStyle.value = {
+      top: `${Math.round(r.bottom + 6)}px`,
+      left: "8px",
+      right: "8px",
+      maxWidth: "none",
+    };
   } else {
     tipStyle.value = { top: `${Math.round(r.top)}px`, left: `${Math.round(r.right + 10)}px` };
   }

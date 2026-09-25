@@ -213,6 +213,12 @@ store.activeTabDirty = computed(() => {
       return store.genDirty;
 });
 
+// 顶栏那个「控制面板」键上的小黄点：面板里**任何一页**有未保存改动就亮。
+// 手机端图标列在底部弹层里，收着的时候看不见，所以顶栏这个入口也得能提示（用户要求）
+store.panelAnyDirty = computed(() => {
+      return !!(store.genDirty || store.charDirty || store.memoryDirty);
+});
+
 store.saveDisabled = computed(() => {
       return store.panelTab === "char" && !store.charForm.name.trim();
 });

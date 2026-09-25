@@ -100,6 +100,16 @@ check("模板引用的上限键都在表里", sorted(used - set(LIMITS)), [])
 # genre / extra 走的是 FIELDS 里的 "max"（后端随字段定义下发），模板里不会写 limits.xxx
 check("模板里没写死的上限键只有 genre / extra", sorted(set(LIMITS) - used), ["extra", "genre"])
 
+# ---- 话语与情境：两个框至少有一个要有内容（沉浸模式允许只写情境，见 DEVELOPMENT §2.1）----
+check("只写情境是合法请求", ChatIn(message="", scenario="雨夜，门口").scenario, "雨夜，门口")
+check("只写话语是合法请求", ChatIn(message="你好").message, "你好")
+_both_empty = False
+try:
+    ChatIn(message="  ", scenario=" ")
+except pydantic.ValidationError:
+    _both_empty = True
+check("两样都空被拒（校验器拦住，而不是等后端报错）", _both_empty, True)
+
 print()
 if FAILED:
     print(f"失败 {len(FAILED)} 项：{FAILED}")

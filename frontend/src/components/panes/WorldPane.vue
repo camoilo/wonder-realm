@@ -14,7 +14,6 @@
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
 <p v-if="!worldPresets.length" class="hint">还没有世界预设：点「编辑预设」→「添加预设」新建一条。</p>
-<p v-else-if="!boundWorldId" class="hint">未选择 = 不启用：不注入世界设定。</p>
 <label class="field">世界名称
   <div class="counted">
     <input :value="worldForm.name" type="text" readonly>

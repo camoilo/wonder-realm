@@ -77,6 +77,8 @@
               v-hint="'打开控制面板'" aria-label="打开控制面板"
               :aria-pressed="mobilePanelOpen" @click="toggleMobilePanel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <!-- 面板里有没保存的改动就点一个小圆点：手机上图标列在弹层里，收着的时候看不见 -->
+        <span v-if="panelAnyDirty" class="tab-dot"></span>
       </button>
       <button class="icon-btn mobile-more-btn" aria-label="更多设置" @click="toggleMore">&#8942;</button>
       <!-- 更多菜单：模型 / 思考开关 / 主题切换（手机断点替代顶栏右侧那一排） -->
@@ -125,6 +127,7 @@ const {
   models,
   ollamaBusy,
   orphanActive,
+  panelAnyDirty,
   renameText,
   renaming,
   searchIndex,

@@ -62,15 +62,21 @@ if __name__ == "__main__":
     # 放在 uvicorn.run() 之前：留下的是上次运行结束时的库，而不是本次启动刚建过表的。
     startup_backup(cfg)
 
-    if "--lan" in args or "--no-lan" in args:
-        # init_db 是幂等的（建表/补列/补单行），这里先建好再改设置，
-        # 之后 uvicorn 里那次 create_app 再跑一遍不会有副作用
-        database.init_db(
-            cfg["data_dir"], cfg["ollama"]["model"], cfg["memory"].get("model", ""),
-            cfg.get("server", {}).get("lan", False),
-        )
-        database.write_lan_enabled("--lan" in args)
-        print("推送局域网：" + ("已开启" if "--lan" in args else "已关闭"))
+    # init_db 是幂等的（建表/补列/补单行），先建好再改设置；之后 uvicorn 里那次 create_app
+    # 再跑一遍不会有副作用
+    database.init_db(
+        cfg["data_dir"], cfg["ollama"]["model"], cfg["memory"].get("model", ""),
+        cfg.get("server", {}).get("lan", False),
+    )
+    # **每次启动都把"推送局域网"关掉**（用户要求）：局域网是一道安全闸门，上次开着不代表
+    # 这次还要开着（换到公共 WiFi 就麻烦了）。想开就在界面里点，或用 `--lan` 显式启动。
+    database.write_lan_enabled("--lan" in args)
+    if "--lan" in args:
+        print("推送局域网：已开启（--lan）")
+    elif "--no-lan" in args:
+        print("推送局域网：已关闭（--no-lan）")
+    else:
+        print("推送局域网：已关闭（默认；要用就在界面里打开，或加 --lan 启动）")
 
     if port_in_use(browser_host, port):
         print(f"端口 {port} 已在监听，服务应该已在运行：{url}")

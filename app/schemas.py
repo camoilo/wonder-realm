@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .limits import LIMITS
 
@@ -13,9 +13,17 @@ AVATAR_PREFIXES = (
 
 
 class ChatIn(BaseModel):
-    message: str = Field(min_length=1, max_length=LIMITS["message"])
-    # 沉浸模式下用户自己写的情境（场景、动作、心理），可选：只有话语也是合法消息
+    # 沉浸模式允许只写情境（话语留空），所以这里不再要求 message 非空；
+    # "两个框至少要有一个有内容"由下面这个校验兜住（见 DEVELOPMENT §2.1/§2.2）
+    message: str = Field(default="", max_length=LIMITS["message"])
+    # 沉浸模式下用户自己写的情境（场景、动作、心理），可选：只有情境也可以发
     scenario: str | None = Field(default=None, max_length=LIMITS["scenario"])
+
+    @model_validator(mode="after")
+    def _at_least_one(self):
+        if not self.message.strip() and not (self.scenario or "").strip():
+            raise ValueError("话语与情境至少要有一样")
+        return self
 
 
 def _check_avatar(v: str) -> str:

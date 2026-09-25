@@ -630,6 +630,10 @@ check("侧栏渲染介绍浮层", 'class="mode-tip"' in _side_src and "MODES[hov
 check("鼠标移入与键盘聚焦都显示",
       all(k in _side_src for k in ('@mouseenter="showModeTip(key, $event)"', "@mouseleave=\"hideModeTip()\"",
                                    '@focus="showModeTip(key, $event)"', "@blur=\"hideModeTip()\"")), True)
+# 手机端：提示改成左右各留 8px 的整条，不再按按钮左边定位（否则「导演模式」那行右侧出屏）
+check("手机端模式提示改成整条",
+      'left: "8px"' in _side_src and 'right: "8px"' in _side_src
+      and ".mode-tip { width: auto; max-width: none;" in css, True)
 _tip = css_block(".mode-tip")
 # 两种浮层共用一条规则（.mode-tip, .hint-tip { ... }），css_block 会先撞上它，
 # 所以这里单独取：共用块 + .hint-tip 自己的定位块
@@ -699,7 +703,7 @@ check("我的设定页只读（框 readonly、没有上传头像）",
 # 名字（只给自己看）与称呼（模型用）是两个字段：页面上分开显示，预设弹窗里分开编辑
 check("我的设定页有「名字」与「称呼」两个字段",
       "profileForm.name" in _pp and "profileForm.call_name" in _pp
-      and "只给你自己看" in _pp and "模型这样称呼你" in _pp, True)
+      and "名字只给自己看" in _pp, True)
 check("预设弹窗里也能改称呼（带自己的上限与计数）",
       "presetModal.form.call_name" in html and "limits.user_call_name" in html, True)
 # 两个编辑弹窗里的「未保存 / 还原」（手机上够不到面板底部那排，用户要求补）
@@ -949,8 +953,10 @@ check("情境栏只在沉浸模式出现（整行由 v-if 控制）",
           < _input_bar.index('class="input-field scenario-field"'), True)
 check("两栏各有自己的上限（情境 scenario / 话语 message）",
       ":maxlength=\"limits.scenario\"" in _input_bar and ":maxlength=\"limits.message\"" in _input_bar, True)
-check("话语必填：发送键仍看 input",
-      ':disabled="!input.trim() || orphanActive"' in _input_bar, True)
+# 话语与情境**至少有一个有内容**（沉浸模式允许只写情境）；发送键看 store.canSend
+check("发送键看 canSend（话语或情境有一个就行）",
+      ':disabled="!canSend"' in _input_bar and "canSend = computed" in js
+      and "this.canSendText(this.inputScenario)" in js, True)
 check("两栏都支持 Enter 发送", _input_bar.count('@keydown.enter.exact.prevent="send"') == 2, True)
 check("store 里有 inputScenario", "inputScenario: \"\"" in store_js, True)
 # 注意：js 这一坨把 store. 换成了 this.（为了让老的选项对象断言能复用），所以这里不写前缀
@@ -1156,8 +1162,9 @@ check("配置面板里不再重复手机视图入口",
 check("二维码缩小过（别撑满面板）", "width: 116px;" in css and "width: 232" in _config, True)
 check("二维码是 qrcode 画在 canvas 上（不手搓、不用 v-html）",
       "QRCode.toCanvas(" in _config and "v-html" not in _config, True)
-check("二维码只在取到地址时画，局域网关着时置灰",
-      "if (lanUrl.value) paint();" in _config and ':class="{dim: !lanEnabled}"' in _config, True)
+check("二维码只在「开关开着 + 取到地址」时才画",
+      'v-if="lanUrl && lanEnabled"' in _config
+      and "if (lanUrl.value && lanEnabled.value) paint();" in _config, True)
 check("配置面板层级在浮层与弹窗之间",
       ".desktop-config {" in css and "z-index: 600;" in css
       and css.index("z-index: 600;") < css.index(".modal-mask {"), True)
@@ -1325,6 +1332,11 @@ check("弹窗手机全屏化", ".modal {\n    width: 100%;" in _mobile
       and "height: 100dvh;" in _mobile and "border-radius: 0;" in _mobile, True)
 check("预设两栏在手机改回上下堆叠",
       ".modal-body.preset-split { flex-direction: column; }" in _mobile, True)
+# 顶栏「控制面板」键上的未保存小黄点（手机上图标列在弹层里，收着看不见）
+check("顶栏面板键带未保存小黄点",
+      "panelAnyDirty" in _tb and 'class="tab-dot"' in _tb
+      and "panelAnyDirty = computed" in js
+      and ".mobile-panel-btn { position: relative; }" in css, True)
 # 触屏降级：v-hint 在 pointer: coarse 下改点击显示
 check("v-hint 触屏降级为点击显示", "(pointer: coarse)" in
       (frontend / "src/composables/hint.js").read_text(encoding="utf-8"), True)

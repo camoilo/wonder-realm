@@ -143,6 +143,13 @@ con.close()
 
 for path in (tmp, tmp2, tmp3):
     shutil.rmtree(path, ignore_errors=True)
+
+# ---- 6. 启动行为：每次启动都把开关写回"关闭"（上次开着不能一路留到下次，见 DEVELOPMENT §8.3）----
+run_src = (Path(__file__).resolve().parent.parent / "run.py").read_text(encoding="utf-8")
+check("启动时无条件写回局域网开关（不再只在带 --lan/--no-lan 时）",
+      'if "--lan" in args or "--no-lan" in args:' not in run_src
+      and 'database.write_lan_enabled("--lan" in args)' in run_src, True)
+
 print()
 if FAILED:
     print(f"失败 {len(FAILED)} 项：{FAILED}")

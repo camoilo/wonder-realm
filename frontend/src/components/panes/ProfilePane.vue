@@ -14,7 +14,6 @@
 </div>
 <p v-if="presetError" class="avatar-error">{{ presetError }}</p>
 <p v-if="!profilePresets.length" class="hint">还没有预设：点「编辑预设」→「添加预设」新建一条。</p>
-<p v-else-if="!boundProfileId" class="hint">未选择 = 不启用：不注入你的身份与外观。</p>
 <div class="avatar-pick">
   <span class="avatar xl">
     <img v-if="profileForm.avatar" :src="profileForm.avatar" alt="">
@@ -25,13 +24,11 @@
   <div class="counted">
     <input :value="profileForm.name" type="text" readonly>
   </div>
-  <span class="hint">只给你自己看，不发给模型。</span>
 </label>
 <label class="field">称呼
   <div class="counted">
     <input :value="profileForm.call_name" type="text" readonly>
   </div>
-  <span class="hint">模型这样称呼你。</span>
 </label>
 <label class="field">身份
   <div class="counted">
@@ -43,7 +40,7 @@
     <textarea :value="profileForm.appearance" rows="3" readonly></textarea>
   </div>
 </label>
-<p class="hint">「称呼」「身份」「外观」会进聊天与沉浸模式的提示词；导演模式不用。</p>
+<p class="hint">名字只给自己看；称呼、身份、外观会进聊天与沉浸模式的提示词。</p>
 </template>
 
 <script setup>

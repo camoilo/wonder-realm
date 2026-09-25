@@ -462,7 +462,8 @@ const PAGE_PROBE = `(async () => {
     phoneHitOk: !!(hit && hit.closest && hit.closest(".win-btn")),
     labels: panel ? Array.from(panel.querySelectorAll('.dc-label')).map((e) => e.textContent.trim()) : [],
     qrInk,
-    qrDim: !!(qr && qr.classList.contains('dim')),
+    // 二维码只在"局域网开着 + 取到地址"时才有；关着时连 canvas 都不该在（见 ConfigPanel.vue）
+    qrPresent: !!qr,
     lanOn: !!(sw && sw.getAttribute('aria-checked') === 'true'),
     statusText: status ? status.textContent.replace(/\\s+/g, ' ').trim() : '',
     phoneBtnInTitlebar: !!pb,
@@ -711,7 +712,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
           + `第二行还有窗口键 ${u.topbarHasKeys} 第二行有主题键 ${u.themeInTopbar} | `
           + `图标列标签 ${u.railTabs} 个 无会话时配置键仍在 ${u.cfgBtnNoSession} `
           + `没会话时图标列按钮 ${u.tabCount} 个 内容区未挂载 ${!u.boxMounted} | `
-          + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
+          + `二维码 ${u.qrPresent ? `已画（暗点 ${u.qrInk}）` : "未画（局域网关着）"} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
         log(`selftest 浮层 | 模式按钮 ${u.modeRect} 介绍浮层 ${u.tipRect} 标题栏下沿 ${u.titlebarBottom}`);
         log(`selftest 尺寸 | 面板 ${u.panelRect} 窗口手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
         log(`selftest 顶栏键 | 搜索键 ${u.searchBtnRect} 搜索条 ${u.searchPopRect} 挂在键下 ${u.searchPopBelowBtn} | `
@@ -749,8 +750,9 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
             bad.push(`右上角没给系统按钮留出宽度（${u.reservedRight}px）`);
           }
         }
-        if (!(u.qrInk > 50)) bad.push(`二维码没画出来（暗点 ${u.qrInk}）`);
-        if (u.qrDim === u.lanOn) bad.push(`二维码置灰状态与局域网开关不一致（置灰 ${u.qrDim} 开关 ${u.lanOn}）`);
+        if (u.lanOn && !u.qrPresent) bad.push("局域网开着却没画二维码");
+        if (!u.lanOn && u.qrPresent) bad.push("局域网关着却画了二维码（应当只在开着时出现）");
+        if (u.qrPresent && !(u.qrInk > 50)) bad.push(`二维码没画出来（暗点 ${u.qrInk}）`);
         // 顶栏那两颗新键：搜索键点开要弹出搜索条（且贴在顶栏下沿）、属性下拉要贴在键下方且右边缘对齐
         if (u.searchBtnRect && !u.searchPopRect) bad.push("点搜索键没弹出搜索条");
         if (u.searchPopRect && u.searchPopBelowBtn !== true) bad.push(`搜索条没挂在放大镜下方（${u.searchPopRect}）`);

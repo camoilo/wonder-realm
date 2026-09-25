@@ -244,6 +244,11 @@ html, body {
   width: 240px;
   z-index: 40;
 }
+/* 手机端：提示改成整条（脚本给的是 left/right 各 8px），不再按按钮左边定位——
+   375 宽那一屏里，"导演模式"那行字最长，按左边定位会把右侧顶出屏幕 */
+@media (max-width: 640px) {
+  .mode-tip { width: auto; max-width: none; font-size: 11.5px; line-height: 1.6; }
+}
 /* 单个元素的提示：fixed 定位在目标下方（空间不够自动翻到上方），层级高于弹窗遮罩，
    所以弹窗里的提示也看得见。
    width: max-content 是必须的——fixed 元素只给了 left 时，宽度按"视口宽度 − left"
@@ -2032,6 +2037,10 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
   background: var(--warn-dot);
   box-shadow: 0 0 0 2px var(--rail-bg);
 }
+/* 顶栏「控制面板」键上的同一个点：那个键不在图标列里，底色也就不是 rail
+   （按钮的定位上下文要显式给，.icon-btn 本身没有 position） */
+.mobile-panel-btn { position: relative; }
+.mobile-panel-btn .tab-dot { box-shadow: 0 0 0 2px var(--bg); }
 
 /* 与标签栏一样放在滚动容器外面：改过之后"还原"键一直够得着 */
 .panel-tab-actions {
