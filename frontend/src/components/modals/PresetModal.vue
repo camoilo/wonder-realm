@@ -48,8 +48,15 @@
         <label class="field">名字
           <div class="counted">
             <input v-model="presetModal.form.name" type="text" :maxlength="limits.user_name"
-                   placeholder="下拉里显示的就是这个名字">
+                   placeholder="只给你自己看，不发给模型">
             <span class="char-count inline" :class="{near: isNear(presetModal.form.name, limits.user_name)}">{{ len(presetModal.form.name) }}/{{ limits.user_name }}</span>
+          </div>
+        </label>
+        <label class="field">称呼
+          <div class="counted">
+            <input v-model="presetModal.form.call_name" type="text" :maxlength="limits.user_call_name"
+                   placeholder="模型这样称呼你">
+            <span class="char-count inline" :class="{near: isNear(presetModal.form.call_name, limits.user_call_name)}">{{ len(presetModal.form.call_name) }}/{{ limits.user_call_name }}</span>
           </div>
         </label>
         <label class="field">身份
@@ -96,6 +103,14 @@
         <p class="hint">绑定的角色：{{ presetBindLabel(picked) }}。选/解除预设在那两页上做。</p>
         </div>
       </div>
+      <!-- 有改动就给「未保存 + 还原」：手机上面板底部那排保存/还原够不到，
+           弹窗里必须自己能看见、能回退（用户要求） -->
+      <div v-if="presetModalDirty" class="modal-dirty">
+        <span class="dirty-flag">未保存</span>
+        <button class="revert-btn" :class="{armed: revertArm.presetModal}"
+                v-hint="revertArm.presetModal ? '再点一次即回到打开时的内容' : '回到打开时的内容'"
+                @click="armRevert('presetModal')">{{ revertArm.presetModal ? "确认还原？" : "还原" }}</button>
+      </div>
       <div class="modal-actions">
         <button class="danger-btn" :disabled="!presetModal.id"
                 v-hint="presetModal.id ? '删除这条预设' : '还没保存，没得删'"
@@ -120,6 +135,8 @@ const {
   avatarError,
   limits,
   presetModal,
+  presetModalDirty,
+  revertArm,
 } = toRefs(store);
 
 // 这次编辑的是哪种预设：标题、列表、右侧字段都由它决定
@@ -133,6 +150,7 @@ const picked = computed(() =>
 
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {
+  armRevert,
   clearAvatar,
   closePresetModal,
   deletePresetInModal,

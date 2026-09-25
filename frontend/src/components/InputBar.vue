@@ -83,8 +83,9 @@
 import { ref, toRefs } from "vue";
 import { store } from "../store.js";
 
-// 手机端辅助操作（背景切换/继续/跳底/情境）的收纳开关；桌面断点该按钮被 CSS 隐藏，此值无副作用
-const auxOpen = ref(false);
+// 手机端辅助操作（背景切换/继续/情境）的收纳开关：**默认展开**（用户要求：进会话就能看到
+// 这些键，而不是先点一下才出来）；桌面断点该按钮被 CSS 隐藏，此值无副作用
+const auxOpen = ref(true);
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {

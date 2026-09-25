@@ -220,6 +220,7 @@ Object.assign(store, {
     store.avatarError = "";
     store.presetModal.id = null;
     store.presetModal.form = k.empty();
+    store.presetModal.saved = store.snapshot(store.presetModal.form);
     store.presetModal.saveError = "";
   },
   editPickPreset(id) {
@@ -229,6 +230,8 @@ Object.assign(store, {
     store.avatarError = "";
     store.presetModal.id = p.id;
     store.presetModal.form = k.values(p); // 只取表单要的字段（列表项还带 characters 等）
+    // 切换/打开时留一份快照：弹窗里的「未保存 / 还原」拿它比（见 presetModalDirty）
+    store.presetModal.saved = store.snapshot(store.presetModal.form);
     store.presetModal.saveError = "";
   },
   closePresetModal() {
@@ -298,6 +301,12 @@ Object.assign(store, {
 
 store.profileDirty = computed(() => {
       return !store.sameSnapshot(store.profileForm, store.profile);
+});
+
+// 预设编辑弹窗里"有没有改动"：当前表单 vs 打开/切到这条时的快照（新建的空白快照也算）
+store.presetModalDirty = computed(() => {
+      if (!store.presetModal.visible || !store.presetModal.saved) return false;
+      return !store.sameSnapshot(store.presetModal.form, store.presetModal.saved);
 });
 
 store.worldDirty = computed(() => {

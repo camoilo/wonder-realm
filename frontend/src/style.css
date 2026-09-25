@@ -2041,6 +2041,16 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
   gap: 6px;
 }
 
+/* 两个编辑弹窗里的"未保存 / 还原"一行：与面板底部那排同款（复用 .dirty-flag / .revert-btn）。
+   手机上面板底部那排够不到时，弹窗里必须自己也看得见、点得到（用户要求） */
+.modal-dirty {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 0 2px;
+}
+
 /* ---------- 面板底部常驻的保存区 ---------- */
 /* 保存键与"未保存 / 还原"固定在面板底部：内容再长也不会跟着滚走、不会被内容量挤位置
    （三块共用一个保存键，不必滚到底才能按）。

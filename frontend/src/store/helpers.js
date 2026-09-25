@@ -174,8 +174,11 @@ export const emptyAttrDef = () => ({ name: "", type: "", hint: "" });
 // 探索模式下对用户隐藏、也不允许改写的三个字段（与后端 character_gen.HIDDEN_FIELDS 一致）
 export const LOCKED_FIELDS = ["personality", "speech_style", "backstory"];
 
-// "我的设定"（用户本人）。与角色无关；三项都可以留空。id=1 是当前那份、id>1 是预设
-export const emptyProfile = () => ({ name: "", identity: "", appearance: "", avatar: "" });
+// "我的设定"（用户本人）。与角色无关；各项都可以留空。id=1 是当前那份、id>1 是预设。
+// **`name` 只给自己看**（自己的标记，不进提示词），**`call_name` 才是模型对你的称呼**（进提示词）
+export const emptyProfile = () => ({
+  name: "", call_name: "", identity: "", appearance: "", avatar: "",
+});
 
 // "世界设定"。id=1 是当前世界、id>1 是世界预设；四项都可以留空。
 // terms 是词库：[{term, meaning}]，顺序就是注入提示词的顺序。
@@ -201,6 +204,7 @@ export const PRESET_KINDS = {
     sub: (p) => p.identity || "（没填身份）",
     values: (p) => ({
       name: p.name || "",
+      call_name: p.call_name || "",
       identity: p.identity || "",
       appearance: p.appearance || "",
       avatar: p.avatar || "",
@@ -251,6 +255,8 @@ export const emptyCharModal = () => ({
   // profile_id / world_id 只加在弹窗表单里（不加进 emptyCharForm）：右侧面板那个 charForm
   // 也用它，而面板是整体提交的，多带一个 null 就等于"一保存角色设定就把两个绑定都解了"
   form: { ...emptyCharForm(), profile_id: null, world_id: null },
+  // 打开弹窗时的快照：用来算"未保存"与「还原」（还原只回退到打开时那份，不动数据库）
+  saved: null,
   gen: emptyGenerator(),
   locked: false,
   // 保存失败要在弹窗里说：底部错误条只在会话打开时渲染，新建角色时它根本不在

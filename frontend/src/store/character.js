@@ -155,6 +155,9 @@ Object.assign(store, {
       if (store.charModal.editingId === cid) {
         store.charModal.form.backgrounds = resp.images || [];
         store.bgMax = resp.max || BG_MAX_COUNT;
+        // 背景图是"从别处取回来的"，不是用户改的：取完顺手把快照对齐，
+        // 否则弹窗一打开就顶着"未保存"（见 charModal.saved 的用途）
+        store.charModal.saved = store.snapshot(store.charModal.form);
       }
     } catch (e) {
       /* 取不到就按空处理，保存时以表单为准 */
@@ -300,6 +303,8 @@ Object.assign(store, {
       store.loadModalBackgrounds(c.id);
     } else {
       store.charModal = { ...emptyCharModal(), visible: true };
+      // 新建：快照就是这份空表单
+      store.charModal.saved = store.snapshot(store.charModal.form);
     }
   },
   async generateCharacter() {
@@ -427,6 +432,13 @@ store.chatBgUrl = computed(() => {
       if (!store.activeChar || !store.bgImages.length || store.bgHidden) return "";
       const i = Math.min(Math.max(store.bgIndex, 0), store.bgImages.length - 1);
       return store.bgImages[i] || "";
+});
+
+// 角色编辑弹窗里"有没有改动"：拿当前表单和打开时的快照比（见 charModal.saved）。
+// 弹窗里也带「未保存 / 还原」，手机上面板底部那排够不到时全靠它（用户要求）
+store.charModalDirty = computed(() => {
+      if (!store.charModal.visible || !store.charModal.saved) return false;
+      return !store.sameSnapshot(store.charModal.form, store.charModal.saved);
 });
 
 store.showBgBar = computed(() => {

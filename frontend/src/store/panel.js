@@ -46,7 +46,16 @@ Object.assign(store, {
     if (section === "gen") store.genForm = store.snapshot(store.genSaved);
     else if (section === "char") store.charForm = store.snapshot(store.charSaved);
     else if (section === "memory") store.memoryText = store.memorySaved;
-    // 世界设定 / 我的设定两页**只读**（内容来自绑定的预设），没有可还原的东西
+    // 两个编辑弹窗：「还原」回到**打开弹窗时**那份（不碰数据库，等价于"回到上次保存的"）
+    else if (section === "charModal" && store.charModal.saved) {
+      store.charModal.form = store.snapshot(store.charModal.saved);
+      store.avatarError = "";
+    } else if (section === "presetModal" && store.presetModal.saved) {
+      store.presetModal.form = store.snapshot(store.presetModal.saved);
+      store.avatarError = "";
+      store.presetModal.saveError = "";
+    }
+    // 世界设定 / 我的设定两页**只读**（内容来自选中的预设），没有可还原的东西
   },
   fieldsOf(mode) {
     return store.genFields[mode] || [];

@@ -255,17 +255,20 @@ def _world_block(world) -> str:
 def _user_block(profile) -> str:
     """用户本人的设定。三项都没填就整块不出现——不要给模型一段空标签。
 
-    只给聊天与沉浸两种模式用：导演模式是"写故事"，没有"我是谁"这回事（见 DEVELOPMENT §2.3 我的设定）。
+    **`name` 不进来**：那是"只给自己看的名字"（自己的标记，跟世界设定里的"名称"一个性质）；
+    模型看到的是 `call_name`（称呼）。见 DEVELOPMENT §2.3 我的设定。
+
+    只给聊天与沉浸两种模式用：导演模式是"写故事"，没有"我是谁"这回事。
     """
     p = profile or {}
-    name = (p.get("name") or "").strip()
+    call_name = (p.get("call_name") or "").strip()
     identity = (p.get("identity") or "").strip()
     appearance = (p.get("appearance") or "").strip()
-    if not (name or identity or appearance):
+    if not (call_name or identity or appearance):
         return ""
     parts = []
-    if name:
-        parts.append(f"姓名：{name}")
+    if call_name:
+        parts.append(f"称呼：{call_name}（用户希望你这样称呼他/她）")
     if identity:
         parts.append(f"身份：{identity}")
     if appearance:

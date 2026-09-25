@@ -94,8 +94,12 @@
 
 | 字段 | 说明 | 进提示词 |
 |---|---|---|
-| `name` / `identity` / `appearance` | 名字 / 身份 / 外观 | 是（聊天与沉浸） |
+| `name` | **名字**：只给自己看的标记（跟世界设定里的"名称"一个性质，列表里靠它辨认） | **否** |
+| `call_name` | **称呼**：模型怎么称呼你 | 是（聊天与沉浸） |
+| `identity` / `appearance` | 身份 / 外观 | 是（聊天与沉浸） |
 | `avatar` | 头像，同角色一套校验裁剪 | 否 |
+
+**名字与称呼是两件事**（用户要求拆开）：`name` 只是自己的标记、不进提示词；模型看到的是 `call_name`（`_user_block` 里写"称呼：X（用户希望你这样称呼他/她）"）。**只填名字时整块不出现**——名字不进提示词，单独存在等于"什么都没给模型"。老库升级时 `call_name` **留空、不复制老 `name`**（两者语义不同），由用户自己填；补列走 `_COLUMN_MIGRATIONS`，`test_profile.py` 里有一段"老库补列"的用例盯着。前端那边 `emptyProfile()` / `PRESET_KINDS.profile.values` / 预设弹窗都已带上这个字段。
 
 面板那一页**只读**：显示的就是选中的那条预设的内容（`readonly` 框 + 只读词库），页面里没有任何编辑入口，底部也不显示「保存当前配置」而是给一行说明。入口键三颗：**选择预设（没选时）/ 更换预设（选了时）· 编辑预设 · 解除绑定（选了才有）**，一律不带省略号。
 - **绑定 = 唯一的启用入口**：写角色的 `profile_id`/`world_id`（导演会话写 `sessions.world_id`），随后把 `id=1` 对齐过去（立即生效）。传 `NULL` 就是解除绑定 = 不启用
@@ -277,7 +281,7 @@ characters(id, name, appearance, personality, speech_style, backstory, created_a
     world_id REFERENCES worlds(id),           -- 绑定的世界预设（NULL=不绑定）
     attr_defs)           -- 附加属性定义 [{"name","type","hint"}]
 
-user_profiles(id, name, identity, appearance, avatar, updated_at)  -- id=1 当前，id>1 预设
+user_profiles(id, name, call_name, identity, appearance, avatar, updated_at)  -- id=1 当前，id>1 预设
 
 worlds(id, name, description, rules, terms, updated_at)  -- terms=[{"term","meaning"}] 有序
 
@@ -482,12 +486,13 @@ event: error  {"message"}                       # 中断发送并结束流
 - **角色弹窗背景（`.bg-pick`）**：缩略图行（92×62，拖动排序、左上序号、右上 ✕、底部 ‹/›）+ 虚线添加格（满则不显）；多选一次加多张，超出忽略并提示；批量时按钮"处理中…"并给主线程让位；缩略图 `<img>` 必须 `draggable="false"`（否则原生拖拽接管指针）
 - **预设绑定界面分两处**：改绑在面板那两页的「选择预设」与「编辑角色」弹窗底部两项 `.field-bind` 下拉；显示在两个预设弹窗（左列表第三行"角色：X、Y/未绑定"、右详情"绑定角色"）。两绑定字段只加 `charModal.form`，**不加进 `emptyCharForm()`**（面板 `charForm` 用同工厂，多 null=一保存就解绑；新角色也因此默认未启用）
 - **两个预设弹窗是一套实现 + `kind` 派发**（`BindPresetModal`/`PresetModal` + `PRESET_KINDS`）：列表/两栏/流程全共用，右侧按 kind 分支（早先叫"载入预设"，语义已改成"绑定预设"）。词库编辑器抽成 `TermEditor.vue`（`readonly` 给只读页用）。面板那两页的可见性由 `data-tab="world|profile"` 定位（自检探针也靠它）
+- **编辑弹窗里的「未保存 / 还原」**（角色弹窗与预设弹窗各一份）：打开/切换时把表单存一份快照（`charModal.saved` / `presetModal.saved`），`charModalDirty` / `presetModalDirty` 拿当前表单跟它比；「还原」走同一套两段式确认（`armRevert('charModal'|'presetModal')`，`revertSection` 里对应分支换回快照）。**快照时机有两处坑**：新建角色时在设完空表单后立刻取；编辑角色时要等 `loadModalBackgrounds()` 把背景图取回来之后再取——否则"背景图从列表外加载回来"会被算成用户改动，弹窗一打开就顶着"未保存"。手机上面板底部那排够不到，所以弹窗里必须自带这一行
 - **附加属性三处**：定义编辑在面板角色设定页（`AttrEditor.vue`，新加行不给默认类型）；**入口 + 下拉在顶栏** `AttrPanel.vue`（`.attr-slot`：`.attr-btn` 紧跟搜索键，`.attr-panel` 绝对定位在键下方、`width:260px`/手机 `50vw`、收起态 `attrsCollapsed`）；编辑消息弹窗内一节（百分比数字框、文字输入框，留空=没设置）。属性值不进气泡
 - **头像裁剪弹窗**（`.crop-mask` 1200 > 遮罩 1000）：固定方形取景框（280px，`overflow:hidden`）+ 缩放滑杆 + 复位；`transform:translate()scale()`、`max-width:none` 必写、`touch-action:none`、`draggable=false`；取景框边界用 **2px outline**（`border-box` 会让 border 压尺寸，换算按 280px 算）；Esc 优先关它；仅取样小于输出边长时提示"可能偏糊"
 - **消息区**：滚动容器外有背景层（`contain` 居中，滚消息背景不动）；有 ≥1 背景时底部中央浮胶囊 +「关闭背景」；聊天/沉浸两侧各有头像列（`.msg-side`+`.avatar.lg` 64px 方形），用户列只在设了名字或头像时渲染；气泡上方 `.msg-head`（说话人+时间，两侧镜像顺序）；气泡宽度由 `bubble-wrap` 单独约束（`min(80%,680px)`），内层只写 `max-width:100%`（两层都写会二次收缩）；**两侧同白底同边框**，只靠左右与下方缺角（`border-bottom-left/right-radius:4px`）区分；已归档折叠"已归档 N 条（已存入记忆）"
 - **消息操作**：hover 显示操作条——复制/编辑/删除（单条或"此处之后"）/重新生成（都自带文字，不再加悬停提示）。删除选项用小菜单，点别处/Esc 关闭。角色已删除的会话只可查看（"重新生成"不渲染，输入框禁用）
 - **面板"未保存"提示**：比对快照，有改动在图标右上点小圆点 + 面板底部"未保存"与「还原」键；只提示不弹窗拦截
-- **移动端适配**（已实施，断点与触屏约定见 9.6）：三断点 `>900px` 桌面三栏 / `641–900px` 紧凑桌面（保留三栏，收紧顶栏）/ `≤640px` 手机单栏。手机断点全部规则收在一条 `@media (max-width: 640px)`：左侧栏 fixed 抽屉（汉堡滑出、遮罩关闭，进会话自动收回）、右侧面板变底部弹层（**固定高 85vh / 上限 94vh**，矮屏也够一屏看完设定；图标栏横排当标签，`onRailClick` 只切页；**打开入口是顶栏四宫格直达按钮** `toggleMobilePanel`，提示文案叫「控制面板」，遮罩关闭；**无会话时点它不开遮罩**——面板 `v-if="activeSession"`，没会话点了只有空遮罩，直接 `flashHint` 提示；更多菜单不再放"面板"行）、顶栏仅留 汉堡/标题/放大镜(弹出搜索条)/属性下拉/面板/更多⋮(收纳模型/思考/主题)、**底部输入区三行同构**（辅助键行左右分栏、情境行、话语行＋发送键；两框无标题；`--send-w` 收紧到 68px、`--aux-h` 36px、发送键 44px、**两框都一行 61px**）、**底部辅助内容（背景切换/继续/情境）统一收进「⋯」键**（`auxOpen` 状态 + `inputbar.aux-open` 类，桌面不收纳；收纳态输入区只留话语框、↓ 与发送键；情境无独立折叠；那一排 `overflow-x:auto` 可横滑、滚动条隐藏；**↓ 不进收纳**）、**消息头像保留但缩到 40px**、**附加属性下拉**（宽度只占半屏 `50vw`、字号收一档）、弹窗全屏、`.modal-body.preset-split` 上下堆叠。全局基础：`viewport-fit=cover` + `--sat/--sab` 安全区、`-webkit-text-size-adjust:100%` 禁聚焦放大、`overscroll-behavior:none`、`v-hint` 在 `pointer:coarse` 降级为点击显示。三个开合状态 `mobileSideOpen/mobilePanelOpen/mobileMoreOpen` 合成 `mobileMask`（**搜索条 `searchOpen` 不在其中**：它双端共用，进遮罩会让桌面一开搜索就冒遮罩），`closeMobileLayers()` 一把全关；**遮罩必须 `position: fixed; inset: 0`**——否则它是文档流里 0 高的元素，真机点不到、抽屉与弹层关不掉
+- **移动端适配**（已实施，断点与触屏约定见 9.6）：三断点 `>900px` 桌面三栏 / `641–900px` 紧凑桌面（保留三栏，收紧顶栏）/ `≤640px` 手机单栏。手机断点全部规则收在一条 `@media (max-width: 640px)`：左侧栏 fixed 抽屉（汉堡滑出、遮罩关闭，进会话自动收回）、右侧面板变底部弹层（**固定高 85vh / 上限 94vh**，矮屏也够一屏看完设定；图标栏横排当标签，`onRailClick` 只切页；**打开入口是顶栏四宫格直达按钮** `toggleMobilePanel`，提示文案叫「控制面板」，遮罩关闭；**无会话时点它不开遮罩**——面板 `v-if="activeSession"`，没会话点了只有空遮罩，直接 `flashHint` 提示；更多菜单不再放"面板"行）、顶栏仅留 汉堡/标题/放大镜(弹出搜索条)/属性下拉/面板/更多⋮(收纳模型/思考/主题)、**底部输入区三行同构**（辅助键行左右分栏、情境行、话语行＋发送键；两框无标题；`--send-w` 收紧到 68px、`--aux-h` 36px、发送键 44px、**两框都一行 61px**）、**底部辅助内容（背景切换/继续/情境）收在「⋯」键里，默认展开**（`auxOpen` 初值 `true`，用户要求进会话就能看到；`inputbar.aux-open` 类，桌面不收纳；收起来时输入区只留话语框、↓ 与发送键；情境无独立折叠；那一排 `overflow-x:auto` 可横滑、滚动条隐藏；**↓ 不进收纳**）、**消息头像保留但缩到 40px**、**附加属性下拉**（宽度只占半屏 `50vw`、字号收一档）、弹窗全屏、`.modal-body.preset-split` 上下堆叠。全局基础：`viewport-fit=cover` + `--sat/--sab` 安全区、`-webkit-text-size-adjust:100%` 禁聚焦放大、`overscroll-behavior:none`、`v-hint` 在 `pointer:coarse` 降级为点击显示。三个开合状态 `mobileSideOpen/mobilePanelOpen/mobileMoreOpen` 合成 `mobileMask`（**搜索条 `searchOpen` 不在其中**：它双端共用，进遮罩会让桌面一开搜索就冒遮罩），`closeMobileLayers()` 一把全关；**遮罩必须 `position: fixed; inset: 0`**——否则它是文档流里 0 高的元素，真机点不到、抽屉与弹层关不掉
 
 ### 7.2 关键交互流
 - **发送**：回车/点发送 → 立即渲染 user 气泡 → 建 SSE →（`thinking` 时"模型思考中…"占位）→ 逐段追加 → `done` 解析渲染、刷新归档折叠区（done 连带附加属性）。生成中变"停止"（`AbortController`，见 5.5）

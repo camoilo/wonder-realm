@@ -107,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_character_images ON character_images(character_id
 CREATE TABLE IF NOT EXISTS user_profiles (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL DEFAULT '',
+    call_name  TEXT NOT NULL DEFAULT '',
     identity   TEXT NOT NULL DEFAULT '',
     appearance TEXT NOT NULL DEFAULT '',
     avatar     TEXT NOT NULL DEFAULT '',
@@ -155,6 +156,10 @@ _COLUMN_MIGRATIONS = {
     },
     "sessions": {"world_id": "INTEGER REFERENCES worlds(id)"},
     "messages": {"attrs": "TEXT NOT NULL DEFAULT '[]'"},
+    # 「我的设定」拆出「称呼」（模型怎么称呼你；`name` 只给自己看、不进提示词）。
+    # 老库没有这一列，**故意不把老的 name 复制过来**：名字是"自己的标记"，称呼是"给模型用的"，
+    # 语义不同；升级后称呼为空 = 模型暂时不称呼你，由用户自己填。
+    "user_profiles": {"call_name": "TEXT NOT NULL DEFAULT ''"},
     # app_settings 是单行设置表：每加一个偏好就在这里登记一次
     "app_settings": {"lan_enabled": "INTEGER NOT NULL DEFAULT 0"},
 }
@@ -289,19 +294,20 @@ def write_disable_thinking(disabled: bool) -> None:
         con.close()
 
 
-PROFILE_FIELDS = ("name", "identity", "appearance", "avatar")
+PROFILE_FIELDS = ("name", "call_name", "identity", "appearance", "avatar")
 
 
 def read_profile() -> dict:
     """用户本人的设定。行不存在时返回全空，调用方不必判 None（init_db 会补行）。
 
-    `id=1` 这一行是"当前使用的设定"；`id>1` 的行是保存下来的**预设**（见 DEVELOPMENT §2.3 我的设定）。
-    两者共用一张表：旧库直接可用，不必改表结构，也不必再开一张表。
+    `name` 是**只给自己看的名字**（进不进提示词由 prompts 决定：它不进），
+    `call_name` 才是**模型对你的称呼**（见 DEVELOPMENT §2.3 我的设定）。
+    `id=1` 这一行是"当前使用的设定"；`id>1` 的行是保存下来的**预设**。
     """
     con = connect()
     try:
         row = con.execute(
-            "SELECT name, identity, appearance, avatar FROM user_profiles WHERE id=1"
+            "SELECT name, call_name, identity, appearance, avatar FROM user_profiles WHERE id=1"
         ).fetchone()
     finally:
         con.close()
@@ -325,9 +331,10 @@ def write_profile(values: dict) -> dict:
     con = connect()
     try:
         con.execute(
-            "UPDATE user_profiles SET name=?, identity=?, appearance=?, avatar=?, updated_at=? WHERE id=1",
+            "UPDATE user_profiles SET name=?, call_name=?, identity=?, appearance=?, avatar=?, updated_at=? WHERE id=1",
             (
                 values.get("name", ""),
+                values.get("call_name", ""),
                 values.get("identity", ""),
                 values.get("appearance", ""),
                 values.get("avatar", ""),
@@ -342,7 +349,7 @@ def write_profile(values: dict) -> dict:
 
 # ---- "我的设定"的预设：同一张表的 id>1 行（见 DEVELOPMENT §2.3 我的设定） ----
 
-_PRESET_COLS = "id, name, identity, appearance, avatar, updated_at"
+_PRESET_COLS = "id, name, call_name, identity, appearance, avatar, updated_at"
 
 
 def _bound_characters(con, column: str) -> dict[int, list[dict]]:
@@ -381,10 +388,11 @@ def add_preset(values: dict) -> dict:
     con = connect()
     try:
         cur = con.execute(
-            "INSERT INTO user_profiles(name, identity, appearance, avatar, updated_at) "
-            "VALUES(?,?,?,?,?)",
+            "INSERT INTO user_profiles(name, call_name, identity, appearance, avatar, updated_at) "
+            "VALUES(?,?,?,?,?,?)",
             (
                 values.get("name", ""),
+                values.get("call_name", ""),
                 values.get("identity", ""),
                 values.get("appearance", ""),
                 values.get("avatar", ""),
@@ -407,10 +415,11 @@ def update_preset(preset_id: int, values: dict) -> dict | None:
     con = connect()
     try:
         cur = con.execute(
-            "UPDATE user_profiles SET name=?, identity=?, appearance=?, avatar=?, updated_at=? "
+            "UPDATE user_profiles SET name=?, call_name=?, identity=?, appearance=?, avatar=?, updated_at=? "
             "WHERE id=?",
             (
                 values.get("name", ""),
+                values.get("call_name", ""),
                 values.get("identity", ""),
                 values.get("appearance", ""),
                 values.get("avatar", ""),

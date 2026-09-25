@@ -93,7 +93,12 @@ export const store = reactive({
       genSaved: {},
       charSaved: emptyCharForm(),
       memorySaved: "",
-      revertArm: { gen: false, char: false, profile: false, memory: false, world: false },
+      // 「还原」的两段式确认（第一次点变"确认还原？"）按区域各自记一个标记：
+      // 面板那几页 + 两个编辑弹窗（角色弹窗 / 预设弹窗，见 §9）
+      revertArm: {
+        gen: false, char: false, profile: false, memory: false, world: false,
+        charModal: false, presetModal: false,
+      },
       avatarError: "",
       panelTab: "gen", // 右侧面板当前显示哪个标签：gen / world / char / profile / memory
       searchQuery: "",
@@ -107,8 +112,12 @@ export const store = reactive({
       // 绑定预设的弹窗：左边挑一条、右边看详情，确认后**绑定**（原「载入预设」，见 §2.3/§2.4）。
       // kind 决定这是"我的设定"还是"世界设定"的预设（两种共用这一对弹窗，见 helpers.PRESET_KINDS）
       bindModal: { visible: false, kind: "profile", pick: "" },
-      // 编辑预设的弹窗：选要改哪条、也能新建（id=null = 还没落库），删除也在这里
-      presetModal: { visible: false, kind: "profile", id: null, form: emptyProfile(), saveError: "" },
+      // 编辑预设的弹窗：选要改哪条、也能新建（id=null = 还没落库），删除也在这里；
+      // saved 是"打开/切到这条时的快照"，弹窗里的「未保存 / 还原」拿它比
+      presetModal: {
+        visible: false, kind: "profile", id: null, form: emptyProfile(),
+        saved: null, saveError: "",
+      },
       world: emptyWorld(),
       worldForm: emptyWorld(),
       worldPresets: [],
@@ -117,7 +126,8 @@ export const store = reactive({
       limits: {
         message: 2000, scenario: 2000, name: 20, appearance: 600, personality: 600,
         speech_style: 600, backstory: 1200, genre: 60, extra: 500, hint: 200,
-        memory: 2000, title: 40, user_name: 20, identity: 300, user_appearance: 600,
+        memory: 2000, title: 40, user_name: 20, user_call_name: 20, identity: 300,
+        user_appearance: 600,
         world_name: 40, world_description: 2000, world_rules: 2000, world_term: 30,
         world_term_meaning: 150, world_terms_max: 30,
         attr_name: 20, attr_hint: 200, attr_value: 100, attr_max: 8,

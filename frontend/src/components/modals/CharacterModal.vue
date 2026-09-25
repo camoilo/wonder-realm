@@ -144,6 +144,14 @@
       <!-- 操作行钉在弹窗底部：它在 .modal-body（唯一可滚动区）之外，内容再长也不会
            跟着滚走。保存失败的那行提示也放在这里，与按钮一起始终可见 -->
       <p v-if="charModal.saveError" class="avatar-error">{{ charModal.saveError }}</p>
+      <!-- 有改动就给「未保存 + 还原」：手机上面板底部那排保存/还原够不到，
+           弹窗里必须自己能看见、能回退（用户要求） -->
+      <div v-if="charModalDirty" class="modal-dirty">
+        <span class="dirty-flag">未保存</span>
+        <button class="revert-btn" :class="{armed: revertArm.charModal}"
+                v-hint="revertArm.charModal ? '再点一次即回到打开时的内容' : '回到打开时的内容'"
+                @click="armRevert('charModal')">{{ revertArm.charModal ? "确认还原？" : "还原" }}</button>
+      </div>
       <div class="modal-actions">
         <button v-if="charModal.editingId" class="danger-btn" @click="removeCharacterFromModal">删除角色</button>
         <span class="spacer"></span>
@@ -166,14 +174,17 @@ const {
   bgError,
   bgMax,
   charModal,
+  charModalDirty,
   limits,
   profilePresets,
+  revertArm,
   worldPresets,
 } = toRefs(store);
 
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {
   addBackgrounds,
+  armRevert,
   bgDragEnd,
   bgDragOver,
   bgDragStart,

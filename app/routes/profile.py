@@ -32,6 +32,7 @@ def update_profile(body: ProfileIn):
     return write_profile(
         {
             "name": body.name.strip(),
+            "call_name": body.call_name.strip(),
             "identity": body.identity.strip(),
             "appearance": body.appearance.strip(),
             "avatar": body.avatar,
@@ -58,6 +59,7 @@ def create_preset(body: ProfileIn):
     return add_preset(
         {
             "name": name,
+            "call_name": body.call_name.strip(),
             "identity": body.identity.strip(),
             "appearance": body.appearance.strip(),
             "avatar": body.avatar,
@@ -79,6 +81,7 @@ def update_preset_route(preset_id: int, body: ProfileIn):
         preset_id,
         {
             "name": name,
+            "call_name": body.call_name.strip(),
             "identity": body.identity.strip(),
             "appearance": body.appearance.strip(),
             "avatar": body.avatar,

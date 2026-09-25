@@ -29,7 +29,7 @@ CHARACTER = {
     "backstory": "",
 }
 WORLD = {"name": "不算数的名字", "description": "一座海边小城", "rules": "", "terms": []}
-PROFILE = {"name": "小李", "identity": "", "appearance": ""}
+PROFILE = {"name": "小李", "call_name": "小雨", "identity": "", "appearance": ""}
 
 
 def chat(**kw):
@@ -73,6 +73,12 @@ check("世界设定在角色设定之前",
       0 < full.index("# 世界设定") < full.index("# 角色设定"), True)
 check("我的设定在角色设定之后",
       full.index("# 角色设定") < full.index("# 与你对话的人"), True)
+# 名字只给自己看、不进提示词；模型看到的是「称呼」（用户要求拆开的两个字段）
+check("称呼进提示词", "称呼：小雨" in full, True)
+check("只给自己看的名字不进提示词", "小李" in full, False)
+check("只填名字（没有称呼/身份/外观）时整块不出现",
+      "# 与你对话的人" in chat(profile={"name": "小李", "call_name": "",
+                                        "identity": "", "appearance": ""}), False)
 check("记忆在回复要求之前",
       full.index("# 你对这个用户的记忆") < full.index("# 回复要求"), True)
 check("输出规则在最后", full.rindex("# 输出规则") > full.index("# 回复要求"), True)

@@ -63,15 +63,19 @@ app.include_router(profile_routes.router)
 client = TestClient(app)
 
 AV = "data:image/jpeg;base64,AAAA"
-r = client.put("/api/profile", json={"name": "小林", "identity": "见习侦探",
-                                     "appearance": "短发", "avatar": AV})
+r = client.put("/api/profile", json={"name": "小林", "call_name": "小林林",
+                                     "identity": "见习侦探", "appearance": "短发", "avatar": AV})
 check("保存当前设定", r.json()["name"], "小林")
+# 名字只给自己看、称呼才是给模型用的（见 DEVELOPMENT §2.3）：两个字段都要存得住
+check("称呼与名字分开存", r.json()["call_name"], "小林林")
 
-r = client.post("/api/profile/presets", json={"name": "阿澈", "identity": "游侠",
+r = client.post("/api/profile/presets", json={"name": "阿澈", "call_name": "澈哥",
+                                              "identity": "游侠",
                                               "appearance": "青衫", "avatar": AV})
 check("存为预设 200", r.status_code, 200)
 p1 = r.json()
 check("预设带 id 与头像", (p1["id"] > 1, p1["avatar"] == AV), (True, True))
+check("预设也带称呼", p1["call_name"], "澈哥")
 p2 = client.post("/api/profile/presets", json={"name": "小满", "identity": "学生"}).json()
 
 presets = client.get("/api/profile/presets").json()
@@ -83,6 +87,35 @@ check("当前设定仍只有一行", database.connect().execute(
     "SELECT COUNT(*) FROM user_profiles WHERE id=1").fetchone()[0], 1)
 
 check("名字为空拒绝存预设", client.post("/api/profile/presets", json={"name": "  "}).status_code, 400)
+
+# ---- 2b. 老库迁移：user_profiles 本来没有 call_name 这一列（见 database._COLUMN_MIGRATIONS） ----
+# 这一步必须单独验：老用户升级时走的就是"建表语句是 IF NOT EXISTS、新列靠迁移补"这条路，
+# 迁移漏了的话应用一起来就报 no such column（真踩过这类）。
+import sqlite3  # noqa: E402
+
+old = Path(".test_profile_old").resolve()
+shutil.rmtree(old, ignore_errors=True)
+old.mkdir()
+old_db = old / "chatbot.db"
+con = sqlite3.connect(old_db)
+con.execute(
+    "CREATE TABLE user_profiles (id INTEGER PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+    "identity TEXT NOT NULL DEFAULT '', appearance TEXT NOT NULL DEFAULT '', "
+    "avatar TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)"
+)
+con.execute("INSERT INTO user_profiles(id, name, identity, appearance, avatar, updated_at) "
+            "VALUES(1, '旧名字', '旧身份', '', '', '2020-01-01')")
+con.commit()
+con.close()
+database.init_db(str(old), "", "")
+cols = [r[1] for r in database.connect().execute("PRAGMA table_info(user_profiles)")]
+check("老库补上了 call_name 列", "call_name" in cols, True)
+check("老库的 name 保持原样（不当成称呼）",
+      database.read_profile()["name"], "旧名字")
+check("老库的称呼留空（由用户自己填）", database.read_profile()["call_name"], "")
+shutil.rmtree(old, ignore_errors=True)
+# 迁移检查把 DB_PATH 指到了老库上，这里**指回前面那个临时库**，后面的用例继续跑
+database.init_db(str(tmp), cfg["ollama"]["model"], "")
 
 # ---- 3b. 覆盖保存已有预设（面板上选中某条后按钮变成「保存预设」）----
 r = client.put(f"/api/profile/presets/{p2['id']}",

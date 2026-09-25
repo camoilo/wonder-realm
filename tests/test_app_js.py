@@ -330,9 +330,9 @@ check("选中图标用强调色边框 + 深色底区分",
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-# 我的设定 / 世界设定两页只读（内容来自绑定的预设），所以那两页没有计数提示了
-check("计数提示数量（含底部输入区两栏、两种预设弹窗各三项、世界设定词条两项、附加属性两项）",
-      counters, 29)
+# 我的设定 / 世界设定两页只读（内容来自选中的预设），所以那两页没有计数提示了
+check("计数提示数量（含底部输入区两栏、两种预设弹窗各四项、世界设定词条两项、附加属性两项）",
+      counters, 30)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆、数字框除外——数字框用 min/max）；
@@ -695,7 +695,25 @@ check("面板上不再有「存为预设」", "存为预设" in _wp or "存为�
 check("世界设定页只读（框 readonly、词库只读、头像/上传都没有）",
       _wp.count("readonly") >= 4 and "pickAvatar" not in _wp, True)
 check("我的设定页只读（框 readonly、没有上传头像）",
-      _pp.count("readonly") >= 3 and "pickAvatar" not in _pp, True)
+      _pp.count("readonly") >= 4 and "pickAvatar" not in _pp, True)
+# 名字（只给自己看）与称呼（模型用）是两个字段：页面上分开显示，预设弹窗里分开编辑
+check("我的设定页有「名字」与「称呼」两个字段",
+      "profileForm.name" in _pp and "profileForm.call_name" in _pp
+      and "只给你自己看" in _pp and "模型这样称呼你" in _pp, True)
+check("预设弹窗里也能改称呼（带自己的上限与计数）",
+      "presetModal.form.call_name" in html and "limits.user_call_name" in html, True)
+# 两个编辑弹窗里的「未保存 / 还原」（手机上够不到面板底部那排，用户要求补）
+check("角色弹窗有未保存/还原",
+      "charModalDirty" in html and "armRevert('charModal')" in html
+      and "charModalDirty = computed" in js, True)
+check("预设弹窗有未保存/还原",
+      "presetModalDirty" in html and "armRevert('presetModal')" in html
+      and "presetModalDirty = computed" in js, True)
+check("弹窗的快照在打开/切换时取（背景图取回后也要对齐，否则一开就显示未保存）",
+      "this.charModal.saved = this.snapshot(this.charModal.form);" in js
+      and "this.presetModal.saved = this.snapshot(this.presetModal.form);" in js, True)
+check("还原会回到快照（两个弹窗都在 revertSection 里）",
+      'section === "charModal"' in js and 'section === "presetModal"' in js, True)
 check("只读页不给保存键，底部改成说明",
       "readonlyTab" in html and "内容来自选中的预设" in html, True)
 check("绑定弹窗有列表与详情",

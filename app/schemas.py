@@ -93,9 +93,13 @@ class CharacterIn(BaseModel):
 
 
 class ProfileIn(BaseModel):
-    """用户本人的设定（"我的设定"）。全部可选：什么都不填也能保存。"""
+    """用户本人的设定（"我的设定"）。全部可选：什么都不填也能保存。
+
+    `name` 是只给自己看的名字（**不进提示词**），`call_name` 才是模型对你的称呼（进提示词）。
+    """
 
     name: str = Field(default="", max_length=LIMITS["user_name"])
+    call_name: str = Field(default="", max_length=LIMITS["user_call_name"])
     identity: str = Field(default="", max_length=LIMITS["identity"])
     appearance: str = Field(default="", max_length=LIMITS["user_appearance"])
     avatar: str = ""

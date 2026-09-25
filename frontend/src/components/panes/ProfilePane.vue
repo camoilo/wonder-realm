@@ -25,6 +25,13 @@
   <div class="counted">
     <input :value="profileForm.name" type="text" readonly>
   </div>
+  <span class="hint">只给你自己看，不发给模型。</span>
+</label>
+<label class="field">称呼
+  <div class="counted">
+    <input :value="profileForm.call_name" type="text" readonly>
+  </div>
+  <span class="hint">模型这样称呼你。</span>
 </label>
 <label class="field">身份
   <div class="counted">
@@ -36,7 +43,7 @@
     <textarea :value="profileForm.appearance" rows="3" readonly></textarea>
   </div>
 </label>
-<p class="hint">「身份」「外观」会进聊天与沉浸模式的提示词；导演模式不用。</p>
+<p class="hint">「称呼」「身份」「外观」会进聊天与沉浸模式的提示词；导演模式不用。</p>
 </template>
 
 <script setup>
