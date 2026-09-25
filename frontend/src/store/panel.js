@@ -45,9 +45,8 @@ Object.assign(store, {
     store.disarmRevert(section);
     if (section === "gen") store.genForm = store.snapshot(store.genSaved);
     else if (section === "char") store.charForm = store.snapshot(store.charSaved);
-    else if (section === "profile") store.profileForm = store.snapshot(store.profile);
-    else if (section === "world") store.worldForm = store.snapshot(store.world);
     else if (section === "memory") store.memoryText = store.memorySaved;
+    // 世界设定 / 我的设定两页**只读**（内容来自绑定的预设），没有可还原的东西
   },
   fieldsOf(mode) {
     return store.genFields[mode] || [];
@@ -106,9 +105,8 @@ Object.assign(store, {
     }
   },
   saveCurrentTab() {
-    if (store.panelTab === "world") return store.saveWorld();
+    // 世界设定 / 我的设定两页不在这里：它们只读，底部也没保存键（见 Panel.vue）
     if (store.panelTab === "char") return store.saveCharacterDrawer();
-    if (store.panelTab === "profile") return store.saveProfile();
     if (store.panelTab === "memory") return store.saveMemory();
     return store.saveGenSettings();
   },
@@ -200,9 +198,8 @@ store.memoryDirty = computed(() => {
 });
 
 store.activeTabDirty = computed(() => {
-      if (store.panelTab === "world") return store.worldDirty;
+      // 世界设定 / 我的设定两页只读，永远不会"未保存"（保存键也不显示）
       if (store.panelTab === "char") return store.charDirty;
-      if (store.panelTab === "profile") return store.profileDirty;
       if (store.panelTab === "memory") return store.memoryDirty;
       return store.genDirty;
 });

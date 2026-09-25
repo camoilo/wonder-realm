@@ -7,42 +7,15 @@
           <button v-if="lastFailedUser" class="retry-btn" @click="retryFailed">重试</button>
           <button class="dismiss" @click="error = ''">&times;</button>
         </div>
-        <div class="input-row">
-          <!-- 沉浸模式：情境（可选）与话语（必填）分两栏并排，与消息编辑弹窗同一套概念。
-               情境那栏只在沉浸模式出现，其它模式保持原来的单框。
-               手机断点整个情境栏由统一收纳键（⋯）控制显隐：收起来时输入区只留话语框＋发送键，
-               展开收纳才显示情境栏（见手机断点的 .inputbar:not(.aux-open) .scenario-field 规则） -->
-          <div v-if="isImmersiveMode" class="input-field scenario-field">
-            <span class="input-field-label">情境说明（可选）</span>
-            <div class="counted">
-              <textarea
-                v-model="inputScenario"
-                :disabled="orphanActive"
-                rows="3"
-                :maxlength="limits.scenario"
-                placeholder="场景、动作、心理等，可留空"
-                @keydown.enter.exact.prevent="send"
-              ></textarea>
-              <span class="char-count" :class="{near: isNear(inputScenario, limits.scenario)}">{{ len(inputScenario) }}/{{ limits.scenario }}</span>
-            </div>
-          </div>
-          <div class="input-field">
-            <span v-if="isImmersiveMode" class="input-field-label">话语</span>
-            <div class="counted">
-              <textarea
-                v-model="input"
-                :disabled="orphanActive"
-                rows="3"
-                :maxlength="limits.message"
-                :placeholder="isImmersiveMode ? '这一幕里说出的话（必填）' : '输入消息，Enter 发送（Shift+Enter 换行）'"
-                @keydown.enter.exact.prevent="send"
-              ></textarea>
-              <span class="char-count" :class="{near: isNear(input, limits.message)}">{{ len(input) }}/{{ limits.message }}</span>
-            </div>
-          </div>
-          <div class="send-col">
+        <!-- 第一行：辅助按键。左边一排（手机端由 ⋯ 收纳，可横向滚动，以后加键也不会挤坏布局），
+             右边"回到最新"钉在行尾、不参与滚动。桌面端没有收纳键，这一排常显。 -->
+        <div class="aux-row">
+          <div class="aux-scroll">
+            <!-- 手机端：背景切换/继续/跳底/情境（沉浸）这些辅助内容收进"⋯"里，桌面断点该按钮隐藏 -->
+            <button class="aux-toggle" :class="{on: auxOpen}" v-hint="auxOpen ? '收起辅助操作' : '展开辅助操作'"
+                    :aria-label="auxOpen ? '收起辅助操作' : '展开辅助操作'" :aria-pressed="auxOpen" @click="auxOpen = !auxOpen">&#8943;</button>
             <!-- 背景切换与"继续"互斥：前者只在聊天与沉浸两种模式出现，后者只在导演模式出现，
-                 所以它们共用发送键上方这个位置，样式也用同一套（次级按钮）。
+                 所以它们共用这个位置，样式也用同一套（次级按钮）。
                  有关闭键，所以只要有一张背景就出现（单张时翻页键置灰） -->
             <div v-if="showBgBar" class="bg-switch">
               <button type="button" v-hint="'上一张背景'" aria-label="上一张背景" :disabled="bgImages.length < 2" @click="prevBg">‹</button>
@@ -55,17 +28,51 @@
             <button v-if="isDirectorMode" class="continue-btn" :disabled="!canContinue"
                     v-hint="'基于上一条回复继续生成（相当于发送“继续”）'"
                     @click="continueGeneration">继续</button>
-            <div class="send-row">
-              <!-- 手机端：背景切换/继续/跳底/情境（沉浸）这些辅助内容收进"⋯"里，桌面断点该按钮隐藏 -->
-              <button class="aux-toggle" :class="{on: auxOpen}" v-hint="auxOpen ? '收起辅助操作' : '展开辅助操作'"
-                      :aria-label="auxOpen ? '收起辅助操作' : '展开辅助操作'" :aria-pressed="auxOpen" @click="auxOpen = !auxOpen">&#8943;</button>
-              <button v-if="streaming" class="stop-btn" @click="stop">
-                <span class="stop-square"></span>停止
-              </button>
-              <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
-              <!-- 消息很长、往上翻过之后，一键回到最新：不用一路拖滚动条 -->
-              <button class="jump-btn" v-hint="'回到页面底部（最新消息）'" aria-label="回到页面底部（最新消息）" @click="jumpToBottom">↓</button>
+          </div>
+          <!-- 消息很长、往上翻过之后，一键回到最新：不用一路拖滚动条 -->
+          <button class="jump-btn" v-hint="'回到页面底部（最新消息）'" aria-label="回到页面底部（最新消息）" @click="jumpToBottom">↓</button>
+        </div>
+        <!-- 第二、三行：情境（可选）与话语（必填）上下各占一行，与消息编辑弹窗同一套概念。
+             两框都不带标题——靠框内提示（placeholder）说明各自该填什么，省下一行高度。
+             每行右侧都留出与发送键同宽的一格（情境那行是空的 .send-spacer），
+             所以情境框与话语框左右边界严格对齐；情境只在沉浸模式出现，其它模式只有话语一行。
+             手机断点情境行由统一收纳键（⋯）控制显隐：收起来时只留话语框＋发送键
+             （见手机断点的 .inputbar:not(.aux-open) .scenario-field 规则） -->
+        <div class="input-main">
+          <div v-if="isImmersiveMode" class="field-row">
+            <div class="input-field scenario-field">
+              <div class="counted">
+                <textarea
+                  v-model="inputScenario"
+                  :disabled="orphanActive"
+                  rows="2"
+                  :maxlength="limits.scenario"
+                  placeholder="请输入情境，如动作、场景、心理等"
+                  @keydown.enter.exact.prevent="send"
+                ></textarea>
+                <span class="char-count" :class="{near: isNear(inputScenario, limits.scenario)}">{{ len(inputScenario) }}/{{ limits.scenario }}</span>
+              </div>
             </div>
+            <span class="send-spacer" aria-hidden="true"></span>
+          </div>
+          <div class="field-row">
+            <div class="input-field">
+              <div class="counted">
+                <textarea
+                  v-model="input"
+                  :disabled="orphanActive"
+                  rows="2"
+                  :maxlength="limits.message"
+                  :placeholder="isImmersiveMode ? '请输入话语' : '输入消息，Enter 发送'"
+                  @keydown.enter.exact.prevent="send"
+                ></textarea>
+                <span class="char-count" :class="{near: isNear(input, limits.message)}">{{ len(input) }}/{{ limits.message }}</span>
+              </div>
+            </div>
+            <button v-if="streaming" class="stop-btn" @click="stop">
+              <span class="stop-square"></span>停止
+            </button>
+            <button v-else class="send-btn" :disabled="!input.trim() || orphanActive" @click="send">发送</button>
           </div>
         </div>
       </div>

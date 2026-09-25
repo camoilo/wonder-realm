@@ -36,11 +36,13 @@ export const store = reactive({
       // 右侧面板**默认收起**：没打开会话时它本来就没内容（整条只有图标列），而"打开会话就自己
       // 展开"会很顶人（用户要求"点会话不要自动展开"）。要看设定点一下图标列即可。
       panelCollapsed: true,
-      // 手机断点（≤640px）下的抽屉 / 底部面板 / 更多菜单 / 折叠搜索条开关；桌面端不使用
+      // 手机断点（≤640px）下的抽屉 / 底部面板 / 更多菜单开关；桌面端不使用
       mobileSideOpen: false,
       mobilePanelOpen: false,
       mobileMoreOpen: false,
-      mobileSearchOpen: false,
+      // 会话内搜索框的展开开关：**双端都用**——顶栏只留一个放大镜，
+      // 点它才弹出搜索条（桌面端也一样，见 DEVELOPMENT §9.6）
+      searchOpen: false,
       theme: "light", // 当前主题 light / dark；"选一个存本地"见 store/ui.js 的 setTheme
       // 桌面端（Electron 壳，见 DEVELOPMENT §3.3）：壳在 preload 里注入 window.dshDesktop，
       // 网页端（含手机浏览器）没有它 —— 于是桌面专属的那两个键根本不会渲染
@@ -61,8 +63,9 @@ export const store = reactive({
       charModal: emptyCharModal(),
       // 附加属性编辑里的就地提示（"给「好感」选个类型"这种），与 presetError 同一个路子
       attrError: "",
-      // 对话页顶部那个属性浮层是否收起（展开态显示详细内容，收起态只有一个图标）
-      attrsCollapsed: false,
+      // 顶栏那个附加属性键弹出的下拉是否收起（键永远在顶栏，面板默认不开——它现在是浮层，
+      // 默认展开会平白盖住消息）
+      attrsCollapsed: true,
       newSessionModal: { visible: false, characterId: null, worldId: null, title: "" },
       renaming: false,
       renameText: "",
@@ -101,10 +104,10 @@ export const store = reactive({
       // 当前使用的设定来自哪条预设（空 = 未选择预设），面板那行据此显示名字
       currentPresetId: "",
       presetError: "",
-      // 载入预设的弹窗：左边挑一条、右边看详情，确认后立即生效。
+      // 绑定预设的弹窗：左边挑一条、右边看详情，确认后**绑定**（原「载入预设」，见 §2.3/§2.4）。
       // kind 决定这是"我的设定"还是"世界设定"的预设（两种共用这一对弹窗，见 helpers.PRESET_KINDS）
-      loadPresetModal: { visible: false, kind: "profile", pick: "" },
-      // 编辑预设的弹窗：在里面选要改哪条，删除也在这里
+      bindModal: { visible: false, kind: "profile", pick: "" },
+      // 编辑预设的弹窗：选要改哪条、也能新建（id=null = 还没落库），删除也在这里
       presetModal: { visible: false, kind: "profile", id: null, form: emptyProfile(), saveError: "" },
       world: emptyWorld(),
       worldForm: emptyWorld(),

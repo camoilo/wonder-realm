@@ -125,20 +125,20 @@
              （同一个角色换会话时不变；不绑定就不用预设）。见 DEVELOPMENT §2.3 / §2.4 -->
         <label class="field field-bind">我的身份预设
           <select v-model="charModal.form.profile_id">
-            <option :value="null">不绑定（不用预设）</option>
+            <option :value="null">未启用</option>
             <option v-for="p in profilePresets" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
-          <span class="hint">打开这个角色的会话时自动套用这份「我的设定」，别的角色不受影响。</span>
+          <span class="hint">这个角色的会话用它。</span>
         </label>
         <label class="field">世界预设
           <select v-model="charModal.form.world_id">
-            <option :value="null">不绑定（不用世界设定）</option>
+            <option :value="null">未启用</option>
             <option v-for="p in worldPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
-          <span class="hint">打开这个角色的会话时自动套用这份世界设定；不绑定表示不用世界设定。</span>
+          <span class="hint">这个角色的会话用它；未启用就不注入。</span>
         </label>
         <p v-if="!profilePresets.length || !worldPresets.length" class="hint">
-          还没有预设：先在右侧面板的「我的设定」/「世界设定」里填好，再点「存为预设」。
+          还没有预设：去「我的设定」/「世界设定」页的「编辑预设」里新建一条。新建角色默认未启用。
         </p>
       </div>
       <!-- 操作行钉在弹窗底部：它在 .modal-body（唯一可滚动区）之外，内容再长也不会

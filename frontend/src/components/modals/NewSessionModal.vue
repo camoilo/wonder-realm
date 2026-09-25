@@ -15,7 +15,7 @@
           <option :value="null">不用世界设定</option>
           <option v-for="p in worldPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
-        <span class="hint">这个会话用哪份世界设定；建好之后还能在「世界设定」标签里改。</span>
+        <span class="hint">这个会话用哪份世界；默认不用。</span>
       </label>
       <label class="field">标题（可选）
         <div class="counted">
@@ -32,7 +32,7 @@
       </div>
       <p v-if="mode !== 'director'" class="hint"><a @click="newSessionModal.visible = false; openCharacterModal()">没有角色？先创建一个</a></p>
       <p v-else-if="!worldPresets.length" class="hint">
-        还没有世界预设：先在「世界设定」里填好，再点「存为预设」，之后就能给导演会话选世界。
+        还没有世界预设：在「世界设定」页的「编辑预设」里新建一条。
       </p>
     </div>
   </div>

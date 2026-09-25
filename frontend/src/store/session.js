@@ -83,11 +83,11 @@ Object.assign(store, {
   async newSession() {
     if (store.mode === "director") {
       // 导演会话各自带一份世界（见 DEVELOPMENT §2.4 世界设定），所以先弹一次窗让用户选：
-      // 默认沿用当前正用的那条世界预设（手改过的当前世界没法用下拉表达，那就默认"不用"）
+      // 与角色一样，**默认不启用**（不绑就不用世界；要就自己在下拉里选一份）
       store.newSessionModal = {
         visible: true,
         characterId: null,
-        worldId: store.currentWorldPresetId || null,
+        worldId: null,
         title: "",
       };
       return;

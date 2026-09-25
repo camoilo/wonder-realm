@@ -1,11 +1,13 @@
-// "我的设定"与"世界设定"：当前生效的那份 + 各自的预设库，以及"身份 / 世界跟着角色走"的校准。
+// "我的设定"与"世界设定"：预设库 + 绑定（角色 / 导演会话）+ "当前那份只读地跟着绑定走"。
 //
-// 两种预设是同一套东西（挑一条、看详情、立即生效；另存、覆盖、删除），差别只在字段与接口，
-// 所以这里**一份实现按 kind 派发**（配置在 helpers.PRESET_KINDS），组件那边也共用同一对弹窗：
-// 两边的行为永远一致，加一种预设只要动配置（见 DEVELOPMENT §2.3 / §2.4 / §7.1）。
+// 从这一版起的模型（见 DEVELOPMENT §2.3 / §2.4）：
+//   · 面板那两页**只读**：显示的就是绑定的那条预设的内容，页面里不提供任何编辑入口
+//   · 要改内容 -> 「编辑预设…」弹窗（也能在里面新建；新建的必须命名才保存得下去）
+//   · 要启用 / 换一份 -> 「绑定预设…」（写角色的 profile_id / world_id，导演会话写 sessions.world_id）
+//   · **没绑定 = 不启用**：当前那份会被清空，提示词里也就不注入
 //
-// 只依赖 state.js（唯一的 reactive 对象），不 import 别的领域模块 —— 依赖是星形的，
-// 所以不存在循环依赖；跨领域的调用都走 store.xxx（运行时才解析）。
+// 两种预设仍是同一套实现（配置在 helpers.PRESET_KINDS），组件也共用同一对弹窗；
+// 只依赖 state.js，不 import 别的领域模块 —— 跨领域调用都走 store.xxx（运行时才解析）。
 import { store } from "./state.js";
 import { PRESET_KINDS } from "./helpers.js";
 import { computed } from "vue";
@@ -13,35 +15,40 @@ import { computed } from "vue";
 // "当前生效的那份"存在哪两个字段里（行本身 + 面板表单）
 const rowKey = (kind) => (kind === "world" ? "world" : "profile");
 const formKey = (kind) => (kind === "world" ? "worldForm" : "profileForm");
-const dirtyOf = (kind) => (kind === "world" ? store.worldDirty : store.profileDirty);
 const kindOf = (kind) => PRESET_KINDS[kind];
 
+// 这个角色（或这个导演会话）绑的是哪条预设；null = 没绑定 = 不启用
+function boundIdOf(kind) {
+  if (kind === "profile") return (store.activeChar && store.activeChar.profile_id) || null;
+  if (store.activeChar) return store.activeChar.world_id || null;
+  const s = store.activeSession;
+  return s && s.mode === "director" ? s.world_id || null : null;
+}
+
+// 换绑定要用 PUT /api/characters/{id}，而那个接口是"整体提交"（没带的字段会被写成空串），
+// 所以这里把角色当前的公开字段原样带上，只改绑定那一项。锁定角色的隐藏字段后端会忽略，
+// 不会被写坏；attr_defs 不带上（后端见到 UNSET 就不动）。
+function characterPayload(extra) {
+  const c = store.activeChar || {};
+  return {
+    name: c.name || "",
+    appearance: c.appearance || "",
+    personality: c.personality || "",
+    speech_style: c.speech_style || "",
+    backstory: c.backstory || "",
+    avatar: c.avatar || "",
+    ...extra,
+  };
+}
+
 Object.assign(store, {
-  // ---- 词库（世界设定里的动态列表）：面板与预设弹窗共用，目标表单从外面传进来 ----
+  // ---- 词库（世界设定里的动态列表）：预设弹窗用，目标表单从外面传进来 ----
   addTerm(form) {
     if (form.terms.length >= store.limits.world_terms_max) return;
     form.terms.push({ term: "", meaning: "" });
   },
   removeTerm(form, index) {
     form.terms.splice(index, 1);
-  },
-  async saveProfile() {
-    try {
-      const p = await store.api("/api/profile", store.jsonOpts("PUT", store.profileForm));
-      store.profile = p;
-      store.profileForm = store.snapshot(p);
-    } catch (e) {
-      store.error = e.message;
-    }
-  },
-  async saveWorld() {
-    try {
-      const w = await store.api("/api/world", store.jsonOpts("PUT", store.worldForm));
-      store.world = w;
-      store.worldForm = store.snapshot(w);
-    } catch (e) {
-      store.error = e.message;
-    }
   },
   // ---- 预设列表（两种 kind 共用） ----
   async loadPresets(kind = "profile") {
@@ -53,9 +60,9 @@ Object.assign(store, {
       if (store[k.currentKey] && !ids.includes(store[k.currentKey])) {
         store[k.currentKey] = "";
       }
-      if (store.loadPresetModal.kind === kind && store.loadPresetModal.pick
-          && !ids.includes(store.loadPresetModal.pick)) {
-        store.loadPresetModal.pick = "";
+      if (store.bindModal.kind === kind && store.bindModal.pick
+          && !ids.includes(store.bindModal.pick)) {
+        store.bindModal.pick = "";
       }
       if (store.presetModal.kind === kind && store.presetModal.id
           && !ids.includes(store.presetModal.id)) {
@@ -66,7 +73,7 @@ Object.assign(store, {
     }
   },
   // 把"当前生效的那份"写成给定内容，并记住它来自哪条预设（空串 = 不是任何预设）。
-  // 载入预设、改完正在用的那条预设、以及按角色校准，都走这同一条路。
+  // 绑定与"改的正好是正在用的那条预设"都走这条同一条路。
   async writeCurrent(kind, values, presetId) {
     const k = kindOf(kind);
     const saved = await store.api(k.base, store.jsonOpts("PUT", values));
@@ -82,21 +89,58 @@ Object.assign(store, {
     await store.writeCurrent(kind, k.values(p), p.id);
     return true;
   },
+  // ---- 绑定 / 解除绑定：面板那两页唯一的"启用"入口 ----
+  // 绑了 P -> 写绑定的同时把当前那份对齐成 P（立即生效）
+  // 传 null -> 解除绑定：当前那份清空（= 不启用），提示词里不再注入
+  async bindPreset(kind, id) {
+    const k = kindOf(kind);
+    const p = id ? store[k.listKey].find((x) => x.id === id) : null;
+    if (id && !p) return false;
+    store.presetError = "";
+    try {
+      if (kind === "profile") {
+        const c = store.activeChar;
+        if (!c) return false;
+        await store.api(`/api/characters/${c.id}`,
+          store.jsonOpts("PUT", characterPayload({ profile_id: id })));
+        await store.afterCharacterChange();   // 刷新后 syncCharacterBindings 会把当前那份对齐过去
+      } else if (store.activeChar) {
+        await store.api(`/api/characters/${store.activeChar.id}`,
+          store.jsonOpts("PUT", characterPayload({ world_id: id })));
+        await store.afterCharacterChange();
+      } else {
+        // 导演模式没有角色：世界挂在会话上
+        await store.setSessionWorld(id);
+      }
+      return true;
+    } catch (e) {
+      store.presetError = e.message;
+      store.error = e.message;
+      return false;
+    }
+  },
+  async unbindPreset(kind) {
+    const k = kindOf(kind);
+    if (!(await store.ask(`解除后不再注入${kind === "world" ? "世界设定" : "你的身份与外观"}，继续？`))) {
+      return;
+    }
+    await store.bindPreset(kind, null);
+  },
   // ---- 身份与世界跟着角色走（读法 A，见 DEVELOPMENT §2.3 / §2.4） ----
-  //   绑了 P → 当前不是 P 就用 P 覆盖当前那份；已经是 P 则**什么都不做**
-  //            （面板上临时手改过的内容在同角色内保留，不被反复冲掉）
-  //   没绑   → 当前正用着某条预设就清空（"没绑就是不用预设"）；本来就没用预设则不动
+  //   绑了 P -> 当前不是 P 就用 P 覆盖当前那份；已经是 P 则**什么都不做**
+  //   没绑   -> 当前那份只要还有内容就清空（"没绑就是不用预设"）。
+  //             这里**不能只看 currentKey**：重启后它是空串，而数据库里可能还留着
+  //             上一个角色绑定的内容 —— 那样新角色一开就"默认启用了"（用户报过）
   //   找不到那条预设（没加载出来 / 刚被删）→ 一律不动：宁可少切一次，也不能清错
-  // 另外：**面板上有没保存的改动时一律不动** —— 那是用户正在编辑的内容。
   async syncBinding(kind, boundId) {
     const k = kindOf(kind);
-    if (dirtyOf(kind)) return;
     const bound = boundId ? store[k.listKey].find((p) => p.id === boundId) : null;
     if (bound) {
       if (store[k.currentKey] === bound.id) return;
       await store.writeCurrent(kind, k.values(bound), bound.id);
     } else {
-      if (!store[k.currentKey]) return;
+      const cur = k.values(store[rowKey(kind)]);
+      if (store.sameSnapshot(cur, k.empty())) return;   // 已经是空的，不用写
       await store.writeCurrent(kind, k.empty(), "");
     }
   },
@@ -117,8 +161,6 @@ Object.assign(store, {
     }
   },
   // 导演会话换世界：改会话的绑定，再把当前世界对齐过去。
-  // 面板上有没保存的改动时不覆盖表单（syncBinding 里那条守卫），但绑定照改——
-  // 用户的编辑留着，下次打开这个会话再校准。
   async setSessionWorld(worldId) {
     const s = store.activeSession;
     if (!s || s.mode !== "director") return;
@@ -133,62 +175,52 @@ Object.assign(store, {
       store.error = e.message;
     }
   },
-  // ---- 载入预设：弹窗里挑一条、看详情，确认后**立即生效** ----
-  openLoadModal(kind) {
+  // ---- 绑定预设：弹窗里挑一条、看详情，确认后绑定（原「载入预设」） ----
+  openBindModal(kind) {
     const k = kindOf(kind);
     if (!store[k.listKey].length) return;
     store.avatarError = "";
-    store.loadPresetModal = {
+    store.bindModal = {
       visible: true,
       kind,
-      // 默认选中"当前用的那条"；没有就选第一条，省一次点击
-      pick: store[k.currentKey] || store[k.listKey][0].id,
+      // 默认选中"当前绑的那条"；没绑就选第一条，省一次点击
+      pick: boundIdOf(kind) || store[k.listKey][0].id,
     };
   },
-  closeLoadModal() {
-    store.loadPresetModal.visible = false;
+  closeBindModal() {
+    store.bindModal.visible = false;
   },
-  pickLoadPreset(id) {
-    store.loadPresetModal.pick = id;
+  pickBindPreset(id) {
+    store.bindModal.pick = id;
   },
-  async confirmLoadPreset() {
-    const kind = store.loadPresetModal.kind;
+  async confirmBind() {
+    const kind = store.bindModal.kind;
     const k = kindOf(kind);
-    const p = store[k.listKey].find((x) => x.id === store.loadPresetModal.pick);
+    const p = store[k.listKey].find((x) => x.id === store.bindModal.pick);
     if (!p) return;
-    // 载入会覆盖当前那份：面板里还有没保存的改动时先问一声（表单里的东西别白丢）
-    if (dirtyOf(kind)
-        && !(await store.ask(`面板里还有没保存的${k.label}改动，载入预设会用它覆盖，继续？`))) {
-      return;
-    }
-    try {
-      await store.applyPreset(kind, p.id);
-      store.loadPresetModal.visible = false;
-    } catch (e) {
-      store.error = e.message;
-    }
+    await store.bindPreset(kind, p.id);
+    if (!store.presetError) store.bindModal.visible = false;
   },
-  async savePreset(kind) {
-    // 「存为预设」= 把面板里当前这份另存成一条新预设（不碰已有预设）
-    const k = kindOf(kind);
-    store.presetError = "";
-    try {
-      const p = await store.api(k.presets, store.jsonOpts("POST", store[formKey(kind)]));
-      await store.loadPresets(kind);
-      // 新建的这条内容就等于当前那份，所以直接认作"当前预设"
-      store[k.currentKey] = p.id;
-    } catch (e) {
-      store.presetError = e.message;
-    }
-  },
-  // ---- 编辑预设：弹窗里先选哪条，再改字段；删除也在这里 ----
+  // ---- 编辑预设：选一条来改、或者新建一条；删除也在这里 ----
   openPresetModal(kind) {
     const k = kindOf(kind);
-    if (!store[k.listKey].length) return;
     store.avatarError = "";
+    store.presetError = "";
     store.presetModal.visible = true;
     store.presetModal.kind = kind;
-    store.editPickPreset(store.presetModal.id || store[k.currentKey] || store[k.listKey][0].id);
+    store.presetModal.saveError = "";
+    // 一条预设都没有时也要能打开：新建预设的唯一入口就在这里
+    const first = boundIdOf(kind) || store[k.currentKey] || (store[k.listKey][0] && store[k.listKey][0].id);
+    if (first) store.editPickPreset(first);
+    else store.startNewPreset(kind);
+  },
+  // 「添加预设」：先给一份空白表单（还没落库，id=null），必须命名后才保存得下去
+  startNewPreset(kind = store.presetModal.kind) {
+    const k = kindOf(kind);
+    store.avatarError = "";
+    store.presetModal.id = null;
+    store.presetModal.form = k.empty();
+    store.presetModal.saveError = "";
   },
   editPickPreset(id) {
     const k = kindOf(store.presetModal.kind);
@@ -204,26 +236,34 @@ Object.assign(store, {
     store.avatarError = "";
   },
   async savePresetModal() {
-    // 只写这一条预设（PUT .../presets/{id}）：当前生效的那份不受影响
+    // id 有值 = 改这一条；id=null = 新建（POST）
     const kind = store.presetModal.kind;
     const k = kindOf(kind);
     const form = store.presetModal.form;
     store.presetModal.saveError = "";
     if (!form.name.trim()) {
-      store.presetModal.saveError = k.nameError;
+      store.presetModal.saveError = k.nameError;   // 命名是硬门槛
       return;
     }
     try {
-      await store.api(
-        `${k.presets}/${store.presetModal.id}`,
-        store.jsonOpts("PUT", form)
-      );
-      const edited = store.presetModal.id;
+      const editing = store.presetModal.id;
+      let saved;
+      if (editing) {
+        saved = await store.api(`${k.presets}/${editing}`, store.jsonOpts("PUT", form));
+      } else {
+        saved = await store.api(k.presets, store.jsonOpts("POST", form));
+      }
       await store.loadPresets(kind);
-      // 改的正好是"当前生效的那份"的来源那条预设 → 当前那份跟着变，
-      // 否则面板那行会挂着"（已修改）"，看起来像用户自己改坏了
-      if (store[k.currentKey] === edited) await store.applyPreset(kind, edited);
-      store.presetModal.visible = false;
+      if (editing) {
+        // 改的正好是"当前生效的那份"的来源那条预设 → 当前那份跟着变，
+        // 否则面板那行会挂着旧内容，看起来像没保存成功
+        if (store[k.currentKey] === editing) await store.applyPreset(kind, editing);
+        store.presetModal.visible = false;
+      } else {
+        // 新建的留在弹窗里继续编辑（刚建出来通常是空白的），但不自动绑定：
+        // "启用"要用户自己走一次「绑定预设…」（用户要求）
+        store.editPickPreset(saved.id);
+      }
     } catch (e) {
       store.presetModal.saveError = e.message;
     }
@@ -232,7 +272,7 @@ Object.assign(store, {
     const kind = store.presetModal.kind;
     const k = kindOf(kind);
     const p = store[k.listKey].find((x) => x.id === store.presetModal.id);
-    if (!p) return;
+    if (!p) return;   // 还没落库的新预设：没得删
     if (!(await store.ask(k.deleteText(p.name)))) return;
     store.presetModal.saveError = "";
     try {
@@ -240,9 +280,11 @@ Object.assign(store, {
       if (store[k.currentKey] === p.id) store[k.currentKey] = "";
       store.presetModal.id = null;
       await store.loadPresets(kind);
-      // 还有别的预设就把编辑对象挪到第一条，没有就关掉弹窗
+      // 删掉的也许正是当前角色绑的那条：后端已经把绑定置空，这里把当前那份同步清掉
+      await store.syncCharacterBindings();
+      // 还有别的预设就把编辑对象挪到第一条，没有就切到"新建"状态
       if (store[k.listKey].length) store.editPickPreset(store[k.listKey][0].id);
-      else store.presetModal.visible = false;
+      else store.startNewPreset(kind);
     } catch (e) {
       store.presetModal.saveError = e.message;
     }
@@ -262,19 +304,22 @@ store.worldDirty = computed(() => {
       return !store.sameSnapshot(store.worldForm, store.world);
 });
 
-// 面板上那一行"当前预设"：载入过预设就显示它的名字；如果之后手改过表单（当前那份已经
-// 不等于那条预设了），加一个"（已修改）"——一眼就能看出当下的内容还是不是那条预设原样。
-// 两种 kind 共用这一个函数，只是看的状态字段不同。
-function currentLabel(kind) {
+// 当前绑的是哪条（面板两页据此显示名字与"未绑定"）：
+//   我的设定 -> 角色的 profile_id；世界 -> 角色的 world_id，导演模式则看会话的 world_id
+store.boundProfileId = computed(() => boundIdOf("profile"));
+store.boundWorldId = computed(() => boundIdOf("world"));
+
+function boundLabel(kind) {
   const k = kindOf(kind);
-  const p = store[k.listKey].find((x) => x.id === store[k.currentKey]);
-  if (!p) return "未选择预设";
-  const same = store.sameSnapshot(store[rowKey(kind)], k.values(p));
-  return same ? p.name : `${p.name}（已修改）`;
+  const id = boundIdOf(kind);
+  if (!id) return "未选择";
+  const p = store[k.listKey].find((x) => x.id === id);
+  // 列表还没加载出来时别显示"未选择"，那会让人以为选择丢了
+  return p ? p.name : "（载入中…）";
 }
 
-store.currentPresetLabel = computed(() => currentLabel("profile"));
-store.currentWorldPresetLabel = computed(() => currentLabel("world"));
+store.currentPresetLabel = computed(() => boundLabel("profile"));
+store.currentWorldPresetLabel = computed(() => boundLabel("world"));
 
 store.showUserSide = computed(() => {
       return !!store.activeChar && !!(store.profile.avatar || store.profile.name);

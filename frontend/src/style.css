@@ -397,6 +397,7 @@ html, body {
 }
 
 .topbar {
+  position: relative;   /* 搜索条与属性下拉都挂在这一行下方，靠它定位 */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -735,7 +736,7 @@ html, body {
   color: var(--accent-dark);
 }
 
-/* 必须显式声明：全局 textarea 样式已收窄到 .input-row，这里不写就会退化成
+/* 必须显式声明：全局 textarea 样式已收窄到 .input-main，这里不写就会退化成
    浏览器默认的多行框（细边框、小字号、等宽字体），看起来"被简化"。
    min-height 保证短消息也有足够大的编辑面积，高度再由 autoGrow 按内容撑开。 */
 .edit-field textarea {
@@ -1127,7 +1128,9 @@ html, body {
 }
 
 /* ---------- 输入区 ---------- */
-.inputbar { padding: 10px 20px 18px; }
+/* --send-w 是发送/停止键的固定宽度，也是情境那一行"留空"的占位宽度：两个输入框靠它对齐。
+   --aux-h 是辅助键那一排（背景切换/继续/↓/⋯）的高度：比输入框矮一档，不跟发送键一样壮 */
+.inputbar { padding: 10px 20px 18px; --send-w: 76px; --aux-h: 32px; }
 
 /* 与对话区同宽同位置，居中留白 */
 .input-inner {
@@ -1183,63 +1186,82 @@ html, body {
   line-height: 1;
 }
 
-.input-row {
+/* 底部辅助操作行：左边一排按键（横向可滚动，以后加键也不会挤坏布局），
+   右边的"回到最新"钉在行尾、不参与滚动 */
+.aux-row {
   display: flex;
+  align-items: center;
   gap: 10px;
+  margin-bottom: 8px;
+}
+.aux-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* 这一行很矮，出现横向滚动条会把下面的输入框顶下去：隐藏条子，滑动/滚轮照样能滚 */
+  scrollbar-width: none;
+}
+.aux-scroll::-webkit-scrollbar { height: 0; }
+/* 滚动区里的键不参与压缩：宁可横向滚动，也不要把键挤扁 */
+.aux-scroll > .bg-switch,
+.aux-scroll > .continue-btn { flex: none; }
+
+/* 输入区主体：情境、话语上下各占一行 */
+.input-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field-row {
+  display: flex;
   align-items: flex-end;
+  gap: 10px;
 }
 
-/* 输入区的"一格"：小标签 + 输入框。沉浸模式下有两格并排（情境 / 话语），
-   情境那格窄一些、话语那格占满剩余宽度；其它模式只有一格且不渲染标签，
-   所以那些模式下的输入框与之前完全一样 */
+/* 输入区的"一格"：小标签 + 输入框。两格各占一行、宽度一致，
+   所以情境框与话语框左右边界是对齐的 */
 .input-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
 }
-.input-field.scenario-field { flex: 0 0 36%; }
-.input-field-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent-dark);
-}
 
-/* 只作用于底部输入框：面板里的记忆框等不能受这里的 max-height 限制，
-   否则 rows=10 的记忆框会被压成一行多高，看起来像被按钮遮住 */
-.input-row textarea {
-  flex: 1;
+/* 只作用于底部输入框：面板里的记忆框等不能受这里的固定高度限制，
+   否则 rows=10 的记忆框会被压成几行高，看起来像被按钮遮住 */
+.input-main textarea {
   resize: none;
   font-family: inherit;
   font-size: 14.5px;
   line-height: 1.5;
-  padding: 11px 14px;
+  padding: 11px 14px 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
   color: var(--text);
-  min-height: 88px;
-  max-height: 220px;
+  /* 固定一行：文字多了在框内滚动，输入区总高度恒定、不随内容跳动
+     （手机断点把情境那格抬到两行，话语仍是一行） */
+  height: 61px;
+  overflow-y: auto;
   transition: border-color 0.15s;
 }
 textarea:focus { outline: none; border-color: var(--accent); }
 textarea:disabled { background: var(--field-disabled); color: var(--text-soft); }
 
-/* 发送键那一列：背景切换 / "继续" 叠在发送（或停止）上方。
-   四个键统一高度与字号，宽度由列内 stretch 对齐，避免同一列里高低不齐 */
-.send-col {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+/* 发送/停止键固定宽度（--send-w，见 .inputbar）：情境那一行用同宽的"留空"占位，
+   两个输入框才能对齐；固定宽度也让"发送"与"停止"不会互相变宽变窄 */
 .send-btn,
-.stop-btn,
-.continue-btn,
-.jump-btn,
-.bg-switch {
+.stop-btn { flex: none; width: var(--send-w); }
+.send-spacer { flex: none; width: var(--send-w); }
+
+/* 这一排的键统一高度与字号，避免同一行里高低不齐 */
+.send-btn,
+.stop-btn {
   height: 42px;
   display: flex;
   align-items: center;
@@ -1248,76 +1270,77 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   border-radius: var(--radius);
 }
 
-/* 发送/停止键与它右侧的"↓"并排：发送键吃掉剩余宽度，↓ 固定成方形，
-   这样它不会随发送键的文字长短而变宽窄 */
-.send-row {
+/* 辅助键那一排（背景切换/继续/↓/⋯）：整排**没有背景板**——键是"浮"在输入框外面的，
+   默认只有自己的字形，悬停/激活时才在键自己那块区域浮出一层淡底（不挡任何内容）。
+   图标键（↓ 与手机端的 ⋯）做成圆形，带文字的（继续、背景切换）做成胶囊 */
+.continue-btn,
+.jump-btn,
+.bg-switch {
+  height: var(--aux-h);
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-radius: 999px;
+  border: none;
+  background: none;
+  color: var(--text-soft);
 }
-.send-row .send-btn,
-.send-row .stop-btn { flex: 1; }
 
 /* 导演模式的"继续"：次级按钮，不抢发送键的视觉重量 */
 .continue-btn {
-  padding: 0 20px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
+  padding: 0 12px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .continue-btn:hover:not(:disabled) {
   background: var(--hover);
-  border-color: var(--accent);
   color: var(--accent-dark);
 }
 .continue-btn:disabled {
-  color: var(--text-soft);
-  background: var(--field-disabled);
+  color: var(--disabled-text);
+  background: none;
   cursor: not-allowed;
 }
 
-/* 对话背景的上一张/下一张：与"继续"同为次级按钮、同在发送键上方
-   （两者互斥：背景切换只在聊天与沉浸两种模式出现，"继续"只在导演模式出现） */
+/* 对话背景的上一张/下一张：与"继续"同为次级按钮、同在辅助键那一排
+   （两者互斥：背景切换只在聊天与沉浸两种模式出现，"继续"只在导演模式出现）。
+   容器只负责排列，自己不画边框/底色 */
 .bg-switch {
   justify-content: space-between;
-  gap: 2px;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  transition: border-color 0.15s;
+  gap: 0;
+  padding: 0;
 }
-.bg-switch:hover { border-color: var(--accent); }
 
 .bg-switch button {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 7px;
+  border-radius: 50%;
   background: none;
-  color: var(--text);
-  font-size: 18px;
+  color: var(--text-soft);
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
   padding: 0;
 }
-.bg-switch button:hover { background: var(--hover-soft); color: var(--accent-dark); }
+.bg-switch button:hover { background: var(--hover); color: var(--accent-dark); }
 
 .bg-switch-count {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-soft);
   white-space: nowrap;
 }
 
 .send-btn {
-  padding: 0 22px;
+  padding: 0;
   border: none;
   background: var(--accent);
   color: #fff;
@@ -1332,7 +1355,7 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
 /* 流式生成中：发送变为停止 */
 .stop-btn {
   gap: 7px;
-  padding: 0 20px;
+  padding: 0;
   border: 1px solid var(--border);
   background: var(--panel);
   color: var(--text);
@@ -1349,21 +1372,22 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   background: currentColor;
 }
 
-/* 发送键右侧的"回到最新"：同样式但与发送键区分，避免和主操作抢注意力 */
+/* 辅助键行右端的"回到最新"：圆形图标键（同样不画背景板），不抢主操作的注意力 */
 .jump-btn {
   flex: none;
-  width: 42px;
+  width: var(--aux-h);
+  border-radius: 50%;
   padding: 0;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  font-size: 17px;
+  border: none;
+  background: none;
+  color: var(--text-soft);
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
-.jump-btn:hover { background: var(--hover); border-color: var(--accent); color: var(--accent-dark); }
+.jump-btn:hover { background: var(--hover); color: var(--accent-dark); }
 
 /* 手机端"＋"收纳键：桌面断点不需要收纳，直接隐藏（外观与 jump-btn 同款，见手机断点里的规则） */
 .aux-toggle { display: none; }
@@ -1540,8 +1564,9 @@ html[data-theme="dark"] .dc-switch { background: #3a3f4a; }
 }
 .search-count {
   flex: none;
-  min-width: 42px; /* 固定宽度 + 等宽数字：0/0 与 12/123 都不改变整框宽度 */
-  text-align: right;
+  min-width: 34px; /* 固定宽度 + 等宽数字：0/0 与 12/123 都不改变整框宽度 */
+  /* 左对齐：数字紧跟在清除键后面（原来右对齐 + 42px，数字被推到最右，看着离 × 老远） */
+  text-align: left;
   font-size: 11px;
   color: var(--text-soft);
   font-variant-numeric: tabular-nums;
@@ -1661,6 +1686,19 @@ mark.search-hit.current {
 }
 .preset-item:hover { background: var(--hover); }
 .preset-item.on { border-color: var(--accent); background: var(--accent-soft); }
+/* 「添加预设」：与列表项同款，但虚线框 + 主题色，一眼看出这是"新建"而不是某条预设 */
+.preset-add { border-style: dashed; border-color: var(--border); justify-content: center; }
+.preset-add:hover { border-color: var(--accent); }
+.preset-add .preset-item-name { color: var(--accent-dark); font-weight: 600; }
+/* 只读页（我的设定 / 世界设定）：框照旧排版，但底色与面板齐平、鼠标也不是"可编辑"，
+   一眼看出这里是"看内容"的（内容来自绑定的预设，改内容要去「编辑预设…」） */
+.panel-box input[readonly],
+.panel-box textarea[readonly] {
+  background: var(--panel);
+  cursor: default;
+}
+.panel-box input[readonly]:focus,
+.panel-box textarea[readonly]:focus { border-color: var(--border); }
 .preset-item-text { display: flex; flex-direction: column; min-width: 0; }
 .preset-item-name { font-size: 13px; }
 .preset-item-sub {
@@ -1788,71 +1826,57 @@ mark.search-hit.current {
   font-size: 13.5px;
 }
 
-/* 顶部浮层：**sticky** —— 静止时它是内容流里的一项（天然把消息往下推，谁也不遮），
-   往下滚时贴住对话区顶部、消息从它下面穿过，也就是"位于顶部、覆盖在消息之上"。
-   z-index 300 高于消息、低于弹窗遮罩（1000）；align-self 让它按内容宽度居中而不是被
-   拉满整个 860px 栏宽。这样不必量高度，也就不依赖 rAF / ResizeObserver 的回调时机 */
+/* 附加属性：入口键在顶栏里（`.attr-slot` 是它在工具条里的占位，也是下拉的定位父级），
+   展开的面板是键正下方的一张小下拉——右边缘与键对齐、宽度只占半屏（手机 50vw），
+   不再铺在对话区顶部（用户要求"移到顶栏、缩小、挪到右边"）。
+   z-index 920：高于消息与遮罩(900)，低于弹窗(1000) */
+.attr-slot {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.attr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  opacity: 1;
+  color: var(--text-soft);
+}
+.attr-btn svg { width: 17px; height: 17px; }
+.attr-btn.on { color: var(--accent); }
 .attr-panel {
-  position: sticky;
-  top: 0;
-  z-index: 300;
-  align-self: center;
-  /* 展开态的宽度：**取中间值**。太窄（第一版按内容宽度缩成 255px）读起来像一条信息条；
-     与消息气泡一样宽（680px）又太铺张。400px 小于消息列的一半，卡片式信息块，更克制 */
-  width: 100%;
-  max-width: min(400px, 100%);
-  margin-bottom: 12px;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 920;
+  width: 260px;
+  max-width: calc(100vw - 24px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--panel-glass);
+  background: var(--panel);
   box-shadow: 0 6px 18px var(--shadow);
-  backdrop-filter: blur(2px);
-  font-size: 14px;
-}
-.attr-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 8px 14px;
-  border: none;
-  border-radius: var(--radius);
-  background: none;
-  color: var(--accent-dark);
-  font-family: inherit;
   font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
 }
-.attr-toggle:hover { background: var(--hover); }
-/* 收起态只有一颗图标：宽度跟着图标走（上面那条定宽只服务展开态） */
-.attr-panel.collapsed {
-  width: max-content;
-  border-radius: 50%;
-  padding: 0;
-}
-.attr-icon {
+.attr-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: none;
-  color: var(--accent-dark);
-  font-family: inherit;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
 }
-.attr-icon:hover { background: var(--hover); }
+.attr-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-dark);
+}
 .attr-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 4px 14px 14px;
+  gap: 8px;
+  padding: 10px 12px 12px;
 }
 .attr-item {
   display: flex;
@@ -2440,7 +2464,7 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 /* ---------- 输入框右下角的实时字数提示 ---------- */
 /* 结构：`.counted` 包住输入框，`.char-count` 绝对定位在它的右下角。
    输入框必须为此让位（单行框留右侧、多行框留底部一行），否则文字会被提示压住。
-   这几条规则放在文件最后：上下文规则（.field / .input-row / .modal.char-modal …）
+   这几条规则放在文件最后：上下文规则（.field / .input-main / .modal.char-modal …）
    的优先级各不相同，靠顺序 + 更具体的选择器逐个压住，比到处塞 !important 可靠 */
 .counted {
   position: relative;
@@ -2485,7 +2509,7 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 .modal.char-modal .field .counted > input[type="text"] { padding: 10px 64px 10px 12px; }
 .modal.char-modal .field .counted > textarea { padding: 10px 12px 26px; }
 .modal.edit-modal .edit-field .counted > textarea { padding: 10px 12px 26px; }
-.input-row .counted > textarea { padding: 11px 14px 26px; }
+.input-main .counted > textarea { padding: 11px 14px 26px; }
 .memory-text,
 .counted > .memory-text { padding-bottom: 26px; }
 
@@ -2504,23 +2528,22 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 .term-row .counted > textarea { padding-bottom: 24px; }
 .term-row .char-count.inline { right: 8px; }
 
-/* 输入框让出底部一行后，内容高度会被压缩，这里把下限补回来（否则等于缩小了输入区） */
-.input-row textarea { min-height: 100px; }
+/* 底部输入框的高度是固定的（见 .input-main textarea），让出底部一行后不用再补 min-height：
+   那条旧规则（.input-row textarea）随两栏改两行一起删掉了，留着只会跟固定高度打架 */
 .modal.char-modal .field textarea { min-height: 118px; }
 .modal.char-modal .field textarea.grow-lg { min-height: 162px; }
 .modal.edit-modal .edit-field textarea { min-height: 152px; }
 
 /* ---------- 背景条上的"关闭背景" ---------- */
-/* 与左右翻页键同一行：翻页是 28×28 的图标键，这个是文字键，用一条分隔线区分两组。
-   选择器要写到 `.bg-switch button.bg-close`：`.bg-switch button` 那条规则更具体，
-   只写 `.bg-close` 会被它的 width:28px 压住，四个汉字挤不进 28px 就会溢出 */
+/* 与左右翻页键同一行：翻页是圆形图标键，这个是文字键，整条做成一颗胶囊（不再画分隔线，
+   否则又是个方框）。选择器要写到 `.bg-switch button.bg-close`：`.bg-switch button`
+   那条规则更具体，只写 `.bg-close` 会被它的 width:24px 压住，四个汉字挤不进就溢出 */
 .bg-switch button.bg-close {
   width: auto;
-  padding: 0 8px;
+  padding: 0 10px 0 6px;
   font-size: 12px;
   white-space: nowrap;
-  border-left: 1px solid var(--border);
-  border-radius: 0 7px 7px 0;
+  border-radius: 999px;
 }
 .bg-switch button.bg-close:hover { background: var(--hover-soft); color: var(--accent-dark); }
 /* 已关闭时按钮变成"显示背景"，给个灰底提示当前是关着的状态 */
@@ -2540,14 +2563,53 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 .confirm-modal { width: 360px; }
 .confirm-text { margin: 4px 0 6px; font-size: 14px; line-height: 1.6; }
 
-/* ---------- 移动端适配（断点策略见 MOBILE_ADAPTATION.md §2） ---------- */
-/* 手机三个浮层（抽屉 / 底部面板 / 更多菜单）共用的遮罩与三个顶栏入口，桌面端一律不显示 */
+/* ---------- 移动端适配（断点策略见 DEVELOPMENT §9.6） ---------- */
+/* 手机三个浮层（抽屉 / 底部面板 / 更多菜单）共用的遮罩与顶栏入口，桌面端一律不显示。
+   搜索入口与搜索条**不在此列**：它们双端都在用（顶栏放大镜 + 点开才弹的搜索条） */
 .mobile-mask,
-.mobile-search-btn,
 .mobile-more-btn,
 .mobile-panel-btn,
-.mobile-search,
 .mobile-more { display: none; }
+
+/* 顶栏的搜索入口：放大镜本身（双端都渲染），点开才弹出搜索条。
+   键与条同在一个定位槽里，所以桌面端搜索条就挂在键正下方、只有 300px 宽——
+   早先那条是整行铺开的，把右侧那排竖排图标盖住了（用户报过） */
+.search-slot {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  opacity: 1;
+}
+.search-btn svg { width: 17px; height: 17px; }
+.search-btn.on { color: var(--accent); }
+
+.search-pop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  z-index: 910;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  display: flex;
+}
+.search-pop .search-box {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px 4px 10px;
+  background: var(--panel);
+  box-shadow: 0 6px 18px var(--shadow);
+}
+.search-pop .search-input { flex: 1; width: auto; }
 
 /* 安全区变量：刘海 / 圆角屏 / 手势条让位。env() 不随主题变，定义一次即可 */
 :root {
@@ -2652,11 +2714,12 @@ body { overscroll-behavior: none; }
   .titlebar .titlebar-name { display: none; }
   .title { font-size: 15px; }
   .chip { display: none; }
-  .toolbar .search-box,
   .toolbar .model-select,
   .toolbar .think-btn,
   .toolbar .theme-toggle { display: none; }
-  .mobile-search-btn,
+  /* 顶栏只剩：汉堡 + 标题 + 放大镜 + 属性 + 面板 + 更多（搜索条弹出来才占一行） */
+  .search-btn,
+  .attr-btn,
   .mobile-more-btn,
   .mobile-panel-btn {
     display: inline-flex;
@@ -2669,14 +2732,20 @@ body { overscroll-behavior: none; }
     padding: 0;
     font-size: 16px;
   }
-  .mobile-search-btn svg { width: 18px; height: 18px; }
+  .search-btn svg,
+  .attr-btn svg { width: 18px; height: 18px; }
   .mobile-panel-btn svg { width: 18px; height: 18px; }
   .mobile-panel-btn.on { color: var(--accent); }
 
-  /* 折叠搜索条：占顶栏一整行 */
-  .mobile-search { flex-basis: 100%; display: flex; }
-  .mobile-search-box { flex: 1; }
-  .mobile-search-box .search-input { flex: 1; width: auto; }
+  /* 搜索条：手机上一整条浮在顶栏下沿（桌面那个 300px 小下拉在窄屏里放不下） */
+  .search-pop {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: calc(58px + var(--sat));
+    width: auto;
+    max-width: none;
+  }
 
   /* ---- 更多菜单：模型 / 思考 / 主题（fixed 卡片挂在右上角，遮罩点击关闭） ---- */
   .mobile-more {
@@ -2710,41 +2779,48 @@ body { overscroll-behavior: none; }
   .more-row .ghost-btn { flex: 1; }
   .mobile-theme { white-space: nowrap; }
 
-  /* ---- 输入区：沉浸两栏改上下堆叠，发送键放大到 ≥44px ---- */
-  .inputbar { padding: 8px 12px calc(12px + var(--sab)); }
-  .input-row { flex-direction: column; align-items: stretch; }
-  .input-field.scenario-field { flex: none; }
-  .send-col { width: 100%; }
+  /* ---- 输入区：辅助键一排（可横滑）＋ 情境一行 ＋ 话语一行，主键放大到 ≥44px ---- */
+  .inputbar { padding: 8px 12px calc(12px + var(--sab)); --send-w: 68px; --aux-h: 36px; }
+  .aux-row { margin-bottom: 6px; }
+  .aux-scroll { gap: 6px; }
+  .input-main { gap: 6px; }
+  /* 两框都是一行（用户要求手机上也一行，别再多留半行） */
+  .input-main textarea { height: 61px; }
   .send-btn,
-  .stop-btn,
+  .stop-btn { height: 44px; }
+  /* 辅助键那一排也按比例放大一点（触摸目标），但比主键小 */
   .continue-btn,
   .jump-btn,
   .aux-toggle,
-  .bg-switch { height: 44px; }
-  .jump-btn { width: 44px; }
-  /* 底部辅助内容收纳：⋯ 展开后显示背景切换/继续/跳底/情境（沉浸），
-     收起时只留话语输入框与发送键——收纳态输入区保持"一个输入框＋一个发送键" */
+  .bg-switch { height: var(--aux-h); }
+  .jump-btn,
+  .aux-toggle { width: var(--aux-h); }
+  .bg-switch button { width: 26px; height: 26px; font-size: 16px; }
+  /* 底部辅助内容收纳：⋯ 展开后显示背景切换/继续/情境（沉浸）。
+     ⋯ 自己**同样没有背景板**——桌面那条基础规则被这里覆盖过（写过 background: var(--panel)、
+     1px 边框），看上去就跟输入框共用一块底（用户报过"还是有背景"），所以这里明确抹掉 */
   .aux-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 44px;
-    height: 44px;
+    width: var(--aux-h);
+    height: var(--aux-h);
+    border-radius: 50%;
     padding: 0;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--text);
-    font-size: 17px;
+    border: none;
+    background: none;
+    color: var(--text-soft);
+    font-size: 16px;
     line-height: 1;
     cursor: pointer;
     font-family: inherit;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s;
   }
-  .aux-toggle.on { background: var(--hover); border-color: var(--accent); color: var(--accent-dark); }
+  .aux-toggle.on { background: var(--hover); color: var(--accent-dark); }
+  /* 「回到页面底部」不进收纳：双端都常显（收起辅助键时它照样能用） */
   .inputbar:not(.aux-open) .bg-switch,
   .inputbar:not(.aux-open) .continue-btn,
-  .inputbar:not(.aux-open) .jump-btn,
   .inputbar:not(.aux-open) .scenario-field { display: none; }
 
   /* ---- 消息区：头像缩小保留（64px 太大收成 40px）、气泡放宽、操作条常显（手机上没有 hover） ---- */
@@ -2757,10 +2833,9 @@ body { overscroll-behavior: none; }
   .msg-actions { opacity: 1; }
 
   /* 附加属性浮层：收起态图标放大到 44px 热区；展开态收拢（字号/间距/条高一起收紧） */
-  .attr-icon { width: 44px; height: 44px; }
-  .attr-panel { font-size: 13px; margin-bottom: 8px; }
-  .attr-toggle { padding: 6px 12px; font-size: 12.5px; }
-  .attr-body { gap: 5px; padding: 2px 12px 10px; }
+  /* 附加属性下拉：手机上宽度只占半屏（用户给的参考尺寸），字号再收一档 */
+  .attr-panel { width: 50vw; font-size: 12.5px; }
+  .attr-body { gap: 6px; padding: 8px 10px 10px; }
   .attr-item { gap: 8px; min-height: 18px; }
   .attr-name { max-width: 34%; }
   .attr-bar { height: 8px; min-width: 64px; }

@@ -8,12 +8,13 @@ import { computed } from "vue";
 Object.assign(store, {
   // 手机端三个浮层（抽屉 / 底部面板 / 更多菜单）共用一个遮罩：任一打开就显示，
   // 点遮罩全部关闭。桌面端这三个状态不会打开，所以遮罩在桌面从不出现。
+  // 搜索条**不进遮罩**：它双端都用，是顶栏自己的浮条，点遮罩关它没意义（桌面更没有遮罩）。
   mobileMask: computed(() => store.mobileSideOpen || store.mobilePanelOpen || store.mobileMoreOpen),
   closeMobileLayers() {
     store.mobileSideOpen = false;
     store.mobilePanelOpen = false;
     store.mobileMoreOpen = false;
-    store.mobileSearchOpen = false;
+    store.searchOpen = false;
   },
   len(value) {
     return (value || "").length;
@@ -33,9 +34,15 @@ Object.assign(store, {
     const s = (m && m.created_at) || "";
     return s ? s.replace("T", " ") : "";
   },
-  onDocumentClick() {
+  onDocumentClick(e) {
     // 删除菜单与触发它的按钮都做了 stopPropagation，能走到这里就说明点的是别处
     store.deleteMenuId = null;
+    // 顶栏那两个浮层（搜索条 / 附加属性下拉）也是"点别处就收"：
+    // 手机上尤其需要——点会话、点消息、点任何按钮时它们不能继续压着内容（用户报过遮挡）
+    const el = e && e.target;
+    const inside = (sel) => !!(el && el.closest && el.closest(sel));
+    if (store.searchOpen && !inside(".search-slot")) store.searchOpen = false;
+    if (!store.attrsCollapsed && !inside(".attr-slot")) store.attrsCollapsed = true;
   },
   onDocumentKeydown(e) {
     if (e.key !== "Escape") return;

@@ -35,13 +35,10 @@ const URL = `http://127.0.0.1:${PORT}/`;
 // 做法是 min==max==PHONE_WIDTH：边框还能拖，但尺寸被钳住，比 setResizable(false) 更符合预期。
 // 尺寸取**传统手机比例 9:16**（375×667，iPhone 8 那一代）：用户明确要"不是现在的全面屏比例"。
 const PHONE_WIDTH = 375;
-const PHONE_DEFAULT_H = 667;                          // 9:16；没存过就用它（仍会按工作区收一下）
-// 手机视图的"几何版本"：默认尺寸换过一次（19.5:9 → 9:16）。存档里若是旧版本记住的高度，
-// 就不再沿用（否则用户改了默认值却看不到变化——踩过）。
-const PHONE_VERSION = 2;
+const PHONE_DEFAULT_H = 667;                          // 9:16；每次启动都用它（仍会按工作区收一下）
 const PHONE_MIN_H = 480;
 const PHONE_MAX_H = 1400;
-const DEFAULT_SIZE = { width: 1180, height: 780 };   // 首次启动（或存档不可用时）的窗口大小，还会按工作区收一下
+const DEFAULT_SIZE = { width: 1180, height: 780 };   // 每次启动都用它，还会按工作区收一下
 const DESKTOP_MIN = { width: 380, height: 520 };      // 与 createWindow 的 minWidth/minHeight 一致
 // 自绘标题栏（Window Controls Overlay）：把系统标题栏让给页面画，好让「配置 / 手机视图」这两个键
 // 跟最小化 / 最大化 / 关闭排在同一行（见 DEVELOPMENT 3.3）。只有 Windows 支持得完整。
@@ -52,33 +49,26 @@ const TITLEBAR_LIGHT = { color: "#f4f5f7", symbolColor: "#3a3f4a" };   // 与 --
 const TITLEBAR_DARK = { color: "#171a21", symbolColor: "#e6e8ec" };
 const SELFTEST = process.argv.includes("--selftest");
 
+// 自检用**独立的 userData**（临时目录）：否则"应用开着时跑自检"会撞 Chromium 的 profile 单例，
+// 第二个进程静默退出、什么都测不到；顺带也不会往用户自己的偏好/日志里掺东西。
+if (SELFTEST) {
+  try {
+    const dir = path.join(os.tmpdir(), "wonder-realm-selftest");
+    fs.mkdirSync(dir, { recursive: true });
+    app.setPath("userData", dir);
+  } catch (e) { /* 换不了就照常用默认目录 */ }
+}
+
 let win = null;
 let backend = null;
 let phoneView = false;
-let desktopBounds = null; // 进手机视图前的窗口 bounds，退出时恢复
+// 窗口尺寸**只在这一趟运行里记着**（用户要求：启动用默认，自己调过的在本次运行内切来切去要记住，
+// 下次启动又回到默认）。所以纯内存，不落盘：desktopBounds = 当前桌面视图的 bounds，
+// phoneContentH = 手机视图的高度（内容区，用户拖过就用拖后的）。
+let desktopBounds = null;
+let phoneContentH = 0;
 
 const clampHeight = (h) => Math.min(PHONE_MAX_H, Math.max(PHONE_MIN_H, Math.round(Number(h) || PHONE_DEFAULT_H)));
-
-// ---- 壳的本地偏好（窗口尺寸 / 上次是不是手机视图）：放 userData，不进数据库 ----
-const prefsFile = () => path.join(app.getPath("userData"), "desktop.json");
-
-function readPrefs() {
-  try {
-    return JSON.parse(fs.readFileSync(prefsFile(), "utf8"));
-  } catch (e) {
-    return {};
-  }
-}
-
-function writePrefs(patch) {
-  const next = { ...readPrefs(), ...patch };
-  try {
-    fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
-    fs.writeFileSync(prefsFile(), JSON.stringify(next, null, 2), "utf8");
-  } catch (e) {
-    log(`偏好写不进去：${e.message}`);
-  }
-}
 
 function log(msg) {
   // 本地时间，跟后端那些日志一个口径；带 [desktop] 前缀以便和"后端: …"区分开
@@ -166,31 +156,26 @@ function waitForBackend(timeoutMs = 120000) {
 
 // ---- 手机视图：宽度锁死、高度可调 + 告诉页面（页面据此隐藏桌面专属键） ----
 //
-// 偏好里**桌面尺寸与手机高度分开存**：早先把手机尺寸当 bounds 存过，结果"在手机视图下退出应用"
-// 会让下次启动的窗口只有 390 宽、且退出手机视图也回不到大尺寸（桌面尺寸被覆盖掉了）。
-// **启动一律桌面视图**（不沿用上次的手机视图）：手机视图是"预览/收纳"用的临时状态，
-// 让下次启动莫名其妙变成手机样子，用户只会以为坏了；高度倒是记着，下次进来接着用。
-function persistWindowState() {
-  if (SELFTEST || !win) return;   // 自检只是量尺寸，不该改用户的偏好
-  if (phoneView) {
-    // 手机视图下**也要把桌面尺寸存着**：否则"在手机视图里关掉应用"会让下次启动回到默认大小
-    // （用户报过"切回来就变成默认了"）
-    writePrefs({
-      phoneHeight: win.getContentSize()[1],
-      phoneVersion: PHONE_VERSION,
-      bounds: desktopRestoreBounds(),
-    });
-  } else {
-    writePrefs({ bounds: win.getBounds() });
-  }
-}
-
-// 退出手机视图时恢复到多大。**要防一手被污染的旧值**：早先版本把手机尺寸当桌面尺寸存过
-// （desktop.json 里出现过 405x882 这种），照着恢复的话用户会觉得"退出了还是个小窗口"。
-// 判据很简单：桌面窗口不会只有手机那么宽。
+// 尺寸的口径（用户 2026-09-25 明确要求）：
+//   · **每次启动两个视图都用默认**：桌面 1180×780（按工作区收），手机 375×667（9:16）
+//   · **同一次运行内记住用户调过的大小**：桌面调过 -> 切去手机再回来还是那个大小；
+//     手机高度拖过 -> 再进手机视图还是拖后的高度
+//   · 所以尺寸**只放内存**，不落盘（早先存 desktop.json，结果"启动了却是上次那个大小/上次那个高度"，
+//     用户看到的就是"默认值不起作用"）。启动一律桌面视图。
+//
+// 退出手机视图时恢复到多大：用这一趟记着的桌面 bounds；没有（或明显是手机尺寸那种脏值——
+// 早先版本存过 405x882）就回默认。
 function desktopRestoreBounds() {
   if (desktopBounds && desktopBounds.width > PHONE_WIDTH + 60) return desktopBounds;
   return { width: DEFAULT_SIZE.width, height: DEFAULT_SIZE.height };
+}
+
+// 窗口尺寸一变就记下来（内存）。自检里不记：它自己会把窗口拖来拖去量断言，
+// 记进去会让后面的断言互相污染。
+function rememberCurrentSize() {
+  if (!win || SELFTEST) return;
+  if (phoneView) phoneContentH = win.getContentSize()[1];
+  else desktopBounds = win.getBounds();
 }
 
 // ---- 尺寸都往当前显示器的工作区里放 ----
@@ -230,15 +215,16 @@ function setPhoneView(on) {
   const frameW = Math.max(0, win.getBounds().width - win.getContentSize()[0]);
   const frameH = Math.max(0, win.getBounds().height - win.getContentSize()[1]);
   if (phoneView) {
-    if (!desktopBounds) desktopBounds = win.getBounds();
-    // 高度取"记住的那次"与工作区的较小值；存档是旧的几何版本就忽略它，用新默认（见 PHONE_VERSION）
-    const saved = readPrefs();
-    const remembered = saved.phoneVersion === PHONE_VERSION ? saved.phoneHeight : 0;
-    const want = clampHeight(remembered || PHONE_DEFAULT_H);
+    // 每次进手机视图都重新抓一次桌面尺寸：早先只在第一次抓，于是"在桌面调好大小 →
+    // 进一趟手机视图再回来"会退回进手机视图之前的旧尺寸（用户报过"调整过的大小没记住"）
+    if (!SELFTEST) desktopBounds = win.getBounds();
+    // 高度用这一趟记着的（用户拖过就按拖的），没有就用 9:16 默认，再按工作区收一下
+    const want = clampHeight(phoneContentH || PHONE_DEFAULT_H);
     const h = fitInWorkArea(PHONE_WIDTH, want, 120).height;
     win.setMinimumSize(PHONE_WIDTH + frameW, PHONE_MIN_H + frameH);   // 先 min 后 max，避免瞬态 min > max
     win.setMaximumSize(PHONE_WIDTH + frameW, PHONE_MAX_H + frameH);
     setBoundsCentered(PHONE_WIDTH + frameW, h + frameH);
+    if (!SELFTEST) phoneContentH = win.getContentSize()[1];
     // 手机视图是"预览 / 收纳"用的：置顶，免得被别的窗口压住（用户要求；普通桌面视图不这样）
     win.setAlwaysOnTop(true);
   } else {
@@ -247,9 +233,9 @@ function setPhoneView(on) {
     win.setAlwaysOnTop(false);
     const b = desktopRestoreBounds();
     setBoundsCentered(b.width, b.height);
+    if (!SELFTEST) desktopBounds = win.getBounds();
   }
   win.webContents.send("desktop:phone-view", phoneView);
-  persistWindowState();
   return phoneView;
 }
 
@@ -276,17 +262,12 @@ function setTitleBarTheme(dark) {
 }
 
 function createWindow() {
-  const prefs = readPrefs();
-  const saved = prefs.bounds || {};
-  // 旧版本把手机尺寸当桌面尺寸存过：那种尺寸不能拿来当窗口初始大小（否则一启动就"还是个手机窗口"）
-  const bounds = saved.width > PHONE_WIDTH + 60 ? saved : {};
-  // 存档尺寸与默认尺寸都按工作区收一下：矮屏上 1280x860 会顶到任务栏（用户报过"视图太大"）
-  const size = fitInWorkArea(bounds.width || DEFAULT_SIZE.width, bounds.height || DEFAULT_SIZE.height);
+  // **启动一律用默认尺寸**（按工作区收一下，矮屏上不会顶到任务栏），不恢复上次的大小：
+  // 用户要的是"启动回默认，自己调过的只在本次运行内记住"（见上面 rememberCurrentSize 那段）
+  const size = fitInWorkArea(DEFAULT_SIZE.width, DEFAULT_SIZE.height);
   win = new BrowserWindow({
     width: size.width,
     height: size.height,
-    x: bounds.x,
-    y: bounds.y,
     minWidth: 380,
     minHeight: 520,
     backgroundColor: "#f4f5f7",
@@ -310,12 +291,10 @@ function createWindow() {
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: "deny" };
   });
-  win.on("close", () => {
-    // 手机视图下**不写 bounds**：那是手机尺寸，不是用户想要的桌面尺寸（写进去就再也回不去了）
-    persistWindowState();
-  });
+  // 用户自己把窗口拖大/拖动 → 记进内存（切视图时用得上；下次启动不用，见上面那段说明）
+  win.on("resize", rememberCurrentSize);
+  win.on("move", rememberCurrentSize);
   win.on("closed", () => { win = null; });
-  // 不恢复上次的手机视图：启动永远是正常桌面窗口（prefs 里若是旧值留着的 phoneView，忽略即可）
   return win;
 }
 
@@ -399,11 +378,83 @@ const PAGE_PROBE = `(async () => {
   const sw = panel && panel.querySelector('.dc-switch');
   const top = document.querySelector('.topbar') || document.body;
   const status = panel && panel.querySelector('.dc-status');
+  // 顶栏那两颗新键（用户要求：搜索改成"点图标才弹输入框"、附加属性键搬到搜索键右边）：
+  // 点开量一下——搜索条要真的弹出来、属性下拉要贴在这颗键正下方且右边缘对齐。
+  // 量完**不关掉**：紧接着的自检截图正好能让人眼看一眼这两个浮层。
+  const searchBtn = document.querySelector('.topbar .search-btn');
+  let searchBtnRect = null, popRect = null;
+  if (searchBtn) {
+    searchBtnRect = searchBtn.getBoundingClientRect();
+    searchBtn.click();
+    await tick();
+    const pop = await until(() => document.querySelector('.search-pop'), 2000);
+    if (pop) {
+      const r = pop.getBoundingClientRect();
+      popRect = [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+    }
+  }
+  const attrBtn = document.querySelector('.topbar .attr-btn');
+  let attrBtnRect = null, attrPanelRect = null;
+  if (attrBtn) {
+    attrBtnRect = attrBtn.getBoundingClientRect();
+    attrBtn.click();
+    await tick();
+    const ap = await until(() => document.querySelector('.attr-panel'), 2000);
+    if (ap) {
+      const r = ap.getBoundingClientRect();
+      attrPanelRect = [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
+    }
+  }
+  const rect4 = (r) => r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null;
+  // 面板的「世界设定」页（用户要求：内容来自绑定的预设 -> 这一页只读，改内容只能去「编辑预设…」）：
+  // 点那排图标里的第二个（railTabs 顺序：生成要求 / 世界设定 / …）-> 量绑定入口、只读框与底部保存键
+  let worldPage = null;
+  const railBtns = Array.from(document.querySelectorAll('.panel-rail .rail-btn'));
+  // 点"别处"（这里就是面板图标）要把顶栏那两个浮层收起来：手机上点会话/点按钮时它们不能继续压着内容
+  const hadSearchPop = !!document.querySelector('.search-pop');
+  const hadAttrPanel = !!document.querySelector('.attr-panel');
+  if (railBtns.length > 1) {
+    railBtns[1].click();
+    await tick();
+    await tick();
+    const pane = document.querySelector('.panel-tab-pane[data-tab="world"]');
+    if (pane) {
+      const boxes = Array.from(pane.querySelectorAll('input, textarea'));
+      const foot = document.querySelector('.panel-footer');
+      const texts = Array.from(pane.querySelectorAll('button')).map((b) => b.textContent);
+      worldPage = {
+        hasCurrent: !!pane.querySelector('.preset-current'),
+        bindBtn: texts.some((t) => /选择预设|更换预设/.test(t)),
+        editBtn: texts.some((t) => /编辑预设/.test(t)),
+        // 所有框都只读（只读框不接受输入），且这一页底部**没有保存键**
+        boxesReadonly: boxes.length > 0 && boxes.every((b) => b.readOnly),
+        boxCount: boxes.length,
+        noSaveBtn: !(foot && foot.querySelector('.primary-btn.full')),
+        footHint: !!(foot && /只读/.test(foot.textContent)),
+        // 点过面板图标之后，刚才还开着的搜索条 / 属性下拉都该收起来了（本来就没开 -> null，不判）
+        searchClosedOnOutside: hadSearchPop ? !document.querySelector('.search-pop') : null,
+        attrClosedOnOutside: hadAttrPanel ? !document.querySelector('.attr-panel') : null,
+      };
+    }
+  }
   const pb = document.querySelector('.titlebar [aria-label*="手机"]');   // 窗口键在标题栏那一行
   const pr = pb ? pb.getBoundingClientRect() : null;
   const hit = pr ? document.elementFromPoint(Math.round(pr.x + pr.width / 2), Math.round(pr.y + pr.height / 2)) : null;
   return {
     panelOpen: !!panel,
+    searchBtnRect: rect4(searchBtnRect),
+    searchPopRect: popRect,
+    // 搜索条要挂在放大镜正下方（顶栏下沿再往下一点），不是 0 高的空壳
+    searchPopBelowBtn: !!(popRect && searchBtnRect && popRect[1] >= Math.round(searchBtnRect.bottom)),
+    attrBtnRect: rect4(attrBtnRect),
+    attrPanelRect,
+    // 下拉要在键的正下方、右边缘与键对齐（用户："移到当前位置的右边"）
+    attrPanelAligned: !!(attrPanelRect && attrBtnRect
+      && attrPanelRect[1] >= Math.round(attrBtnRect.bottom)
+      && Math.abs((attrPanelRect[0] + attrPanelRect[2]) - Math.round(attrBtnRect.right)) <= 1),
+    attrBtnRightOfSearch: !!(searchBtnRect && attrBtnRect
+      && Math.round(attrBtnRect.x) >= Math.round(searchBtnRect.right) - 1),
+    worldPage,
     panelRect: panel ? (() => { const r = panel.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; })() : null,
     phoneRect: pr ? [Math.round(pr.x), Math.round(pr.y), Math.round(pr.width), Math.round(pr.height)] : null,
     // 点中心命中的可能是按钮里的 svg，所以要看祖先链上有没有窗口键
@@ -611,7 +662,10 @@ function buildMenu() {
 }
 
 // ---- 单实例：第二次双击只把已有窗口叫到前面，而不是又起一个后端 ----
-if (!app.requestSingleInstanceLock()) {
+// 自检**不抢这把锁**：应用开着的时候也要能跑自检（它只开一个隐藏窗口，后端若已被占就直接用现成的，
+// 见 waitBackend 的"端口已被别的实例占用也算就绪"）。否则应用一开着，自检就静默退出、什么都测不到。
+if (!SELFTEST && !app.requestSingleInstanceLock()) {
+  log("已有实例在运行：这次只把它的窗口叫到前面");
   app.quit();
 } else {
   app.on("second-instance", () => {
@@ -660,6 +714,10 @@ if (!app.requestSingleInstanceLock()) {
           + `二维码暗点 ${u.qrInk} 置灰 ${u.qrDim} 局域网 ${u.lanOn} | 行 ${u.labels.join("/")} | 状态 ${u.statusText}`);
         log(`selftest 浮层 | 模式按钮 ${u.modeRect} 介绍浮层 ${u.tipRect} 标题栏下沿 ${u.titlebarBottom}`);
         log(`selftest 尺寸 | 面板 ${u.panelRect} 窗口手机键 ${u.phoneRect} 该点最上层 ${u.phoneHit}`);
+        log(`selftest 顶栏键 | 搜索键 ${u.searchBtnRect} 搜索条 ${u.searchPopRect} 挂在键下 ${u.searchPopBelowBtn} | `
+          + `属性键 ${u.attrBtnRect}（在搜索键右边 ${u.attrBtnRightOfSearch}）`
+          + ` 下拉 ${u.attrPanelRect} 对齐 ${u.attrPanelAligned}`);
+        log(`selftest 只读页 | 世界设定 ${JSON.stringify(u.worldPage)}`);
         log(`selftest 手机视图 | 退出键 ${probe.pv.exitBtn} 文案「${probe.pv.exitLabel}」 `
           + `位置尺寸 ${probe.pv.rect} 可点 ${probe.pv.hitOk} 命中 ${probe.pv.hit} 其父 ${probe.pv.hitParent} `
           + `页面宽 ${probe.pv.innerWidth}px | 污染尺寸恢复实测宽 ${probe.repairedWidth}px`);
@@ -693,6 +751,37 @@ if (!app.requestSingleInstanceLock()) {
         }
         if (!(u.qrInk > 50)) bad.push(`二维码没画出来（暗点 ${u.qrInk}）`);
         if (u.qrDim === u.lanOn) bad.push(`二维码置灰状态与局域网开关不一致（置灰 ${u.qrDim} 开关 ${u.lanOn}）`);
+        // 顶栏那两颗新键：搜索键点开要弹出搜索条（且贴在顶栏下沿）、属性下拉要贴在键下方且右边缘对齐
+        if (u.searchBtnRect && !u.searchPopRect) bad.push("点搜索键没弹出搜索条");
+        if (u.searchPopRect && u.searchPopBelowBtn !== true) bad.push(`搜索条没挂在放大镜下方（${u.searchPopRect}）`);
+        // 桌面端搜索条只能是一小条：早先是整行铺开，右侧那排竖排图标被它盖住（用户报过）
+        if (u.searchPopRect && !(u.searchPopRect[2] <= 340)) {
+          bad.push(`搜索条太宽（${u.searchPopRect[2]}px，应当 ≤340）`);
+        }
+        if (u.searchPopRect && !((u.searchPopRect[0] + u.searchPopRect[2]) <= u.viewW - 60)) {
+          bad.push(`搜索条盖住了右侧图标列（${u.searchPopRect}，视口宽 ${u.viewW}）`);
+        }
+        if (u.attrBtnRect && u.searchBtnRect && u.attrBtnRightOfSearch !== true) {
+          bad.push(`属性键不在搜索键右边（${u.attrBtnRect} vs ${u.searchBtnRect}）`);
+        }
+        // 属性下拉只在"这个会话真有属性"时才渲染，所以这里按"键在就要求下拉在"来判（自检会话已配了属性）
+        if (u.attrBtnRect && !u.attrPanelRect) bad.push("点属性键没弹出下拉");
+        if (u.attrPanelRect && u.attrPanelAligned !== true) {
+          bad.push(`属性下拉没对齐属性键下方（下拉 ${u.attrPanelRect} 键 ${u.attrBtnRect}）`);
+        }
+        // 世界设定页只读：要有绑定/编辑预设入口、框全只读、底部没有保存键
+        if (!u.worldPage) bad.push("世界设定页没量到（面板图标点了没切过去？）");
+        else {
+          if (!u.worldPage.hasCurrent) bad.push("世界设定页没有“当前世界预设”那行");
+          if (!u.worldPage.bindBtn) bad.push("世界设定页没有绑定入口");
+          if (!u.worldPage.editBtn) bad.push("世界设定页没有「编辑预设…」入口");
+          if (u.worldPage.boxesReadonly !== true) bad.push(`世界设定页的框不是只读的（${u.worldPage.boxCount} 个）`);
+          if (u.worldPage.noSaveBtn !== true) bad.push("只读页底部还挂着保存键");
+          if (u.worldPage.footHint !== true) bad.push("只读页底部没给出说明");
+          // 点别处（面板图标）要把顶栏那两个浮层收起来（手机端遮挡问题）
+          if (u.worldPage.searchClosedOnOutside === false) bad.push("点别处没收起搜索条");
+          if (u.worldPage.attrClosedOnOutside === false) bad.push("点别处没收起属性下拉");
+        }
         // 配置面板必须真的落在视口里（它曾经因为父级没有定位上下文被摆到视口外面：
         // "按钮点了没反应"其实就是面板开在屏幕外 —— 实测踩到）
         const _pr = u.panelRect;

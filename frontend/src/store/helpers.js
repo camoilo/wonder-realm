@@ -188,6 +188,7 @@ export const emptyWorld = () => ({ name: "", description: "", rules: "", terms: 
 //   empty —— "清空当前那份"的形状（没绑预设时用）
 //   values(p) —— 从一条预设取出表单要的字段（**必须新建对象/数组**，否则改表单会改到列表项）
 //   sub(p) —— 列表第二行显示什么（光看名字分不清是谁）
+//   bindTitle / bindHint —— "绑定预设"弹窗的标题与说明（面板两页只读，绑定是唯一的启用入口）
 export const PRESET_KINDS = {
   profile: {
     label: "我的设定",
@@ -205,10 +206,10 @@ export const PRESET_KINDS = {
       avatar: p.avatar || "",
     }),
     nameError: "先给这条预设填个名字",
-    loadTitle: "载入预设",
-    loadHint: "载入会用这条预设覆盖“当前使用的设定”",
+    bindTitle: "选择预设",
+    bindHint: "选中后这个角色就用它；内容在「编辑预设」里改",
     editTitle: "编辑预设",
-    deleteText: (name) => `删除预设「${name}」？当前使用的设定不受影响。`,
+    deleteText: (name) => `删除预设「${name}」？没绑定它的角色不受影响。`,
   },
   world: {
     label: "世界设定",
@@ -226,11 +227,11 @@ export const PRESET_KINDS = {
       terms: (p.terms || []).map((t) => ({ term: t.term, meaning: t.meaning })),
     }),
     nameError: "先给这个世界预设填个名字",
-    loadTitle: "载入世界预设",
-    loadHint: "载入会用这条世界预设覆盖“当前世界”",
+    bindTitle: "选择世界预设",
+    bindHint: "选中后这个角色（或导演会话）就用它；内容在「编辑预设」里改",
     editTitle: "编辑世界预设",
     deleteText: (name) =>
-      `删除世界预设「${name}」？当前世界不受影响，用了它的角色会变成“不绑定”。`,
+      `删除世界预设「${name}」？没绑定它的角色/会话不受影响，绑定过的会变成“不绑定”。`,
   },
 };
 

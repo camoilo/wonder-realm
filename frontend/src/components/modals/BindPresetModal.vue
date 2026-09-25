@@ -1,16 +1,17 @@
 <template>
-<div class="modal-mask" v-if="loadPresetModal.visible"
+<div class="modal-mask" v-if="bindModal.visible"
      @mousedown="onMaskDown" @mouseup="onMaskUp" @click="onMaskClick">
     <div class="modal load-modal">
-      <h2>{{ kind.loadTitle }}</h2>
+      <h2>{{ kind.bindTitle }}</h2>
       <!-- 左边挑、右边看详情：预设名字可能重复，光看一行字分不清是谁，这里把内容摆出来。
-           确认后立即写入"当前生效的那一份"。"我的设定"与"世界设定"共用这一对弹窗，
+           确认后**绑定**（写角色的 profile_id / world_id，导演会话写 world_id）——面板那两页
+           从此只读地显示这份内容。"我的设定"与"世界设定"共用这一对弹窗，
            差别只有右侧的字段与接口（kind 决定，见 helpers.js 的 PRESET_KINDS）。 -->
       <div class="modal-body preset-split">
         <div class="preset-list">
           <button v-for="p in presets" :key="p.id" class="preset-item"
-                  :class="{on: p.id === loadPresetModal.pick}"
-                  @click="pickLoadPreset(p.id)">
+                  :class="{on: p.id === bindModal.pick}"
+                  @click="pickBindPreset(p.id)">
             <span class="avatar sm">
               <img v-if="kind.hasAvatar && p.avatar" :src="p.avatar" alt="">
               <template v-else>{{ (p.name || "预").slice(0, 1) }}</template>
@@ -54,9 +55,9 @@
         </div>
       </div>
       <div class="modal-actions">
-        <span class="hint">{{ kind.loadHint }}</span>
-        <button class="ghost-btn" @click="closeLoadModal">取消</button>
-        <button class="primary-btn" :disabled="!picked" @click="confirmLoadPreset">载入这条</button>
+        <span class="hint">{{ kind.bindHint }}</span>
+        <button class="ghost-btn" @click="closeBindModal">取消</button>
+        <button class="primary-btn" :disabled="!picked" @click="confirmBind">确定</button>
       </div>
     </div>
   </div>
@@ -70,25 +71,25 @@ import { useMaskClose } from "../../composables/maskClose.js";
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
-  loadPresetModal,
+  bindModal,
 } = toRefs(store);
 
 // 这一次打开的是哪种预设：标题、列表、右侧字段都由它决定
-const kind = computed(() => PRESET_KINDS[store.loadPresetModal.kind] || PRESET_KINDS.profile);
-const isProfile = computed(() => store.loadPresetModal.kind === "profile");
+const kind = computed(() => PRESET_KINDS[store.bindModal.kind] || PRESET_KINDS.profile);
+const isProfile = computed(() => store.bindModal.kind === "profile");
 const presets = computed(() => store[kind.value.listKey]);
 const picked = computed(() =>
-  presets.value.find((p) => p.id === store.loadPresetModal.pick) || null
+  presets.value.find((p) => p.id === store.bindModal.pick) || null
 );
 
 // 模板用到的方法（函数不是响应式的，直接解构）
 const {
-  closeLoadModal,
-  confirmLoadPreset,
-  pickLoadPreset,
+  closeBindModal,
+  confirmBind,
+  pickBindPreset,
   presetBindLabel,
 } = store;
 
 // 点窗口外 = 取消（判据是"按下"落在遮罩上，见 composables/maskClose.js）
-const { onMaskDown, onMaskUp, onMaskClick } = useMaskClose(closeLoadModal);
+const { onMaskDown, onMaskUp, onMaskClick } = useMaskClose(closeBindModal);
 </script>

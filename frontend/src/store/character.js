@@ -117,7 +117,8 @@ Object.assign(store, {
     }
   },
   avatarForm(target) {
-    if (target === "profile") return store.profileForm;
+    // 面板上的「我的设定」页只读（内容来自绑定的预设），所以没有 "profile" 这个目标了：
+    // 换头像是"改预设内容"，只能在预设弹窗里做
     if (target === "preset") return store.presetModal.form;
     return target === "modal" ? store.charModal.form : store.charForm;
   },

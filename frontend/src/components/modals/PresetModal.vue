@@ -9,6 +9,12 @@
            "我的设定"与"世界设定"共用这一对弹窗，右边字段按 kind 分支。 -->
       <div class="modal-body preset-split">
         <div class="preset-list">
+          <!-- 「添加预设」= 先给一份**空白且还没落库**的表单（id=null），必须命名才保存得下去。
+               这是新建预设的唯一入口（面板那两页已经不放「存为预设」了） -->
+          <button class="preset-item preset-add" v-hint="'新建一条空白预设（要填名字才存得下）'"
+                  @click="startNewPreset(presetModal.kind)">
+            <span class="preset-item-text"><span class="preset-item-name">＋ 添加预设</span></span>
+          </button>
           <button v-for="p in presets" :key="p.id" class="preset-item"
                   :class="{on: p.id === presetModal.id}"
                   @click="editPickPreset(p.id)">
@@ -86,13 +92,13 @@
         <TermEditor :form="presetModal.form" />
         </template>
         <p v-if="presetModal.saveError" class="avatar-error">{{ presetModal.saveError }}</p>
-        <!-- 绑定只能在角色那侧改：一份预设可以给多个角色用，所以"哪些角色用它"
-             是角色的属性而不是预设的属性，这里只显示 -->
-        <p class="hint">绑定角色：{{ presetBindLabel(picked) }}。在「编辑角色」里选这个角色用哪份预设；导演会话的世界在导演模式下的「世界设定」标签里选。</p>
+        <!-- 一份预设可以给多个角色用，所以"哪些角色用它"是角色的属性而不是预设的属性，这里只显示 -->
+        <p class="hint">绑定的角色：{{ presetBindLabel(picked) }}。选/解除预设在那两页上做。</p>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="danger-btn" v-hint="'删除这条预设（当前生效的那份不受影响）'"
+        <button class="danger-btn" :disabled="!presetModal.id"
+                v-hint="presetModal.id ? '删除这条预设' : '还没保存，没得删'"
                 @click="deletePresetInModal">删除这条预设</button>
         <button class="ghost-btn" @click="closePresetModal">取消</button>
         <button class="primary-btn" :disabled="!presetModal.form.name.trim()"
@@ -136,6 +142,7 @@ const {
   pickAvatar,
   presetBindLabel,
   savePresetModal,
+  startNewPreset,
 } = store;
 
 // 点窗口外 = 取消（判据是"按下"落在遮罩上，见 composables/maskClose.js）

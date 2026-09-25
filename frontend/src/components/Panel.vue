@@ -8,38 +8,44 @@
          "未保存 / 还原" 与保存键在它外面（见 .panel-footer） -->
     <div class="panel-box" v-if="activeSession">
       <div class="panel-body">
-        <div class="panel-tab-pane" v-show="panelTab === 'gen'">
+        <div class="panel-tab-pane" data-tab="gen" v-show="panelTab === 'gen'">
         <GenPane />
       </div>
-        <!-- 世界设定：全局一份，三种模式都注入。名称只给自己辨认、**不进提示词**；
-             描述 / 规则 / 词库会写进提示词（位置在角色设定之前），所以都带限额与计数 -->
-        <div class="panel-tab-pane" v-show="panelTab === 'world'">
+        <!-- 世界设定：三种模式都注入。名称只给自己辨认、**不进提示词**；这一页只读
+             （内容来自绑定的预设），要改内容去「编辑预设…」 -->
+        <div class="panel-tab-pane" data-tab="world" v-show="panelTab === 'world'">
         <WorldPane />
       </div>
-        <div v-if="activeSession.character" class="panel-tab-pane"
+        <div v-if="activeSession.character" class="panel-tab-pane" data-tab="char"
              v-show="panelTab === 'char'">
         <CharPane />
       </div>
         <!-- 我的设定：用户本人。姓名与身份会进聊天与沉浸两种模式的提示词，头像与名字显示在
-             自己消息的气泡旁；导演模式用不到它，所以那个模式下不出现这个标签 -->
-        <div v-if="activeSession.character" class="panel-tab-pane" v-show="panelTab === 'profile'">
+             自己消息的气泡旁；导演模式用不到它，所以那个模式下不出现这个标签。这一页同样只读 -->
+        <div v-if="activeSession.character" class="panel-tab-pane" data-tab="profile"
+             v-show="panelTab === 'profile'">
         <ProfilePane />
       </div>
-        <div v-if="memoryScope" class="panel-tab-pane" v-show="panelTab === 'memory'">
+        <div v-if="memoryScope" class="panel-tab-pane" data-tab="memory" v-show="panelTab === 'memory'">
         <MemoryPane />
       </div>
       </div>
       <!-- 保存与"未保存 / 还原"常驻在面板底部（滚动容器之外）：内容再长也不会跟着滚走，
-           也不会被内容量挤位置。所有页签共用这一个按钮，保存谁由当前页签决定 -->
+           也不会被内容量挤位置。所有页签共用这一个按钮，保存谁由当前页签决定。
+           **世界设定 / 我的设定两页只读**（内容来自绑定的预设），所以它们不显示保存键，
+           改成一个说明：要改内容去页面上那排的「编辑预设…」 -->
       <div class="panel-footer">
-        <div v-if="activeTabDirty" class="panel-tab-actions">
-          <span class="dirty-flag">未保存</span>
-          <button class="revert-btn" :class="{armed: revertArm[panelTab]}"
-                  v-hint="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
-                  @click="armRevert(panelTab)">{{ revertArm[panelTab] ? "确认还原？" : "还原" }}</button>
-        </div>
-        <button class="primary-btn full" :disabled="saveDisabled" @click="saveCurrentTab">保存当前配置</button>
-        <p class="hint">保存后立即生效，只影响后续生成</p>
+        <p v-if="readonlyTab" class="hint">只读：内容来自选中的预设，改内容请点「编辑预设」。</p>
+        <template v-else>
+          <div v-if="activeTabDirty" class="panel-tab-actions">
+            <span class="dirty-flag">未保存</span>
+            <button class="revert-btn" :class="{armed: revertArm[panelTab]}"
+                    v-hint="revertArm[panelTab] ? '再点一次即还原到上次保存的内容' : '还原到上次保存的内容'"
+                    @click="armRevert(panelTab)">{{ revertArm[panelTab] ? "确认还原？" : "还原" }}</button>
+          </div>
+          <button class="primary-btn full" :disabled="saveDisabled" @click="saveCurrentTab">保存当前配置</button>
+          <p class="hint">保存后立即生效，只影响后续生成</p>
+        </template>
       </div>
     </div>
 
@@ -51,9 +57,9 @@
     <div class="panel-rail">
       <template v-if="activeSession">
         <button v-for="t in railTabs" :key="t.key" class="rail-btn"
-                :class="{on: !panelCollapsed && panelTab === t.key}"
+                :class="{on: isActiveTab(t)}"
                 v-hint="tabLabel(t)" :aria-label="tabLabel(t)"
-                :aria-pressed="!panelCollapsed && panelTab === t.key"
+                :aria-pressed="isActiveTab(t)"
                 @click="onRailClick(t.key)">
           <span class="rail-svg" v-html="t.icon"></span>
           <span v-if="tabDirty(t)" class="tab-dot"></span>
@@ -116,6 +122,14 @@ function tabDirty(t) {
   }
 }
 
+// 当前选中的那一页要一直高亮：桌面端面板收起时旧规则会把高亮去掉，
+// 但手机端面板本来就是"收起／弹层打开"两态（panelCollapsed 常常是 true），
+// 那样弹层里就永远看不到哪个标签是选中的（用户报过）——所以手机端以"弹层开着"为准
+function isActiveTab(t) {
+  if (store.panelTab !== t.key) return false;
+  return !store.panelCollapsed || store.mobilePanelOpen;
+}
+
 const {
   activeSession,
   activeTabDirty,
@@ -133,4 +147,7 @@ const {
   saveCurrentTab,
   togglePanel,
 } = store;
+
+// 世界设定 / 我的设定：只读页（内容来自绑定的预设），底部不显示保存键
+const readonlyTab = computed(() => panelTab.value === "world" || panelTab.value === "profile");
 </script>

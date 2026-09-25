@@ -257,9 +257,10 @@ check("保存带 draft_id", "charPayload.draft_id = this.charModal.gen.draftId" 
 check("保存失败在弹窗内提示", "charModal.saveError" in js and "charModal.saveError" in html, True)
 check("样式含 gen-box / locked-box", (".gen-box" in css) and (".locked-box" in css), True)
 
-# 发送键旁的"回到最新"键（DEVELOPMENT §9.6 界面约定 顺带加的）
+# 辅助键行里的"回到最新"键（DEVELOPMENT §9.6 界面约定 顺带加的）
 check("有 ↓ 键", 'class="jump-btn"' in html, True)
-check("↓ 在发送行内", html.index('class="send-row"') < html.index('class="jump-btn"'), True)
+check("↓ 在辅助键行内、输入区之上",
+      html.index('class="aux-row"') < html.index('class="jump-btn"') < html.index('class="input-main"'), True)
 check("有 jumpToBottom 方法", "jumpToBottom" in methods, True)
 
 # 弹窗变体宽度必须压得住基础 .modal（DEVELOPMENT §9.6 界面约定 的坑）
@@ -329,18 +330,19 @@ check("选中图标用强调色边框 + 深色底区分",
 
 # ---- 字数上限与右下角实时提示 ----
 counters = html.count('class="char-count')
-check("计数提示数量（含底部输入区两栏、我的设定三项、两种预设弹窗各三项、世界设定三项与词条两项、附加属性两项）",
-      counters, 35)
+# 我的设定 / 世界设定两页只读（内容来自绑定的预设），所以那两页没有计数提示了
+check("计数提示数量（含底部输入区两栏、两种预设弹窗各三项、世界设定词条两项、附加属性两项）",
+      counters, 29)
 check("每个计数器都有 .counted 定位父层", html.count('class="counted') >= counters, True)
 check("计数方法在", "isNear(value, max)" in js and "len(value)" in js, True)
 # 所有自由文本输入都要有 maxlength（文件选择、单选、滑杆、数字框除外——数字框用 min/max）；
-# 会话内搜索框是界面过滤器、不落库，也不该占一个上限，所以单独放行
+# 会话内搜索框是界面过滤器、不落库，也不该占一个上限；只读框（面板那两页）根本不接受输入
 free_boxes = []
 for tag, attrs in re.findall(r"<(input|textarea)([^>]*)>", html, flags=re.S):
     if tag == "input" and any(k in attrs for k in (
             'type="file"', 'type="radio"', 'type="range"', 'type="number"')):
         continue
-    if "search-input" in attrs:
+    if "search-input" in attrs or "readonly" in attrs:
         continue
     if ":maxlength" not in attrs:
         free_boxes.append(attrs.strip().splitlines()[0][:60])
@@ -421,21 +423,23 @@ check("切换会话时把定义带进面板表单",
 check("定义也进 emptyCharForm（面板与新角色表单都用它）",
       "attr_defs: []," in js, True)
 
-# 浮层：可收纳、贴在对话区顶部、只在选中会话且有属性时出现
-check("浮层组件挂在消息列表里（sticky 自己占位）",
+# 附加属性：入口与下拉都在顶栏（用户要求"按钮移进顶栏、紧挨搜索键右边、面板缩小挪到右边"）
+_chat_area = dict(zip(VUE_ORDER, vue_sources))["components/ChatArea.vue"]
+check("属性入口在顶栏、紧跟搜索键右边",
       'components/AttrPanel.vue' in VUE_ORDER
-      and html.index("<AttrPanel />") < html.index('v-for="m in displayMessages"'), True)
-check("浮层用 sticky 贴在对话区顶部", ".attr-panel {" in css
-      and "position: sticky;" in css and "z-index: 300;" in css and "align-self: center;" in css, True)
-# 展开态的宽度要落在"能读清"与"不铺张"之间：太窄（按内容缩成 255px）像信息条、
-# 与气泡一样宽（680px）又太宽——用户的两次反馈分别针对这两头，所以钉住中间那个值
-check("展开态宽度取中间值（不是按内容缩成窄条，也不是与气泡同宽）",
-      "max-width: min(400px, 100%);" in css
-      and "width: max-content;" in css.split(".attr-panel.collapsed")[1][:120], True)
-check("浮层可收纳（收起时只是一个图标，展开才有标题与内容）",
-      'class="attr-icon"' in html and "attrsCollapsed = false" in html
-      and 'class="attr-toggle"' in html and ".attr-icon {" in css
-      and ".attr-panel.collapsed" in css, True)
+      and '<AttrPanel v-if="activeSession" />' in html
+      and html.index('class="icon-btn search-btn"') < html.index("<AttrPanel"), True)
+check("属性键在顶栏工具条里（不再挂消息列表）",
+      "<AttrPanel" not in _chat_area and "import AttrPanel" not in _chat_area, True)
+check("展开的是键下方的小下拉（右边缘对齐、宽 260px / 手机 50vw）",
+      ".attr-panel {" in css and "position: absolute;" in css
+      and "top: calc(100% + 6px);" in css and "right: 0;" in css
+      and "width: 260px;" in css, True)
+check("面板默认不开（浮层盖消息没意义）", "attrsCollapsed: true," in store_js, True)
+check("属性键可开可合、面板只有标题（不再有重复的 × 键）",
+      'class="icon-btn attr-btn"' in html and "attrsCollapsed = !attrsCollapsed" in html
+      and 'class="attr-title"' in html and 'class="attr-close"' not in html
+      and ".attr-close" not in css, True)
 check("浮层只在选中会话 + 聊天/沉浸 + 有值时出现",
       "showAttrPanel = computed" in js and "if (!this.activeSession || this.isDirectorMode) return false;" in js
       and "v-if=\"showAttrPanel\"" in html, True)
@@ -473,26 +477,30 @@ check("有我的设定图标（配置表里登记）", '{ key: "profile", label:
 check("我的设定面板在", 'panelTab === \'profile\'' in html, True)
 check("面板顶部的输出倾向已改名", "输出倾向" in html or "genSectionTitle" in js, False)
 check("生成要求图标在配置表里", '{ key: "gen", label: "生成要求"' in html, True)
-check("用户头像有第三个 target", "pickAvatar($event, 'profile')" in html, True)
+check("用户头像只在预设弹窗里换（面板那页只读）",
+      ("pickAvatar($event, 'profile')" in html, "pickAvatar($event, 'preset')" in html), (False, True))
 check("头像归属有统一入口", "avatarForm(target)" in js, True)
-check("我的设定有独立的脏标记与还原", "profileDirty" in js and 'section === "profile"' in js, True)
-check("保存派发包含我的设定", 'if (this.panelTab === "profile") return this.saveProfile();' in js, True)
+# 只读页：没有"面板改了没保存"这回事，脏标记/还原/保存派发都不该再管它们
+check("我的设定不再进「还原」分支（面板只读）", 'section === "profile"' in js, False)
+check("保存派发不含我的设定（面板只读，写的是绑定）",
+      'this.panelTab === "profile"' in js, False)
 check("启动时加载我的设定", 'await this.api("/api/profile")' in js, True)
 
-# ---- 世界设定（全局一份，三种模式都用得上） ----
+# ---- 世界设定（三种模式都用得上） ----
 check("有世界设定图标（配置表里登记）", '{ key: "world", label: "世界设定"' in html, True)
 check("世界设定面板在", "panelTab === 'world'" in html, True)
 check("世界设定图标不判模式（导演模式也显示）",
       "t.key === 'world'" not in html or "{ key: \"world\", label: \"世界设定\" }" in html, True)
-check("世界设定有独立的脏标记与还原", "worldDirty" in js and 'section === "world"' in js, True)
-check("保存派发包含世界设定", 'if (this.panelTab === "world") return this.saveWorld();' in js, True)
+check("世界设定不再进「还原」分支（面板只读）", 'section === "world"' in js, False)
+check("保存派发不含世界设定（面板只读，写的是绑定）",
+      'this.panelTab === "world"' in js, False)
 check("启动时加载世界设定", 'await this.api("/api/world")' in js, True)
 check("词条可增可删（方法收一份表单，面板与预设弹窗共用）",
       "addTerm(form) {" in js and "removeTerm(form, index) {" in js
       and '@click="addTerm(form)"' in html and '@click="removeTerm(form, i)"' in html, True)
 check("到上限后不能再加词条",
       ':disabled="form.terms.length >= limits.world_terms_max"' in html, True)
-check("名称注明不发给模型", "只用于自己辨认，不发给模型" in html, True)
+check("名称注明不发给模型", "名称只给自己看" in html, True)
 check("词库说明写清空行会被丢弃", "名词留空的行在保存时自动丢弃" in html, True)
 # 竖排图标栏：宽度固定、竖排；图标是同一套 24px 线性图标，统一随按钮颜色走（currentColor）
 rail_box_css = re.search(r"\.panel-rail \{[^}]*\}", css)
@@ -530,7 +538,9 @@ check("保存失败提示也在字段区之外（与按钮一起常驻）",
 check("顶栏有搜索框", 'class="search-box"' in html and 'class="search-input"' in html, True)
 check("搜索框在工具栏里",
       html.index('class="toolbar"') < html.index('class="search-box"'), True)
-check("搜索框只在有会话时出现", 'v-if="activeSession" class="search-box"' in html, True)
+check("搜索条只在有会话时弹出",
+      'v-if="activeSession" class="search-slot"' in html
+      and 'v-if="searchOpen" class="search-pop"' in html, True)
 check("Enter / Shift+Enter / Esc 都接上了",
       ('@keydown.enter.exact.prevent="searchNext"' in html)
       and ('@keydown.shift.enter.prevent="searchPrev"' in html)
@@ -555,12 +565,14 @@ check("搜索框后面有清空键（常驻、没关键词时置灰）",
 check("清空键不按状态出现/消失（只置灰）",
       'v-if="searchQuery"' in html, False)
 check("搜索框与计数都不伸缩",
-      ".search-box {\n  flex: none;" in css and "min-width: 42px;" in css, True)
+      ".search-box {\n  flex: none;" in css and "min-width: 34px;" in css
+      # 数字左对齐：紧跟在清除键后面（右对齐 + 42px 会把 0/0 推到最右，看着离 × 老远）
+      and bool(re.search(r"\.search-count \{[^}]*text-align: left;", css)), True)
 # 按钮必须显式 opacity: 1——.icon-btn 默认是"悬停才显形"（给侧栏用的），
 # 照搬过来会让按钮可点却看不见
 check("搜索框按键可见", ".search-box .icon-btn {\n  flex: none;\n  opacity: 1;" in css, True)
 check("搜索框在模型选择左边",
-      html.index('class="search-box"') < html.index('class="model-select"'), True)
+      html.index('class="icon-btn search-btn"') < html.index('class="model-select"'), True)
 check("顶栏放不下时换行而不是溢出", "flex-wrap: wrap;" in css, True)
 
 # ---- 图标上的未保存小点不能改变图标尺寸 ----
@@ -660,9 +672,9 @@ picker = re.findall(r'class="ghost-btn file-btn">\{\{([^}]*)\}\}', html)
 normalized = sorted(re.sub(
     r"(?:char(?:Modal\.form|Form)|profileForm|presetModal\.form)\.avatar", "AV", p).strip()
     for p in picker)
-check("四处头像入口都在（角色面板 / 角色弹窗 / 我的设定 / 预设弹窗）", len(picker), 4)
-check("四处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
-      normalized, ['AV ? "更换头像" : "上传头像"'] * 4)
+check("三处头像入口都在（角色面板 / 角色弹窗 / 预设弹窗）", len(picker), 3)
+check("三处头像按钮同文案（无头像=上传头像 / 有头像=更换头像）",
+      normalized, ['AV ? "更换头像" : "上传头像"'] * 3)
 check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") if w in html], [])
 
 # ---- "我的设定"与"世界设定"的预设：一套实现 + kind 派发（DEVELOPMENT §2.3 / §2.4） ----
@@ -671,16 +683,28 @@ check("没有遗留的旧文案", [w for w in ("选择头像", "选择图片") i
 check("面板只显示当前预设名（两种各一行）",
       html.count('class="preset-current">当前预设：<b>{{ currentPresetLabel }}</b>') == 1
       and 'class="preset-current">当前世界预设：<b>{{ currentWorldPresetLabel }}</b>' in html, True)
-check("两处面板各有三个入口键（载入 / 编辑 / 存为）",
-      [html.count(f">{k}</button>") for k in ("载入预设…", "编辑预设…", "存为预设")] == [2, 2, 2], True)
-check("载入 / 编辑 / 存为 的排列顺序",
-      (html.index(">载入预设…</button>") < html.index(">编辑预设…</button>")
-       < html.index(">存为预设</button>")), True)
-check("面板上不放删除（不可逆操作收进弹窗）", ">删除预设</button>" in html, False)
-check("载入弹窗有列表与详情",
+check("面板两页只有 选择/更换预设 · 编辑预设 · 解除绑定（不再有存为预设）",
+      [html.count(f'"{k}"') for k in ("选择预设", "更换预设")] == [2, 2]
+      and html.count(">解除绑定</button>") == 2
+      and html.count(">编辑预设</button>") == 2, True)
+# 面板那两页只读：内容来自绑定的预设（改内容去「编辑预设…」）
+_panes = dict(zip(VUE_ORDER, vue_sources))
+_wp = _panes["components/panes/WorldPane.vue"]
+_pp = _panes["components/panes/ProfilePane.vue"]
+check("面板上不再有「存为预设」", "存为预设" in _wp or "存为预设" in _pp, False)
+check("世界设定页只读（框 readonly、词库只读、头像/上传都没有）",
+      _wp.count("readonly") >= 4 and "pickAvatar" not in _wp, True)
+check("我的设定页只读（框 readonly、没有上传头像）",
+      _pp.count("readonly") >= 3 and "pickAvatar" not in _pp, True)
+check("只读页不给保存键，底部改成说明",
+      "readonlyTab" in html and "内容来自选中的预设" in html, True)
+check("绑定弹窗有列表与详情",
       'class="preset-list"' in html and 'class="preset-detail"' in html
-      and ">载入这条</button>" in html and "picked.identity" in html, True)
+      and ">确定</button>" in html and "picked.identity" in html, True)
 check("删除在编辑预设弹窗里", ">删除这条预设</button>" in html, True)
+check("编辑弹窗里有「添加预设」入口（新建预设的唯一入口）",
+      'class="preset-item preset-add"' in html and "startNewPreset(presetModal.kind)" in html
+      and ".preset-add {" in css, True)
 check("两个预设弹窗共用同一套两栏骨架（一份模板管两种预设）",
       html.count('class="modal-body preset-split"') == 2
       and html.count('class="preset-list"') == 2
@@ -691,47 +715,60 @@ check("两个预设弹窗同宽（且压得住 .modal.edit-modal 的写法）",
 check("两栏用复合选择器压住 .modal-body 的列布局",
       ".modal-body.preset-split {" in css and "flex-direction: row;" in css, True)
 check("弹窗标题与列表按 kind 决定",
-      "kind.loadTitle" in html and "kind.editTitle" in html
+      "kind.bindTitle" in html and "kind.editTitle" in html
       and "v-for=\"p in presets\"" in html and "kind.sub(p)" in html, True)
 check("世界预设有自己的详情字段（描述/规则/词库）",
       "<dt>世界名称</dt>" in html and "<dt>词库</dt>" in html, True)
 check("没有预设时给出提示", "还没有预设" in html and "还没有世界预设" in html, True)
 check("预设方法齐全（kind 参数化的那几个）",
       all(k in js for k in ("async loadPresets(kind = \"profile\") {", "async writeCurrent(kind, values, presetId) {",
-                            "async applyPreset(kind, id) {", "openLoadModal(kind) {",
-                            "closeLoadModal() {", "pickLoadPreset(id) {", "async confirmLoadPreset() {",
-                            "async savePreset(kind) {", "openPresetModal(kind) {", "editPickPreset(id) {",
+                            "async applyPreset(kind, id) {", "async bindPreset(kind, id) {",
+                            "async unbindPreset(kind) {", "openBindModal(kind) {",
+                            "closeBindModal() {", "pickBindPreset(id) {", "async confirmBind() {",
+                            "openPresetModal(kind) {", "startNewPreset(kind = this.presetModal.kind) {",
+                            "editPickPreset(id) {",
                             "async savePresetModal() {", "async deletePresetInModal() {")), True)
+check("旧的「存为预设」整条拿掉了", "async savePreset(kind) {" in js, False)
 check("kind 配置表在 helpers 里（加一种预设只动配置）",
       "export const PRESET_KINDS = {" in js and "profile: {" in js and "world: {" in js
       and 'listKey: "worldPresets"' in js and 'currentKey: "currentWorldPresetId"' in js, True)
 check("预设列表的字段名从配置里取（不写死 profilePresets）",
       "const k = kindOf(kind);" in js and "store[k.listKey]" in js, True)
-# 载入 = 立即生效（写当前生效的那份），所以要带一次"覆盖"确认；删除也要确认
+# 绑定 = 写角色/会话的绑定字段，再把当前那份对齐（不再"把内容灌进全局那份"）；解除绑定要确认
+_bind = js[js.index("async bindPreset(kind, id) {"):js.index("async unbindPreset(kind) {")]
+_unbind = js[js.index("async unbindPreset(kind) {"):js.index("async syncBinding(kind, boundId) {")]
+check("绑定写的是角色侧（导演会话走会话那侧）",
+      "this.jsonOpts(\"PUT\", characterPayload({" in _bind
+      and "await this.setSessionWorld(id);" in _bind, True)
+check("绑定后立即生效（刷新后按绑定校准当前那份）",
+      "await this.afterCharacterChange();" in _bind, True)
+check("解除绑定要先问一声", "await this.ask(" in _unbind and "await this.bindPreset(kind, null);" in _unbind, True)
+check("没绑 = 不启用：当前那份会被清空（不能只看 currentKey）",
+      "async syncBinding(kind, boundId) {" in js
+      and "await this.writeCurrent(kind, k.empty(), \"\");" in js, True)
+check("绑定弹窗确认后走绑定那条路", "async confirmBind() {" in js
+      and "await this.bindPreset(kind, p.id);" in js, True)
 _write = js[js.index("async writeCurrent(kind, values, presetId) {"):js.index("async applyPreset(kind, id) {")]
-_confirm = js[js.index("async confirmLoadPreset() {"):js.index("async savePreset(kind) {")]
-check("载入前对未保存改动要确认", "await this.ask(" in _confirm, True)
-check("载入走同一条“立即生效”路径", "await this.applyPreset(kind, p.id)" in _confirm, True)
 check("立即生效写到配置里的那个接口",
       "this.api(k.base" in _write and 'this.jsonOpts("PUT", values)' in _write, True)
 check("立即生效后当前那份与表单一起更新",
       "store[rowKey(kind)] = saved" in _write
       and "store[formKey(kind)] = this.snapshot(saved)" in _write, True)
 check("立即生效后记住当前预设", "store[k.currentKey] = presetId" in _write, True)
-check("当前预设名带“已修改”判定",
+check("面板那行显示的是**绑定**的那条（没绑就是未启用）",
       "currentPresetLabel = computed" in js and "currentWorldPresetLabel = computed" in js
-      and "（已修改）" in js, True)
+      and "未选择" in js and "this.boundProfileId = computed" in js, True)
 check("启动时两种预设列表都拉一次",
       'await this.loadPresets("profile");' in js and 'await this.loadPresets("world");' in js, True)
 check("删除预设要确认（两种都有文案）", "删除预设「" in js and "删除世界预设「" in js, True)
 check("预设样式在", ".preset-row {" in css and ".preset-current {" in css
       and ".preset-item {" in css and ".preset-detail {" in css, True)
-check("世界面板也有一行当前世界预设与三个键",
-      ">当前世界预设：" in html and html.count("openLoadModal('world')") == 1
-      and "openPresetModal('world')" in html and "savePreset('world')" in html, True)
+check("世界面板也有一行当前绑定与三个键",
+      ">当前世界预设：" in html and "openBindModal('world')" in _wp
+      and "openPresetModal('world')" in _wp and "unbindPreset('world')" in _wp, True)
 check("我的设定面板的键带着自己的 kind",
-      "openLoadModal('profile')" in html and "openPresetModal('profile')" in html
-      and "savePreset('profile')" in html, True)
+      "openBindModal('profile')" in _pp and "openPresetModal('profile')" in _pp
+      and "unbindPreset('profile')" in _pp, True)
 
 # ---- 预设绑定：身份与世界跟着角色走（DEVELOPMENT §2.3 / §2.4） ----
 # 一份预设可以被多个角色共用，所以绑定存在角色那侧（characters.profile_id / world_id），
@@ -741,10 +778,9 @@ check("两个预设弹窗都显示绑定角色",
 check("列表里有绑定那一行", html.count('class="preset-item-bind"') == 2 and ".preset-item-bind {" in css, True)
 check("绑定文案函数在（没绑就是「未绑定」）",
       "presetBindLabel(p) {" in js and '"未绑定"' in js, True)
-check("角色弹窗里有身份与世界两个下拉",
+check("角色弹窗里有身份与世界两个下拉（都带「未启用」）",
       'v-model="charModal.form.profile_id"' in html and 'v-model="charModal.form.world_id"' in html
-      and '<option :value="null">不绑定（不用预设）</option>' in html
-      and '<option :value="null">不绑定（不用世界设定）</option>' in html, True)
+      and html.count('<option :value="null">未启用</option>') == 2, True)
 check("下拉列出所有预设", 'v-for="p in profilePresets" :key="p.id" :value="p.id"' in html
       and 'v-for="p in worldPresets" :key="p.id" :value="p.id"' in html, True)
 check("绑定项与角色字段分开", ".field-bind {" in css and 'class="field field-bind"' in html, True)
@@ -771,19 +807,20 @@ check("角色会话校准两个绑定", 'await this.syncBinding("profile", c.pro
 check("导演会话按会话自己的世界校准",
       'if (s && s.mode === "director") await this.syncBinding("world", s.world_id);' in js, True)
 check("已经是这条预设就不再覆盖", "if (store[k.currentKey] === bound.id) return;" in _sync, True)
-check("没绑且本来就没用预设就不动", "if (!store[k.currentKey]) return;" in _sync, True)
-check("没绑时清空（不用预设）", 'await this.writeCurrent(kind, k.empty(), "");' in _sync, True)
+check("没绑 = 不启用：当前那份只要非空就清掉（不能只看 currentKey）",
+      "const cur = k.values(store[rowKey(kind)]);" in _sync
+      and 'await this.writeCurrent(kind, k.empty(), "");' in _sync, True)
 check("找不到那条预设时按“没绑”处理（保守，不乱清）",
       "const bound = boundId ? store[k.listKey].find((p) => p.id === boundId) : null;" in _sync, True)
-check("面板上有没保存的改动时不校准（别冲掉正在编辑的内容）",
-      "if (dirtyOf(kind)) return;" in _sync, True)
+check("只读页没有脏标记，所以不再需要 dirty 守卫", "if (dirtyOf(kind)) return;" in _sync, False)
 check("导演会话换世界会写会话本身",
       '"PATCH", { world_id: worldId }' in js
       and 'await this.syncBinding("world", saved.world_id);' in js, True)
 
-# ---- 世界设定：面板表单 + 导演会话选世界 + 词库编辑器共用（DEVELOPMENT §2.4） ----
-check("世界面板有本会话的世界下拉（仅导演模式）",
-      'v-if="isDirectorMode"' in html and "setSessionWorld($event.target.value" in html, True)
+# ---- 世界设定：绑定写角色/会话 + 词库编辑器共用（DEVELOPMENT §2.4） ----
+check("世界页的绑定入口对两种模式是同一个（不再单开导演下拉）",
+      "openBindModal('world')" in _wp and "setSessionWorld(" not in _wp
+      and "await this.setSessionWorld(id);" in js, True)
 check("新建会话弹窗里按模式换字段",
       "v-if=\"mode !== 'director'\"" in html and "<option :value=\"null\">不用世界设定</option>" in html, True)
 check("新建导演会话会带上世界",
@@ -888,7 +925,10 @@ check("每个弹窗走同一套关闭判定", [rel for rel, src in zip(VUE_ORDER
 _input_bar = dict(zip(VUE_ORDER, vue_sources))["components/InputBar.vue"]
 check("情境栏绑 inputScenario", 'v-model="inputScenario"' in _input_bar, True)
 check("话语栏仍绑 input", 'v-model="input"' in _input_bar, True)
-check("情境栏只在沉浸模式出现", 'v-if="isImmersiveMode" class="input-field scenario-field"' in _input_bar, True)
+check("情境栏只在沉浸模式出现（整行由 v-if 控制）",
+      'v-if="isImmersiveMode" class="field-row"' in _input_bar
+      and _input_bar.index('v-if="isImmersiveMode" class="field-row"')
+          < _input_bar.index('class="input-field scenario-field"'), True)
 check("两栏各有自己的上限（情境 scenario / 话语 message）",
       ":maxlength=\"limits.scenario\"" in _input_bar and ":maxlength=\"limits.message\"" in _input_bar, True)
 check("话语必填：发送键仍看 input",
@@ -901,9 +941,28 @@ check("发送时把情境一起带上（SSE 请求体）", "{ message: text, sce
 check("乐观插入的 user 消息带情境", 'role: "user", content: text, scenario: scenario || null' in js, True)
 check("失败重试也恢复情境", "inputScenario = scenario" in js, True)
 _ib_css = css_block(".input-field")
-check("两栏用标签区分（两个并排的框没标签会分不清）",
-      ".input-field-label {" in css and ".input-field.scenario-field { flex: 0 0 36%; }" in css
+check("两框都不带标题（靠框内提示区分，省一行高度）",
+      ".input-field-label" not in css and ".input-field-label" not in _input_bar
       and "flex-direction: column;" in _ib_css, True)
+check("两框各自的框内提示在",
+      'placeholder="请输入情境，如动作、场景、心理等"' in _input_bar
+      and "'请输入话语'" in _input_bar, True)
+# 情境与话语各占一行、右侧留出同宽的一格（.send-spacer / 发送键都用 --send-w），
+# 所以两框左右边界严格对齐；发送键固定宽度，不再吃掉整行
+_ib_main_css = css_block(".input-main textarea")
+check("情境与话语上下两行、右侧同宽留空",
+      ".field-row {" in css and ".send-spacer { flex: none; width: var(--send-w); }" in css
+      and ".inputbar { padding: 10px 20px 18px; --send-w: 76px; --aux-h: 32px; }" in css, True)
+check("输入框固定一行（多了在框内滚动）",
+      "height: 61px;" in _ib_main_css and "overflow-y: auto;" in _ib_main_css, True)
+check("辅助键一排可横向滚动、↓ 钉在行尾",
+      ".aux-scroll {" in css and "overflow-x: auto;" in css and "scrollbar-width: none;" in css, True)
+# 辅助键那一排比输入框矮一档（--aux-h），图标键圆形、带文字的胶囊：不再是一堆方框
+check("辅助键排调小（--aux-h）且不再用方框",
+      ".continue-btn,\n.jump-btn,\n.bg-switch {" in css and "border-radius: 999px;" in css
+      and "height: var(--aux-h);" in css, True)
+check("图标键是圆的（↓ 桌面）",
+      "border-radius: 50%;" in css_block(".jump-btn"), True)
 
 # ---- 悬停提示统一走 v-hint（不用原生 title） ----
 # 原生 title 延迟约一秒、样式跟浏览器走、不能换行；统一用自研浮层（composables/hint.js +
@@ -940,7 +999,7 @@ _app = dict(zip(VUE_ORDER, vue_sources))["App.vue"]
 check("ConfirmModal 在根组件里排在最后",
       _app.index("<ConfirmModal />") > max(
           _app.index(f"<{m} />") for m in ("CharacterModal", "NewSessionModal", "EditMessageModal",
-                                          "CropModal", "PresetModal", "LoadPresetModal")), True)
+                                          "CropModal", "PresetModal", "BindPresetModal")), True)
 check("确认框有专属遮罩类", 'class="modal-mask confirm-mask"' in html, True)
 # 纯图标按钮（可见内容是个符号）去掉 title 后必须能读出来
 check("图标按钮都有 aria-label", [rel for rel, src in zip(VUE_ORDER, vue_sources)
@@ -966,14 +1025,15 @@ check("下拉占位是名词（不再有“从预设载入”）",
 check("选下拉不再自动载入表单",
       'v-model="presetPick" @change="loadPreset"' in _pp, False)
 check("载入入口打开弹窗（不再就地载入）",
-      "@click=\"openLoadModal('profile')\"" in _pp and "loadPreset() {" in _pp, False)
+      "@click=\"openBindModal('profile')\"" in _pp and "loadPreset() {" in _pp, False)
 check("预设的编辑走独立弹窗",
       "@click=\"openPresetModal('profile')\"" in _pp
       and (frontend / "src/components/modals/PresetModal.vue").exists(), True)
-check("存为预设只新建、编辑预设才覆盖",
-      'store.jsonOpts("POST", store[formKey(kind)])' in store_js
-      and "`${k.presets}/${store.presetModal.id}`" in store_js
-      and 'store.jsonOpts("PUT", form)' in store_js, True)
+check("编辑弹窗里保存：有 id 走 PUT、没 id 走 POST（新建）",
+      "saved = await store.api(`${k.presets}/${editing}`, store.jsonOpts(\"PUT\", form));" in store_js
+      and "saved = await store.api(k.presets, store.jsonOpts(\"POST\", form));" in store_js, True)
+check("新建的必须命名才能保存（保存键按名字非空禁用）",
+      'store.presetModal.saveError = k.nameError;' in store_js, True)
 check("覆盖接口在", "@router.put(\"/profile/presets/{preset_id}\")" in
       (ROOT / "app/routes/profile.py").read_text(encoding="utf-8"), True)
 
@@ -1047,6 +1107,11 @@ check("标题宽度按内容（不是撑满整行）",
       and "max-width: 220px" not in css and "max-width: 38vw" not in css, True)
 # 右侧面板默认收起：打开会话不该自己冒出来（用户要求）
 check("右侧面板默认收起", "panelCollapsed: true," in js, True)
+# 选中的标签要一直高亮：手机端面板以"弹层开着"为准（panelCollapsed 在手机端常是 true，
+# 旧条件会让弹层里永远看不到选中态）
+check("选中标签高亮（手机端看弹层是否开着）",
+      "function isActiveTab(t)" in _panel and "!store.panelCollapsed || store.mobilePanelOpen" in _panel
+      and ":class=\"{on: isActiveTab(t)}\"" in _panel, True)
 # 自绘标题栏：三条约束缺一不可——壳开 titleBarOverlay、标题栏进 .wco（拖拽区 + 让出右上角）、
 # 高度常量与 CSS 变量同值（不同值系统三键就会跟页面按钮错开）
 check("壳开了自绘标题栏",
@@ -1104,8 +1169,20 @@ check("桌面键与配置面板的样式在", ".win-btn {" in css and ".dc-switc
 check("壳把手机视图宽度锁死、高度留自由",
       "PHONE_WIDTH + frameW" in shell_js and "setMaximumSize(0, 0)" in shell_js
       and "setContentSize(PHONE_WIDTH," in shell_js, True)
-check("桌面尺寸与手机高度分开存",
-      "phoneHeight: win.getContentSize()[1]" in shell_js and "persistWindowState()" in shell_js, True)
+# 尺寸口径（用户 2026-09-25 定）：启动两个视图都回默认，自己调过的只在这一趟运行里记住。
+# 所以尺寸**只放内存**（不落 desktop.json），启动不读旧值；进手机视图每次重抓桌面尺寸。
+check("窗口尺寸只记在内存里、不落盘",
+      "let desktopBounds = null;" in shell_js and "let phoneContentH = 0;" in shell_js
+      and "prefsFile" not in shell_js and "persistWindowState" not in shell_js, True)
+check("启动一律用默认尺寸（不恢复上次的）",
+      "const size = fitInWorkArea(DEFAULT_SIZE.width, DEFAULT_SIZE.height);" in shell_js
+      and "readPrefs" not in shell_js, True)
+check("进手机视图每次重抓桌面尺寸（改过大小再切回来也对）",
+      "if (!SELFTEST) desktopBounds = win.getBounds();" in shell_js
+      and "const want = clampHeight(phoneContentH || PHONE_DEFAULT_H);" in shell_js, True)
+check("窗口一动就记下来（切视图用得上）",
+      'win.on("resize", rememberCurrentSize);' in shell_js
+      and 'win.on("move", rememberCurrentSize);' in shell_js, True)
 check("壳日志能从面板里打开",
       "openLog:" in preload_js and 'ipcMain.handle("desktop:open-log"' in shell_js, True)
 # 后端输出走管道：Python 按控制台代码页编码（bat 里是 936）、Node 按 UTF-8 解，
@@ -1116,10 +1193,9 @@ check("壳 spawn 后端时明确 UTF-8 输出",
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
       "退出手机视图" in _titlebar and 'class="win-btn"' in _titlebar, True)
 # 脏的"手机大小桌面尺寸"（旧版本存进去过）不能被当成恢复目标
-check("壳会丢掉脏的桌面尺寸",
+check("壳会丢掉脏的桌面尺寸（手机宽那种）",
       "function desktopRestoreBounds()" in shell_js
-      and "desktopBounds.width > PHONE_WIDTH + 60" in shell_js
-      and "saved.width > PHONE_WIDTH + 60" in shell_js, True)
+      and "desktopBounds.width > PHONE_WIDTH + 60" in shell_js, True)
 # 隐藏窗口里 CSS 过渡不会自己推进：量抽屉归位前必须轮询
 check("自检等抽屉归位再量命中",
       "side.getBoundingClientRect().x < -100" in shell_js, True)
@@ -1159,26 +1235,30 @@ check("手机断点下图标栏横排到弹层顶部",
 check("遮罩在根组件（任一浮层打开就显示）",
       'v-if="mobileMask" class="mobile-mask"' in html and '@click="closeMobileLayers"' in html, True)
 check("遮罩桌面隐藏、手机显示",
-      ".mobile-mask,\n.mobile-search-btn," in css
+      ".mobile-mask,\n.mobile-more-btn," in css
       and ".mobile-mask {\n    position: fixed;\n    inset: 0;" in css
       and "z-index: 900;" in css and "display: block;" in css, True)
 # store 的移动端状态与方法
-for _key in ("mobileSideOpen", "mobilePanelOpen", "mobileMoreOpen", "mobileSearchOpen"):
+for _key in ("mobileSideOpen", "mobilePanelOpen", "mobileMoreOpen", "searchOpen"):
     check(f"store 有 {_key}", f"{_key}: false," in store_js, True)
 check("mobileMask 计算属性在", "mobileMask: computed" in store_js, True)
 check("closeMobileLayers 在", "closeMobileLayers() {" in store_js, True)
 # 顶栏手机精简：汉堡开抽屉 + 放大镜折叠搜索 + 更多菜单
 _tb = dict(zip(VUE_ORDER, vue_sources))["components/TopBar.vue"]
 check("汉堡在手机断点打开抽屉", "@click=\"toggleSide\"" in _tb and "toggleSide() {" in _tb, True)
-check("放大镜与更多入口在", 'mobile-search-btn' in _tb and 'mobile-more-btn' in _tb, True)
+check("放大镜与更多入口在", 'search-btn' in _tb and 'mobile-more-btn' in _tb, True)
 # 面板有顶栏直达入口（不再只藏在更多菜单里）+ 弹层固定高度（标签切换不跳变）
 check("顶栏有面板直达按钮", 'class="icon-btn mobile-panel-btn"' in _tb
       and "toggleMobilePanel" in _tb and "mobilePanelOpen" in _tb, True)
 check("手机端这个键的提示叫「控制面板」", "打开控制面板" in _tb
       and "打开右侧面板" not in _tb, True)
 check("弹层手机端固定高度（85vh，矮屏也够用）", "height: 85vh;" in _mobile, True)
-check("折叠搜索条在（只保留输入/清空/计数，↑↓ 不重复）",
-      'class="mobile-search"' in _tb and "mobileSearchOpen" in _tb, True)
+check("搜索条点放大镜才弹出、双端同一套（含 ↑↓ 跳转与清空）",
+      'class="search-pop"' in _tb and "searchOpen" in _tb
+      and _tb.count('aria-label="上一个（Shift+Enter）"') == 1
+      and _tb.count('aria-label="下一个（Enter）"') == 1
+      and _tb.count('aria-label="清空搜索"') == 1, True)
+check("桌面端工具条里不再常驻搜索框", '<div v-if="activeSession" class="search-box">' not in _tb, True)
 check("更多菜单收纳模型/思考/主题", 'class="mobile-more"' in _tb
       and "mobile-model" in _tb and "mobile-think" in _tb and "mobile-theme" in _tb, True)
 check("更多菜单共用主题切换", "themeIcon()" in _tb and "themeLabel()" in _tb
@@ -1196,21 +1276,31 @@ _pn = dict(zip(VUE_ORDER, vue_sources))["components/Panel.vue"]
 check("面板绑定 mobile-open", "'mobile-open': mobilePanelOpen" in _pn, True)
 check("图标点击在手机断点只切页", "onRailClick(tab) {" in store_js
       and "window.innerWidth <= 640" in store_js, True)
-# 细节：沉浸输入堆叠 / 去头像列 / 操作条常显 / 弹窗全屏
-check("沉浸输入两栏改上下堆叠",
-      ".input-row { flex-direction: column; align-items: stretch; }" in _mobile, True)
+# 细节：底部输入区行数 / 去头像列 / 操作条常显 / 弹窗全屏
+check("手机端两个输入框都是一行", _mobile.count("height: 61px;") >= 1
+      and ".input-field.scenario-field textarea { height: 82px; }" not in _mobile, True)
+check("手机端发送键列宽同一套栅格（--send-w 收紧到 68px）",
+      "--send-w: 68px;" in _mobile, True)
+check("手机端辅助键 36px（比主键小）", "--aux-h: 36px;" in _mobile, True)
+_aux_toggle_m = re.findall(r"\.aux-toggle \{([^}]*)\}", _mobile)
+check("手机端 ⋯ 圆形且同样没有背景板（曾漏写 background/border 覆盖）",
+      ".aux-toggle {" in _mobile and "border-radius: 50%;" in _mobile
+      and any("border: none;" in b and "background: none;" in b for b in _aux_toggle_m), True)
 check("发送键放大到 44px", "height: 44px;" in _mobile, True)
-check("底部辅助按键收纳（⋯ 展开才显示背景切换/继续/跳底）",
+check("底部辅助按键收纳（⋯ 展开才显示背景切换/继续/情境）",
       ".aux-toggle {" in _mobile
-      and ".inputbar:not(.aux-open) .jump-btn," in _mobile, True)
+      and ".inputbar:not(.aux-open) .continue-btn," in _mobile, True)
+check("回到页面底部不进收纳（手机端也常显）",
+      ".inputbar:not(.aux-open) .jump-btn" not in _mobile, True)
 check("收纳态情境一起收进⋯（只留话语框＋发送键）",
       ".inputbar:not(.aux-open) .scenario-field { display: none; }" in _mobile, True)
 check("情境栏不再有独立折叠（统一由⋯收纳键控制）",
       "scen-fold" not in _input_bar and "scenOpen" not in _input_bar, True)
 check("消息区头像恢复（40px）", ".msg-side { display: flex; }" in _mobile
       and ".msg-side .avatar.lg { width: 40px; height: 40px;" in _mobile, True)
-check("附加属性浮层手机端收拢", ".attr-panel { font-size: 13px;" in _mobile
-      and ".attr-body { gap: 5px;" in _mobile, True)
+check("附加属性下拉手机端收拢（半屏宽 + 小字号）",
+      ".attr-panel { width: 50vw; font-size: 12.5px; }" in _mobile
+      and ".attr-body { gap: 6px;" in _mobile, True)
 check("气泡放宽近全宽", ".bubble-wrap { max-width: 100%; }" in _mobile, True)
 check("消息操作条手机常显（没有 hover）", ".msg-actions { opacity: 1; }" in _mobile, True)
 check("弹窗手机全屏化", ".modal {\n    width: 100%;" in _mobile

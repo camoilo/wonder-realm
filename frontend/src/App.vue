@@ -35,7 +35,7 @@
 <EditMessageModal />
 <CropModal />
 <PresetModal />
-<LoadPresetModal />
+<BindPresetModal />
 
 <!-- 确认框放最后：它的层级已经最高（.confirm-mask），这里再按 DOM 顺序兜一层——
      同级 z-index 时后面的兄弟节点压前面的，它要能从上面任何一个弹窗里弹出来 -->
@@ -66,7 +66,7 @@ import ConfirmModal from "./components/modals/ConfirmModal.vue";
 import EditMessageModal from "./components/modals/EditMessageModal.vue";
 import CropModal from "./components/modals/CropModal.vue";
 import PresetModal from "./components/modals/PresetModal.vue";
-import LoadPresetModal from "./components/modals/LoadPresetModal.vue";
+import BindPresetModal from "./components/modals/BindPresetModal.vue";
 
 registerWatchers();
 

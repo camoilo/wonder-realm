@@ -4,9 +4,7 @@
       <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
       <main class="chat" ref="chatBox">
       <div class="chat-inner">
-        <!-- 附加属性浮层：sticky，所以它自己在内容流里占位（不遮消息），
-             往下滚时贴在对话区顶部、消息从它下面穿过，见 DEVELOPMENT §2.6 -->
-        <AttrPanel />
+        <!-- 附加属性不在这里：它的入口与下拉都搬到顶栏了（顶栏搜索键右边那颗图标键，见 AttrPanel.vue） -->
         <div v-if="!activeSession" class="empty">
           <div class="empty-icon">&#9998;</div>
           <p>从左侧选择或创建一个会话</p>
@@ -42,7 +40,6 @@
 <script setup>
 import { onMounted, ref, toRefs } from "vue";
 import { setChatBox, store } from "../store.js";
-import AttrPanel from "./AttrPanel.vue";
 import MessageItem from "./MessageItem.vue";
 
 // 对话滚动容器交给 store（滚动/回底那些方法在那边用）
