@@ -15,8 +15,8 @@
     </div>
     <p class="dc-status">{{ statusText }}</p>
 
-    <!-- 二维码**只在局域网开着时才画**（用户要求）：关着时给一句说明就行，
-         不摆一个扫不出来的码，也不必让用户去猜"是不是坏了" -->
+    <!-- 二维码**只在局域网开着时才画**（用户要求）：关着时什么都不显示——
+         界面是给用户用的，不用介绍"打开开关后会怎样"（用户明确要求删掉这类提示） -->
     <template v-if="lanUrl && lanEnabled">
       <canvas ref="qrEl" class="dc-qr" width="232" height="232" aria-label="手机访问二维码"></canvas>
       <div class="dc-row">
@@ -25,8 +25,8 @@
       </div>
       <p class="hint">手机连同一个 WiFi，扫码或直接打开这个地址即可。</p>
     </template>
-    <p v-else-if="lanUrl" class="hint">打开上面的开关后，这里会出现手机扫码用的二维码。</p>
-    <p v-else class="hint">没取到局域网地址（用 ipconfig 看一眼本机 IPv4，确认连着 WiFi/网线）。</p>
+    <!-- 关着（或没地址）时这里**什么都不显示**：不做"打开后会怎样"的介绍 -->
+    <p v-else-if="!lanUrl" class="hint">没取到局域网地址（用 ipconfig 看一眼本机 IPv4，确认连着 WiFi/网线）。</p>
 
     <div class="dc-actions">
       <button class="ghost-btn dc-act" @click="copyFirewallCmd">{{ firewallCopied ? "已复制命令" : "复制防火墙命令" }}</button>
