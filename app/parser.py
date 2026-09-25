@@ -89,6 +89,22 @@ def split_attrs(raw: str) -> tuple[str, str]:
     return head, block
 
 
+def _attr_lines(block: str, names) -> list[str]:
+    """属性块 → "一条一行"。
+
+    模型偶尔把整块写成一行（实测 9B 给出的是 `[ATTR]心情值：85%好感度：60%`，一个换行都没有），
+    只按 `splitlines()` 切的话只有第一条解析得出来、后面几条静默丢掉。所以在每个**已知属性名**
+    前面也断开一次（名字按长度降序，免得「好感」把「好感度」切断）。值里正好含另一个属性名的
+    极端情况会被切坏——那种输入本来就没法可靠解析，代价可接受。
+    """
+    text = block or ""
+    names = [n for n in (names or []) if n]
+    if names:
+        alts = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+        text = re.sub(rf"\s*(?=(?:{alts})\s*[:：=])", "\n", text)
+    return text.splitlines()
+
+
 def parse_attrs(block: str, defs) -> list[dict]:
     """属性块 + 定义 → `[{name, type, value}]`。
 
@@ -98,7 +114,7 @@ def parse_attrs(block: str, defs) -> list[dict]:
     """
     wanted = {d["name"]: d for d in (defs or [])}
     out = []
-    for line in (block or "").splitlines():
+    for line in _attr_lines(block, wanted.keys()):
         line = line.strip().lstrip("-•*").strip()
         if not line:
             continue

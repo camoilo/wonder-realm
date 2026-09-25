@@ -45,6 +45,12 @@ check("禁止动作与表情", "不要写动作" in s and "表情" in s, True)
 check("禁止心理活动", "心理活动" in s, True)
 check("禁止旁白与场景描写", "旁白" in s and "场景描写" in s, True)
 check("角色名出现在规则里", "阿岚" in s, True)
+# 实测最常见的走偏：模型写成「阿岚说：……」/「阿岚：……」。名字界面上已经有了（气泡上方），
+# 再写一遍就不像聊天记录了；所以这条前缀要明确禁止，而且要带上角色名（用户报过）
+check("禁止「角色名说：」这类前缀",
+      "不要在开头写「阿岚：」「阿岚说：」这类前缀" in s, True)
+check("禁止正文里用括号/星号/markdown/引号包裹",
+      "不要在正文里用括号、星号、markdown 标记" in s and "引号把整段话包起来" in s, True)
 # 这条是聊天模式与沉浸模式的分界：聊天模式不该要求输出情境
 check("聊天模式不提情境块", "情境说明" in s, False)
 
@@ -54,6 +60,8 @@ check("沉浸模式保留情境要求", "[SCENARIO]" in immersive, True)
 check("沉浸模式要求两段标记", "[DIALOG]" in immersive, True)
 check("沉浸模式禁止空标记与标记外文字",
       "不要输出空标记" in immersive and "不要在标记之外写任何文字" in immersive, True)
+check("沉浸模式的台词也不要「角色名：」前缀",
+      "[DIALOG] 里只写角色说出的话本身" in immersive, True)
 check("沉浸模式不会说“像发消息”", "像手机发消息" in immersive, False)
 # ---- 导演模式仍然按配比写情境与台词 ----
 director = prompts.build_director_system("", {}, None)

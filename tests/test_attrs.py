@@ -63,6 +63,17 @@ check("百分比没有数字就丢掉", parser.parse_attrs("好感：还行", DE
 check("文字型空值丢掉", parser.parse_attrs("心情：\n好感：1", DEFS),
       [{"name": "好感", "type": "percent", "value": 1.0}])
 check("没有属性块时正文不受影响", parser.split_attrs("就一句话"), ("就一句话", ""))
+# 实测 9B 模型会把整块写成一行（`[ATTR]心情值：85%好感度：60%`）：只按行切就只剩第一条，
+# 所以在每个已知属性名前也要断开（用户报过"话末又写了一遍属性"，顺手发现这条）
+_one_line = parser.split_attrs("好呀，那就看电影。[ATTR]心情：有点紧张 好感：42%")[1]
+check("整块写成一行也能全解析出来",
+      parser.parse_attrs(_one_line, DEFS),
+      [{"name": "心情", "type": "text", "value": "有点紧张"},
+       {"name": "好感", "type": "percent", "value": 42.0}])
+check("名字长的优先（「好感度」不会被「好感」切断）",
+      parser.parse_attrs("好感度：88%", [{"name": "好感", "type": "percent", "hint": ""},
+                                        {"name": "好感度", "type": "percent", "hint": ""}]),
+      [{"name": "好感度", "type": "percent", "value": 88.0}])
 check("属性块插在中间也能摘掉（位置不敏感）",
       parser.split_attrs("前半\n[ATTR]\n心情：x\n后半")[0].replace("\n", "|"), "前半|后半")
 
@@ -84,6 +95,10 @@ check("还没有记录时写明给初始值", "暂无记录" in c, True)
 check("解释写进提示词", "用一句简短的话描述" in c, True)
 check("要求输出 [ATTR] 块", "用一个 [ATTR] 块" in c and "[ATTR]\n心情：" in c, True)
 check("说明用户看不到这个块", "用户看不到它" in c, True)
+# 实测模型会把状态块里的「心情：98」照抄到台词结尾（"……好的呀。心情：98%"）：光说"别写进台词"
+# 拦不住，提示词里必须点名反例（用户报过）
+check("正文里禁止出现属性名与属性值（带反例）",
+      "正文里绝对不要出现属性名或属性值" in c and "不要在话的结尾写" in c, True)
 check("状态块在回复要求之前",
       c.index("# 角色的当前状态") < c.index("# 回复要求"), True)
 check("输出规则在最后（附加属性那段在正文规则之后）",
