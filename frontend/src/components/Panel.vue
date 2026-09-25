@@ -124,7 +124,7 @@ function tabDirty(t) {
 
 // 当前选中的那一页要一直高亮：桌面端面板收起时旧规则会把高亮去掉，
 // 但手机端面板本来就是"收起／弹层打开"两态（panelCollapsed 常常是 true），
-// 那样弹层里就永远看不到哪个标签是选中的（用户报过）——所以手机端以"弹层开着"为准
+// 那样弹层里就永远看不到哪个标签是选中的——所以手机端以"弹层开着"为准
 function isActiveTab(t) {
   if (store.panelTab !== t.key) return false;
   return !store.panelCollapsed || store.mobilePanelOpen;

@@ -38,7 +38,7 @@ Object.assign(store, {
     // 删除菜单与触发它的按钮都做了 stopPropagation，能走到这里就说明点的是别处
     store.deleteMenuId = null;
     // 顶栏那两个浮层（搜索条 / 附加属性下拉）也是"点别处就收"：
-    // 手机上尤其需要——点会话、点消息、点任何按钮时它们不能继续压着内容（用户报过遮挡）
+    // 手机上尤其需要——点会话、点消息、点任何按钮时它们不能继续压着内容
     const el = e && e.target;
     const inside = (sel) => !!(el && el.closest && el.closest(sel));
     if (store.searchOpen && !inside(".search-slot")) store.searchOpen = false;
@@ -53,6 +53,20 @@ Object.assign(store, {
     }
     store.deleteMenuId = null;
     if (store.editingId !== null) store.cancelEdit();
+  },
+  // ---- 手机端顶栏的全屏键：交给浏览器的全屏 API（桌面端没有这个键）----
+  // 状态不自己存：以 `document.fullscreenElement` 为准（按 Esc / 手势退出时也要跟着变），
+  // 由 fullscreenchange 事件回写（见 api.js 的注册处）
+  async toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (e) {
+      store.error = "这个浏览器不让全屏（iOS Safari 只支持「加到主屏幕」）";
+    }
+  },
+  onFullscreenChange() {
+    store.isFullscreen = !!document.fullscreenElement;
   },
   ask(text) {
     return new Promise((resolve) => {

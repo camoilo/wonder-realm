@@ -1,5 +1,5 @@
 <template>
-<div class="chat-area">
+<div class="chat-area" :class="{'hide-msgs': chatHidden}">
       <!-- 背景层放在滚动容器外面，这样滚动消息时背景是静止的 -->
       <div v-if="chatBgUrl" class="chat-bg" :style="{ backgroundImage: `url(${chatBgUrl})` }"></div>
       <main class="chat" ref="chatBox">
@@ -51,6 +51,7 @@ const {
   activeSession,
   archivedCount,
   chatBgUrl,
+  chatHidden,
   displayMessages,
   showArchived,
   streamText,

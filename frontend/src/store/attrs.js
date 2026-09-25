@@ -77,10 +77,11 @@ store.latestAttrs = computed(() => {
   return [];
 });
 
-// 浮层只在"选中会话 + 聊天或沉浸模式 + 有定义 + 有值"时出现
+// 顶栏那个属性入口什么时候出现：**选中会话 + 聊天/沉浸模式**就出现（与"有没有定义/值"无关）。
+// 早先要求"有值才出现"，于是没配属性的角色在顶栏根本看不到这个功能——入口应该常驻，
+// 没配就在下拉里说明"这个角色还没有定义附加属性"（见 §2.6）
 store.showAttrPanel = computed(() => {
-  if (!store.activeSession || store.isDirectorMode) return false;
-  return store.latestAttrs.length > 0;
+  return !!store.activeSession && !store.isDirectorMode;
 });
 
 // 编辑面板里那一节是否出现：只有聊天与沉浸两种模式、且角色定义了属性

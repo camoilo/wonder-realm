@@ -336,7 +336,7 @@ Object.assign(store, {
 });
 
 store.canSend = computed(() => {
-      // 话语与情境**至少有一个有内容**：沉浸模式允许只写情境（用户要求），
+      // 话语与情境**至少有一个有内容**：沉浸模式允许只写情境，
       // 其它模式仍然要求话语（那时根本没有情境框）
       if (store.canSendText(store.input)) return true;
       return !!store.isImmersiveMode && store.canSendText(store.inputScenario);

@@ -60,7 +60,7 @@ async def maybe_autoname(session_id: int) -> None:
             "WHERE session_id=? AND archived=0 ORDER BY id LIMIT 12",
             (session_id,),
         ).fetchall()
-        # 取**角色（模型）说过的话**来命名（用户要求：标题看模型那边的对话信息）。
+        # 取**角色（模型）说过的话**来命名。
         # 一条回复都没有时（比如刚发出第一句、生成还没回来）再退回落到用户的话上，
         # 否则这一段永远凑不出内容、标题也就永远起不来。
         def said(role):

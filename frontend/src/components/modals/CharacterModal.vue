@@ -145,7 +145,7 @@
            跟着滚走。保存失败的那行提示也放在这里，与按钮一起始终可见 -->
       <p v-if="charModal.saveError" class="avatar-error">{{ charModal.saveError }}</p>
       <!-- 有改动就给「未保存 + 还原」：手机上面板底部那排保存/还原够不到，
-           弹窗里必须自己能看见、能回退（用户要求） -->
+           弹窗里必须自己能看见、能回退 -->
       <div v-if="charModalDirty" class="modal-dirty">
         <span class="dirty-flag">未保存</span>
         <button class="revert-btn" :class="{armed: revertArm.charModal}"

@@ -68,7 +68,7 @@ if __name__ == "__main__":
         cfg["data_dir"], cfg["ollama"]["model"], cfg["memory"].get("model", ""),
         cfg.get("server", {}).get("lan", False),
     )
-    # **每次启动都把"推送局域网"关掉**（用户要求）：局域网是一道安全闸门，上次开着不代表
+    # **每次启动都把"推送局域网"关掉**：局域网是一道安全闸门，上次开着不代表
     # 这次还要开着（换到公共 WiFi 就麻烦了）。想开就在界面里点，或用 `--lan` 显式启动。
     database.write_lan_enabled("--lan" in args)
     if "--lan" in args:

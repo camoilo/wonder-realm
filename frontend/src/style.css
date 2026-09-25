@@ -418,7 +418,7 @@ html, body {
   gap: 10px;
   min-width: 0;
   /* 标题区吃掉剩下的宽度：工具条里面的东西换行之后，标题就该把那行的空位用满，
-     而不是像以前那样被 max-width 卡住、旁边明明有空位还打省略号（用户报过） */
+     而不是像以前那样被 max-width 卡住、旁边明明有空位还打省略号 */
   flex: 1 1 0;
 }
 /* 标题区里除标题本体外都是固定宽度（汉堡、模式标签…），别让它们被压扁 */
@@ -433,7 +433,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   /* 宽度就是文字本身的宽度（flex-basis: auto + 可收缩）：别让它把整行都占成"可重命名区"，
-     否则点名字右边老远也会进重命名（用户报过"似乎是直接填充的"）。
+     否则点名字右边老远也会进重命名。
      行内真放不下时它照样按 flex-shrink 收缩并打省略号 */
   flex: 0 1 auto;
   min-width: 0;
@@ -1216,6 +1216,9 @@ html, body {
 .aux-scroll > .continue-btn { flex: none; }
 
 /* 输入区主体：情境、话语上下各占一行 */
+/* 「隐藏对话」：消息流整块藏起来，只留背景层（背景在 .chat 之外，不受影响） */
+.chat-area.hide-msgs .chat-inner { visibility: hidden; }
+
 .input-main {
   display: flex;
   flex-direction: column;
@@ -1279,6 +1282,7 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
    默认只有自己的字形，悬停/激活时才在键自己那块区域浮出一层淡底（不挡任何内容）。
    图标键（↓ 与手机端的 ⋯）做成圆形，带文字的（继续、背景切换）做成胶囊 */
 .continue-btn,
+.aux-btn,
 .jump-btn,
 .bg-switch {
   height: var(--aux-h);
@@ -1292,8 +1296,9 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   color: var(--text-soft);
 }
 
-/* 导演模式的"继续"：次级按钮，不抢发送键的视觉重量 */
-.continue-btn {
+/* 辅助键里的文字键（继续 / 隐藏对话）：次级按钮，不抢发送键的视觉重量 */
+.continue-btn,
+.aux-btn {
   padding: 0 12px;
   font-weight: 500;
   cursor: pointer;
@@ -1301,10 +1306,7 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
-.continue-btn:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--accent-dark);
-}
+.continue-btn:hover:not(:disabled) { color: var(--accent-dark); }
 .continue-btn:disabled {
   color: var(--disabled-text);
   background: none;
@@ -1336,7 +1338,7 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   font-family: inherit;
   padding: 0;
 }
-.bg-switch button:hover { background: var(--hover); color: var(--accent-dark); }
+.bg-switch button:hover { color: var(--accent-dark); }
 
 .bg-switch-count {
   font-size: 12px;
@@ -1392,7 +1394,7 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   font-family: inherit;
   transition: background 0.15s, color 0.15s;
 }
-.jump-btn:hover { background: var(--hover); color: var(--accent-dark); }
+.jump-btn:hover { color: var(--accent-dark); }
 
 /* 手机端"＋"收纳键：桌面断点不需要收纳，直接隐藏（外观与 jump-btn 同款，见手机断点里的规则） */
 .aux-toggle { display: none; }
@@ -1833,7 +1835,7 @@ mark.search-hit.current {
 
 /* 附加属性：入口键在顶栏里（`.attr-slot` 是它在工具条里的占位，也是下拉的定位父级），
    展开的面板是键正下方的一张小下拉——右边缘与键对齐、宽度只占半屏（手机 50vw），
-   不再铺在对话区顶部（用户要求"移到顶栏、缩小、挪到右边"）。
+   不再铺在对话区顶部。
    z-index 920：高于消息与遮罩(900)，低于弹窗(1000) */
 .attr-slot {
   position: relative;
@@ -2051,7 +2053,7 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 }
 
 /* 两个编辑弹窗里的"未保存 / 还原"一行：与面板底部那排同款（复用 .dirty-flag / .revert-btn）。
-   手机上面板底部那排够不到时，弹窗里必须自己也看得见、点得到（用户要求） */
+   手机上面板底部那排够不到时，弹窗里必须自己也看得见、点得到 */
 .modal-dirty {
   display: flex;
   align-items: center;
@@ -2564,9 +2566,9 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
   white-space: nowrap;
   border-radius: 999px;
 }
-.bg-switch button.bg-close:hover { background: var(--hover-soft); color: var(--accent-dark); }
-/* 已关闭时按钮变成"显示背景"，给个灰底提示当前是关着的状态 */
-.bg-switch button.bg-close.off { background: var(--field-disabled); color: var(--text-soft); }
+.bg-switch button.bg-close:hover { color: var(--accent-dark); }
+/* 背景已关闭时按钮变成"显示背景"：只用颜色区分状态，不再铺一块灰底（一排键都应当是浮着的） */
+.bg-switch button.bg-close.off { background: none; color: var(--text-soft); }
 .bg-switch button:disabled { color: var(--disabled-text); cursor: not-allowed; }
 .bg-switch button:disabled:hover { background: none; color: var(--disabled-text); }
 
@@ -2588,11 +2590,12 @@ html[data-theme="dark"] .win-btn:active { background: rgba(255, 255, 255, 0.14);
 .mobile-mask,
 .mobile-more-btn,
 .mobile-panel-btn,
+.mobile-full-btn,
 .mobile-more { display: none; }
 
 /* 顶栏的搜索入口：放大镜本身（双端都渲染），点开才弹出搜索条。
    键与条同在一个定位槽里，所以桌面端搜索条就挂在键正下方、只有 300px 宽——
-   早先那条是整行铺开的，把右侧那排竖排图标盖住了（用户报过） */
+   早先那条是整行铺开的，把右侧那排竖排图标盖住了 */
 .search-slot {
   position: relative;
   flex: none;
@@ -2739,6 +2742,7 @@ body { overscroll-behavior: none; }
   /* 顶栏只剩：汉堡 + 标题 + 放大镜 + 属性 + 面板 + 更多（搜索条弹出来才占一行） */
   .search-btn,
   .attr-btn,
+  .mobile-full-btn,
   .mobile-more-btn,
   .mobile-panel-btn {
     display: inline-flex;
@@ -2752,7 +2756,8 @@ body { overscroll-behavior: none; }
     font-size: 16px;
   }
   .search-btn svg,
-  .attr-btn svg { width: 18px; height: 18px; }
+  .attr-btn svg,
+  .mobile-full-btn svg { width: 18px; height: 18px; }
   .mobile-panel-btn svg { width: 18px; height: 18px; }
   .mobile-panel-btn.on { color: var(--accent); }
 
@@ -2803,7 +2808,7 @@ body { overscroll-behavior: none; }
   .aux-row { margin-bottom: 6px; }
   .aux-scroll { gap: 6px; }
   .input-main { gap: 6px; }
-  /* 两框都是一行（用户要求手机上也一行，别再多留半行） */
+  /* 两框都是一行 */
   .input-main textarea { height: 61px; }
   .send-btn,
   .stop-btn { height: 44px; }
@@ -2817,7 +2822,7 @@ body { overscroll-behavior: none; }
   .bg-switch button { width: 26px; height: 26px; font-size: 16px; }
   /* 底部辅助内容收纳：⋯ 展开后显示背景切换/继续/情境（沉浸）。
      ⋯ 自己**同样没有背景板**——桌面那条基础规则被这里覆盖过（写过 background: var(--panel)、
-     1px 边框），看上去就跟输入框共用一块底（用户报过"还是有背景"），所以这里明确抹掉 */
+     1px 边框），看上去就跟输入框共用一块底，所以这里明确抹掉 */
   .aux-toggle {
     display: inline-flex;
     align-items: center;
@@ -2836,7 +2841,7 @@ body { overscroll-behavior: none; }
     font-family: inherit;
     transition: background 0.15s, color 0.15s;
   }
-  .aux-toggle.on { background: var(--hover); color: var(--accent-dark); }
+  .aux-toggle.on { color: var(--accent-dark); background: none; }
   /* 「回到页面底部」不进收纳：双端都常显（收起辅助键时它照样能用） */
   .inputbar:not(.aux-open) .bg-switch,
   .inputbar:not(.aux-open) .continue-btn,
@@ -2860,16 +2865,19 @@ body { overscroll-behavior: none; }
   .attr-bar { height: 8px; min-width: 64px; }
   .attr-num { flex: 0 0 42px; font-size: 12.5px; }
 
-  /* ---- 弹窗全屏化 ---- */
-  .modal-mask { padding: 0; }
+  /* ---- 弹窗：居中的卡片，不铺满整屏 ---- */
+  /* 弹窗是"看一眼、改一下"的东西：铺满整屏反而挡住对话上下文，也让人以为进了新页面。
+     所以窄屏下同样居中，只是左右留白收紧、高度上限放到 88%（里面照旧滚动，
+     有 .modal-body 的那个仍然是"正文滚动、操作行钉底"） */
+  .modal-mask { padding: 12px; }
   .modal {
     width: 100%;
     max-width: none;
-    max-height: none;
-    height: 100vh;
-    height: 100dvh;
-    border-radius: 0;
-    padding: calc(14px + var(--sat)) 14px calc(14px + var(--sab));
+    max-height: 88vh;
+    max-height: 88dvh;
+    height: auto;
+    border-radius: 14px;
+    padding: 16px 14px calc(14px + var(--sab));
   }
   /* 预设两栏在窄屏改回上下堆叠：40% 的列表列在手机上太窄 */
   .modal-body.preset-split { flex-direction: column; }

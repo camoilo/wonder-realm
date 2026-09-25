@@ -435,7 +435,7 @@ store.chatBgUrl = computed(() => {
 });
 
 // 角色编辑弹窗里"有没有改动"：拿当前表单和打开时的快照比（见 charModal.saved）。
-// 弹窗里也带「未保存 / 还原」，手机上面板底部那排够不到时全靠它（用户要求）
+// 弹窗里也带「未保存 / 还原」，手机上面板底部那排够不到时全靠它
 store.charModalDirty = computed(() => {
       if (!store.charModal.visible || !store.charModal.saved) return false;
       return !store.sameSnapshot(store.charModal.form, store.charModal.saved);

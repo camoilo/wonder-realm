@@ -130,7 +130,7 @@ Object.assign(store, {
   //   绑了 P -> 当前不是 P 就用 P 覆盖当前那份；已经是 P 则**什么都不做**
   //   没绑   -> 当前那份只要还有内容就清空（"没绑就是不用预设"）。
   //             这里**不能只看 currentKey**：重启后它是空串，而数据库里可能还留着
-  //             上一个角色绑定的内容 —— 那样新角色一开就"默认启用了"（用户报过）
+  //             上一个角色绑定的内容 —— 那样新角色一开就"默认启用了"
   //   找不到那条预设（没加载出来 / 刚被删）→ 一律不动：宁可少切一次，也不能清错
   async syncBinding(kind, boundId) {
     const k = kindOf(kind);
@@ -264,7 +264,7 @@ Object.assign(store, {
         store.presetModal.visible = false;
       } else {
         // 新建的留在弹窗里继续编辑（刚建出来通常是空白的），但不自动绑定：
-        // "启用"要用户自己走一次「绑定预设…」（用户要求）
+        // "启用"要用户自己走一次「绑定预设…」
         store.editPickPreset(saved.id);
       }
     } catch (e) {

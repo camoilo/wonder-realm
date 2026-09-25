@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 -- 世界设定（右侧面板的"世界设定"）。**和"我的设定"同一套约定**：id=1 是当前世界，id>1 是世界预设。
 -- 三种模式都注入提示词：聊天与沉浸跟着**角色**的绑定走，导演会话跟着**会话**的绑定走（见 2.4）。
 -- terms 存 JSON 数组 [{"term": ..., "meaning": ...}]：它有序、可增删，整体读写最省事；
--- 名称只给自己辨认，**不进提示词**（用户明确要求）。
+-- 名称只给自己辨认，**不进提示词**。
 CREATE TABLE IF NOT EXISTS worlds (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL DEFAULT '',

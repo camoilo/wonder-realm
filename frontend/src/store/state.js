@@ -34,7 +34,7 @@ export const store = reactive({
       initError: "",
       sideCollapsed: false,
       // 右侧面板**默认收起**：没打开会话时它本来就没内容（整条只有图标列），而"打开会话就自己
-      // 展开"会很顶人（用户要求"点会话不要自动展开"）。要看设定点一下图标列即可。
+      // 展开"会很顶人。要看设定点一下图标列即可。
       panelCollapsed: true,
       // 手机断点（≤640px）下的抽屉 / 底部面板 / 更多菜单开关；桌面端不使用
       mobileSideOpen: false,
@@ -43,6 +43,10 @@ export const store = reactive({
       // 会话内搜索框的展开开关：**双端都用**——顶栏只留一个放大镜，
       // 点它才弹出搜索条（桌面端也一样，见 DEVELOPMENT §9.6）
       searchOpen: false,
+      // 「隐藏对话」：把消息流整块藏起来、只留背景（三个模式通用，见 §9）
+      chatHidden: false,
+      // 手机端顶栏那个全屏键的状态（浏览器全屏，桌面端没有这个键）
+      isFullscreen: false,
       theme: "light", // 当前主题 light / dark；"选一个存本地"见 store/ui.js 的 setTheme
       // 桌面端（Electron 壳，见 DEVELOPMENT §3.3）：壳在 preload 里注入 window.dshDesktop，
       // 网页端（含手机浏览器）没有它 —— 于是桌面专属的那两个键根本不会渲染

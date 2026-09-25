@@ -297,9 +297,12 @@ export async function initApp() {
     // 点空白处 / 按 Esc 关掉消息删除菜单与编辑弹窗，避免它们只能靠再次点按钮关闭
     document.addEventListener("click", store.onDocumentClick);
     document.addEventListener("keydown", store.onDocumentKeydown);
+    // 全屏状态以浏览器为准（按 Esc、手势退出都要跟着变）
+    document.addEventListener("fullscreenchange", store.onFullscreenChange);
 }
 
 export function disposeApp() {
     document.removeEventListener("click", store.onDocumentClick);
+    document.removeEventListener("fullscreenchange", store.onFullscreenChange);
     document.removeEventListener("keydown", store.onDocumentKeydown);
 }

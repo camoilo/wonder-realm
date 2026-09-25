@@ -14,7 +14,7 @@
             <span class="char-count inline" :class="{near: isNear(renameText, limits.title)}">{{ len(renameText) }}/{{ limits.title }}</span>
           </span>
           <h1 v-else class="title" v-hint="'点击重命名'" @click="startRename">{{ activeSession.title }}</h1>
-          <!-- 当前模式不在这里标：左栏那排模式 Tab 上已经高亮着（用户要求去掉这个重复信息） -->
+          <!-- 当前模式不在这里标：左栏那排模式 Tab 上已经高亮着 -->
           <span v-if="orphanActive" class="chip warn">角色已删除 · 仅可查看</span>
         </template>
         <h1 v-else class="title muted">未选择会话</h1>
@@ -31,7 +31,7 @@
         <!-- 会话内搜索：顶栏只留一个放大镜（**双端一致**，桌面端也不再常驻一个输入框），
              点它才弹出搜索条；再点一次或 Esc 收起。
              键与条同在一个定位槽里：桌面端搜索条挂在键正下方、只有 300px 宽（整行铺开会把
-             右侧那排图标盖住——用户报过），手机端由 CSS 换成整条 -->
+             右侧那排图标盖住），手机端由 CSS 换成整条 -->
         <span v-if="activeSession" class="search-slot">
           <button class="icon-btn search-btn" :class="{on: searchOpen}"
                   v-hint="searchOpen ? '收起搜索' : '在当前会话里搜索'"
@@ -71,8 +71,15 @@
                 v-hint="themeButtonTitle()" :aria-label="themeButtonTitle()"
                 @click="cycleTheme">{{ themeIcon() }}</button>
       </div>
-      <!-- 手机端两个入口：面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
-           桌面断点由 CSS 隐藏 -->
+      <!-- 手机端三个入口：全屏 + 面板（右侧设置弹层）+ 更多（⋮，收纳模型/思考/主题）。
+           桌面断点由 CSS 隐藏（全屏键只在手机端出现） -->
+      <button class="icon-btn mobile-full-btn"
+              v-hint="isFullscreen ? '退出全屏' : '全屏显示'"
+              :aria-label="isFullscreen ? '退出全屏' : '全屏显示'"
+              :aria-pressed="isFullscreen" @click="toggleFullscreen">
+        <svg v-if="isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6H3"/><path d="M15 21v-6h6"/><path d="M3 9l6-6"/><path d="M21 15l-6 6"/></svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 15v5h-5"/><path d="M4 4l6 6"/><path d="M20 20l-6-6"/></svg>
+      </button>
       <button class="icon-btn mobile-panel-btn" :class="{on: mobilePanelOpen}"
               v-hint="'打开控制面板'" aria-label="打开控制面板"
               :aria-pressed="mobilePanelOpen" @click="toggleMobilePanel">
@@ -120,6 +127,7 @@ const {
   disableThinking,
   initError,
   isDesktop,
+  isFullscreen,
   limits,
   mobileMoreOpen,
   mobilePanelOpen,
@@ -143,7 +151,7 @@ const {
 // 主题三态的图标 / 短名来自 store（窗口标题栏那一行也在用，见 TitleBar.vue）
 
 // 重命名输入框的宽度按**当前名称**算（中日韩字符按两个宽度估）：不然它是一条写死的宽框，
-// 短名字也占那么大地方（用户要求"匹配当前名称的长度"）。6ch 起、40ch 封顶。
+// 短名字也占那么大地方。6ch 起、40ch 封顶。
 const titleInputWidth = computed(() => {
   const text = store.renameText || "";
   const w = [...text].reduce(
@@ -185,6 +193,7 @@ const {
   themeButtonTitle,
   themeIcon,
   themeLabel,
+  toggleFullscreen,
   toggleMobilePanel,
   toggleThinking,
 } = store;

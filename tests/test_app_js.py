@@ -423,7 +423,7 @@ check("切换会话时把定义带进面板表单",
 check("定义也进 emptyCharForm（面板与新角色表单都用它）",
       "attr_defs: []," in js, True)
 
-# 附加属性：入口与下拉都在顶栏（用户要求"按钮移进顶栏、紧挨搜索键右边、面板缩小挪到右边"）
+# 附加属性：入口与下拉都在顶栏
 _chat_area = dict(zip(VUE_ORDER, vue_sources))["components/ChatArea.vue"]
 check("属性入口在顶栏、紧跟搜索键右边",
       'components/AttrPanel.vue' in VUE_ORDER
@@ -440,9 +440,11 @@ check("属性键可开可合、面板只有标题（不再有重复的 × 键）
       'class="icon-btn attr-btn"' in html and "attrsCollapsed = !attrsCollapsed" in html
       and 'class="attr-title"' in html and 'class="attr-close"' not in html
       and ".attr-close" not in css, True)
-check("浮层只在选中会话 + 聊天/沉浸 + 有值时出现",
-      "showAttrPanel = computed" in js and "if (!this.activeSession || this.isDirectorMode) return false;" in js
-      and "v-if=\"showAttrPanel\"" in html, True)
+check("属性入口在选中会话 + 聊天/沉浸时就有（没配属性也进得去）",
+      "showAttrPanel = computed" in js
+      and "return !!this.activeSession && !this.isDirectorMode;" in js
+      and "v-if=\"showAttrPanel\"" in html
+      and "这个角色还没有定义附加属性" in html, True)
 # 让位不靠量高度：sticky 自己就占位（早先按实测高度让位，展开时仍压住第一条消息 51px）
 check("不再靠量高度让位（sticky 自己占位）",
       "attrPanelH" in js or "ResizeObserver" in js, False)
@@ -611,7 +613,7 @@ def css_font_size(sel):
     return int(m.group(1)) if m else 0
 
 
-# 用户要求：标题居中加粗、字号调大，并在与模式按钮之间加一条分隔线
+# 标题居中加粗、字号调大，并在与模式按钮之间加一条分隔线
 sl = css_block(".side-label")
 check("标题居中", "text-align: center;" in sl, True)
 check("标题加粗", "font-weight: 700;" in sl, True)
@@ -706,7 +708,7 @@ check("我的设定页有「名字」与「称呼」两个字段",
       and "名字只给自己看" in _pp, True)
 check("预设弹窗里也能改称呼（带自己的上限与计数）",
       "presetModal.form.call_name" in html and "limits.user_call_name" in html, True)
-# 两个编辑弹窗里的「未保存 / 还原」（手机上够不到面板底部那排，用户要求补）
+# 两个编辑弹窗里的「未保存 / 还原」（手机上面板底部那排够不到）
 check("角色弹窗有未保存/还原",
       "charModalDirty" in html and "armRevert('charModal')" in html
       and "charModalDirty = computed" in js, True)
@@ -983,7 +985,7 @@ check("辅助键一排可横向滚动、↓ 钉在行尾",
       ".aux-scroll {" in css and "overflow-x: auto;" in css and "scrollbar-width: none;" in css, True)
 # 辅助键那一排比输入框矮一档（--aux-h），图标键圆形、带文字的胶囊：不再是一堆方框
 check("辅助键排调小（--aux-h）且不再用方框",
-      ".continue-btn,\n.jump-btn,\n.bg-switch {" in css and "border-radius: 999px;" in css
+      ".continue-btn,\n.aux-btn,\n.jump-btn,\n.bg-switch {" in css and "border-radius: 999px;" in css
       and "height: var(--aux-h);" in css, True)
 check("图标键是圆的（↓ 桌面）",
       "border-radius: 50%;" in css_block(".jump-btn"), True)
@@ -1118,7 +1120,7 @@ check("没有会话时右侧不该留大片空白",
 check("先读设置再拉模型列表",
       js.index('await this.api("/api/settings")') < js.index("await this.loadModels()"), True)
 # 点会话**不要**动右侧面板的开合：面板是收是开由用户决定，切换会话不该把它顶开
-# （用户报过"点进会话默认不自动展开"）。只看 openSession 自己的方法体，别扫全文件——
+# 。只看 openSession 自己的方法体，别扫全文件——
 # panel.js 里切标签时本来就会改 panelCollapsed
 _session_src = js[js.index("async openSession("):]
 _next = re.search(r"\n  async ", _session_src)
@@ -1129,7 +1131,7 @@ check("标题宽度按内容（不是撑满整行）",
       "flex: 0 1 auto;" in css_block(".title") and "flex: 0 1 auto;" in css_block(".title-counted")
       and "max-width: 320px;" not in css_block(".title")
       and "max-width: 220px" not in css and "max-width: 38vw" not in css, True)
-# 右侧面板默认收起：打开会话不该自己冒出来（用户要求）
+# 右侧面板默认收起：打开会话不该自己冒出来
 check("右侧面板默认收起", "panelCollapsed: true," in js, True)
 # 选中的标签要一直高亮：手机端面板以"弹层开着"为准（panelCollapsed 在手机端常是 true，
 # 旧条件会让弹层里永远看不到选中态）
@@ -1328,8 +1330,9 @@ check("附加属性下拉手机端收拢（半屏宽 + 小字号）",
       and ".attr-body { gap: 6px;" in _mobile, True)
 check("气泡放宽近全宽", ".bubble-wrap { max-width: 100%; }" in _mobile, True)
 check("消息操作条手机常显（没有 hover）", ".msg-actions { opacity: 1; }" in _mobile, True)
-check("弹窗手机全屏化", ".modal {\n    width: 100%;" in _mobile
-      and "height: 100dvh;" in _mobile and "border-radius: 0;" in _mobile, True)
+check("手机端弹窗是居中卡片（不铺满整屏）", ".modal {\n    width: 100%;" in _mobile
+      and "max-height: 88dvh;" in _mobile and "border-radius: 14px;" in _mobile
+      and "height: 100dvh;" not in _mobile, True)
 check("预设两栏在手机改回上下堆叠",
       ".modal-body.preset-split { flex-direction: column; }" in _mobile, True)
 # 顶栏「控制面板」键上的未保存小黄点（手机上图标列在弹层里，收着看不见）
@@ -1337,6 +1340,17 @@ check("顶栏面板键带未保存小黄点",
       "panelAnyDirty" in _tb and 'class="tab-dot"' in _tb
       and "panelAnyDirty = computed" in js
       and ".mobile-panel-btn { position: relative; }" in css, True)
+# 手机端顶栏的全屏键（桌面端不渲染）：交给浏览器全屏 API，状态以 fullscreenElement 为准
+check("手机端有全屏键、桌面端隐藏",
+      'class="icon-btn mobile-full-btn"' in _tb and "toggleFullscreen" in _tb
+      and "async toggleFullscreen()" in js
+      and "document.addEventListener(\"fullscreenchange\", this.onFullscreenChange);" in js
+      and ".mobile-full-btn,\n.mobile-more { display: none; }" in css, True)
+# 「隐藏对话」：消息流整块藏起来、只留背景（三个模式通用）
+check("有「隐藏对话」键，且只藏消息流",
+      "chatHidden = !chatHidden" in _input_bar and "chatHidden" in _chat_area
+      and "hide-msgs" in _chat_area
+      and ".chat-area.hide-msgs .chat-inner { visibility: hidden; }" in css, True)
 # 触屏降级：v-hint 在 pointer: coarse 下改点击显示
 check("v-hint 触屏降级为点击显示", "(pointer: coarse)" in
       (frontend / "src/composables/hint.js").read_text(encoding="utf-8"), True)

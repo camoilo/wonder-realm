@@ -28,6 +28,9 @@
             <button v-if="isDirectorMode" class="continue-btn" :disabled="!canContinue"
                     v-hint="'基于上一条回复继续生成（相当于发送“继续”）'"
                     @click="continueGeneration">继续</button>
+            <!-- 隐藏对话：把消息流整块藏起来、只留背景（三个模式都有），方便看背景图/截图 -->
+            <button class="aux-btn" v-hint="chatHidden ? '显示对话内容' : '隐藏对话内容，只留背景'"
+                    @click="chatHidden = !chatHidden">{{ chatHidden ? "显示对话" : "隐藏对话" }}</button>
           </div>
           <!-- 消息很长、往上翻过之后，一键回到最新：不用一路拖滚动条 -->
           <button class="jump-btn" v-hint="'回到页面底部（最新消息）'" aria-label="回到页面底部（最新消息）" @click="jumpToBottom">↓</button>
@@ -83,8 +86,7 @@
 import { ref, toRefs } from "vue";
 import { store } from "../store.js";
 
-// 手机端辅助操作（背景切换/继续/情境）的收纳开关：**默认展开**（用户要求：进会话就能看到
-// 这些键，而不是先点一下才出来）；桌面断点该按钮被 CSS 隐藏，此值无副作用
+// 手机端辅助操作（背景切换/继续/情境）的收纳开关：**默认展开**；桌面断点该按钮被 CSS 隐藏，此值无副作用
 const auxOpen = ref(true);
 
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
@@ -95,6 +97,7 @@ const {
   bgIndex,
   canContinue,
   canSend,
+  chatHidden,
   error,
   input,
   inputScenario,

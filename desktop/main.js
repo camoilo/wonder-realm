@@ -62,8 +62,7 @@ if (SELFTEST) {
 let win = null;
 let backend = null;
 let phoneView = false;
-// 窗口尺寸**只在这一趟运行里记着**（用户要求：启动用默认，自己调过的在本次运行内切来切去要记住，
-// 下次启动又回到默认）。所以纯内存，不落盘：desktopBounds = 当前桌面视图的 bounds，
+// 窗口尺寸**只在这一趟运行里记着**。所以纯内存，不落盘：desktopBounds = 当前桌面视图的 bounds，
 // phoneContentH = 手机视图的高度（内容区，用户拖过就用拖后的）。
 let desktopBounds = null;
 let phoneContentH = 0;
@@ -179,8 +178,7 @@ function rememberCurrentSize() {
 }
 
 // ---- 尺寸都往当前显示器的工作区里放 ----
-// 默认 1280x860 在 1366x768 这类屏幕上会顶到任务栏甚至超出屏幕（用户报过"电脑端视图太大、
-// 手机端太长"），所以建窗与进手机视图时都按工作区收一下，留点边距。
+// 默认 1280x860 在 1366x768 这类屏幕上会顶到任务栏甚至超出屏幕，所以建窗与进手机视图时都按工作区收一下，留点边距。
 function fitInWorkArea(width, height, margin = 80, ref = null) {
   let wa = null;
   try {
@@ -194,7 +192,7 @@ function fitInWorkArea(width, height, margin = 80, ref = null) {
 }
 
 // 按"中心不动"改窗口尺寸：切视图时看起来是围绕中心缩/涨，而不是从左上角缩/涨
-// （用户要求"切视图前后位置不变，居中扩展或者收缩"）。贴边时再夹一次，别把窗口推出屏幕。
+// 。贴边时再夹一次，别把窗口推出屏幕。
 function setBoundsCentered(width, height) {
   const b = win.getBounds();
   const wa = (() => {
@@ -216,7 +214,7 @@ function setPhoneView(on) {
   const frameH = Math.max(0, win.getBounds().height - win.getContentSize()[1]);
   if (phoneView) {
     // 每次进手机视图都重新抓一次桌面尺寸：早先只在第一次抓，于是"在桌面调好大小 →
-    // 进一趟手机视图再回来"会退回进手机视图之前的旧尺寸（用户报过"调整过的大小没记住"）
+    // 进一趟手机视图再回来"会退回进手机视图之前的旧尺寸
     if (!SELFTEST) desktopBounds = win.getBounds();
     // 高度用这一趟记着的（用户拖过就按拖的），没有就用 9:16 默认，再按工作区收一下
     const want = clampHeight(phoneContentH || PHONE_DEFAULT_H);
@@ -225,7 +223,7 @@ function setPhoneView(on) {
     win.setMaximumSize(PHONE_WIDTH + frameW, PHONE_MAX_H + frameH);
     setBoundsCentered(PHONE_WIDTH + frameW, h + frameH);
     if (!SELFTEST) phoneContentH = win.getContentSize()[1];
-    // 手机视图是"预览 / 收纳"用的：置顶，免得被别的窗口压住（用户要求；普通桌面视图不这样）
+    // 手机视图是"预览 / 收纳"用的：置顶，免得被别的窗口压住
     win.setAlwaysOnTop(true);
   } else {
     win.setMinimumSize(DESKTOP_MIN.width, DESKTOP_MIN.height);
@@ -344,7 +342,7 @@ const PAGE_PROBE = `(async () => {
   const row = await until(() => document.querySelector('.session-row'), 4000);
   if (row) { row.click(); await tick(); await tick(); }
 
-  // 模式介绍浮层：桌面端要弹在按钮**右侧**、且不能被标题栏压住（用户报过"被顶部状态栏遮挡"）。
+  // 模式介绍浮层：桌面端要弹在按钮**右侧**、且不能被标题栏压住。
   // 它靠 mouseenter 出现，这里手动派发一次事件再量位置。
   const modeBtn = document.querySelector('.mode-tab');
   let tipRect = null, modeRect = null;
@@ -378,7 +376,7 @@ const PAGE_PROBE = `(async () => {
   const sw = panel && panel.querySelector('.dc-switch');
   const top = document.querySelector('.topbar') || document.body;
   const status = panel && panel.querySelector('.dc-status');
-  // 顶栏那两颗新键（用户要求：搜索改成"点图标才弹输入框"、附加属性键搬到搜索键右边）：
+  // 顶栏那两颗新键：
   // 点开量一下——搜索条要真的弹出来、属性下拉要贴在这颗键正下方且右边缘对齐。
   // 量完**不关掉**：紧接着的自检截图正好能让人眼看一眼这两个浮层。
   const searchBtn = document.querySelector('.topbar .search-btn');
@@ -406,7 +404,7 @@ const PAGE_PROBE = `(async () => {
     }
   }
   const rect4 = (r) => r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null;
-  // 面板的「世界设定」页（用户要求：内容来自绑定的预设 -> 这一页只读，改内容只能去「编辑预设…」）：
+  // 面板的「世界设定」页：
   // 点那排图标里的第二个（railTabs 顺序：生成要求 / 世界设定 / …）-> 量绑定入口、只读框与底部保存键
   let worldPage = null;
   const railBtns = Array.from(document.querySelectorAll('.panel-rail .rail-btn'));
@@ -563,7 +561,7 @@ async function selftestWindow() {
   );
   const desktopWidth = await win.webContents.executeJavaScript("window.innerWidth");
   const ui = await win.webContents.executeJavaScript(PAGE_PROBE);
-  const beforeBounds = win.getBounds();   // 切视图前后的"中心"要对得上（用户要求位置不变）
+  const beforeBounds = win.getBounds();   // 切视图前后的"中心"要对得上
 
   if (process.env.DSH_SHOT) {
     // 给人眼看一眼配置面板长什么样（自检平时不截图，避免留垃圾文件）
@@ -756,7 +754,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
         // 顶栏那两颗新键：搜索键点开要弹出搜索条（且贴在顶栏下沿）、属性下拉要贴在键下方且右边缘对齐
         if (u.searchBtnRect && !u.searchPopRect) bad.push("点搜索键没弹出搜索条");
         if (u.searchPopRect && u.searchPopBelowBtn !== true) bad.push(`搜索条没挂在放大镜下方（${u.searchPopRect}）`);
-        // 桌面端搜索条只能是一小条：早先是整行铺开，右侧那排竖排图标被它盖住（用户报过）
+        // 桌面端搜索条只能是一小条：早先是整行铺开，右侧那排竖排图标被它盖住
         if (u.searchPopRect && !(u.searchPopRect[2] <= 340)) {
           bad.push(`搜索条太宽（${u.searchPopRect[2]}px，应当 ≤340）`);
         }
@@ -791,7 +789,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
               && _pr[0] + _pr[2] <= u.viewW + 1 && _pr[1] + _pr[3] <= u.viewH + 1)) {
           bad.push(`配置面板不在视口里（${_pr}，视口 ${u.viewW}x${u.viewH}）`);
         }
-        // 切视图前后中心要对得上；手机视图不能超出屏幕（用户报过"切回来变默认了""手机端太长"）
+        // 切视图前后中心要对得上；手机视图不能超出屏幕
         if (probe.centerShift[0] > 4 || probe.centerShift[1] > 4) {
           bad.push(`切一圈回来窗口中心偏了 ${probe.centerShift}`);
         }
@@ -803,7 +801,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
                 || probe.phoneBounds.width > probe.workArea.width)) {
           bad.push(`手机视图超出屏幕（窗口 ${probe.phoneBounds} 工作区 ${probe.workArea}）`);
         }
-        // 默认尺寸也得能装进屏幕（矮屏上 1280x860 会顶到任务栏，用户报过"视图太大"）
+        // 默认尺寸也得能装进屏幕（矮屏上 1280x860 会顶到任务栏）
         if (probe.workArea) {
           const fitted = fitInWorkArea(DEFAULT_SIZE.width, DEFAULT_SIZE.height);
           if (fitted.height > probe.workArea.height || fitted.width > probe.workArea.width) {

@@ -15,8 +15,8 @@
     </div>
     <p class="dc-status">{{ statusText }}</p>
 
-    <!-- 二维码**只在局域网开着时才画**（用户要求）：关着时什么都不显示——
-         界面是给用户用的，不用介绍"打开开关后会怎样"（用户明确要求删掉这类提示） -->
+    <!-- 二维码**只在局域网开着时才画**：关着时什么都不显示——
+         界面是给用户用的，不用介绍"打开开关后会怎样" -->
     <template v-if="lanUrl && lanEnabled">
       <canvas ref="qrEl" class="dc-qr" width="232" height="232" aria-label="手机访问二维码"></canvas>
       <div class="dc-row">
