@@ -4,7 +4,9 @@
        见 DEVELOPMENT 3.3）。整行是拖拽区，里面的控件逐个排除。
        浏览器与手机没有 window.dshDesktop —— 这一整行不渲染，品牌区由左栏自己显示。 -->
   <div v-if="isDesktop" class="titlebar" :class="{wco}">
-    <span class="brand-mark">&#9671;</span>
+    <!-- 品牌标记 = 应用图标本身（`frontend/public/icon.png`，Vite 拷进 app/static/）。
+         手机视图下应用名让位，图标留着——那是这一屏唯一能表明"这是哪个应用"的东西 -->
+    <img class="brand-mark" src="/icon.png" alt="">
     <span class="titlebar-name">Wonder Realm（奇想界域）</span>
     <span class="titlebar-gap"></span>
     <button v-if="!desktopPhoneView" class="win-btn" :class="'theme-' + theme"

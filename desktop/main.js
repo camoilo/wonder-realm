@@ -15,6 +15,9 @@ const os = require("node:os");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");           // 项目根目录（后端在它下面）
+// 应用图标（窗口 / 任务栏 / Alt+Tab）：由 `desktop/build/icon.png` 母版生成的多尺寸 ICO
+// （16/24/32/48/64/128/256）。页面里那份品牌标记与浏览器标签图标另在 `frontend/public/`。
+const APP_ICON = path.join(__dirname, "build", "icon.ico");
 
 // 后端端口：壳必须和后端用同一个端口，而"换端口"是用户在 config.yaml 的 server.port 里做的，
 // 所以这里也读它（只要未注释的 `port:` 行——配置文件里那些默认值都是注释掉的）。
@@ -269,6 +272,7 @@ function createWindow() {
     height: size.height,
     minWidth: 380,
     minHeight: 520,
+    icon: APP_ICON,
     backgroundColor: "#f4f5f7",
     title: "Wonder Realm（奇想界域）",
     autoHideMenuBar: true,
@@ -327,6 +331,13 @@ const PAGE_PROBE = `(async () => {
   // 拖拽没法交互测，只能看计算样式：行是 drag、里面的窗口键是 no-drag
   const wcoOnTitlebar = !!document.querySelector('.titlebar.wco');
   const titlebarText = titlebarEl ? titlebarEl.textContent.replace(/\\s+/g, ' ').trim() : "";
+  // 品牌图标：图片加载失败时 naturalWidth 是 0（界面上只剩一块空白，肉眼未必立刻发现）
+  const brandImg = document.querySelector('.titlebar .brand-mark');
+  const brandIcon = {
+    isImg: !!brandImg && brandImg.tagName === "IMG",
+    loaded: !!brandImg && brandImg.naturalWidth > 0,
+    size: brandImg ? Math.round(brandImg.getBoundingClientRect().width) : 0,
+  };
   const dragRegion = wcoOnTitlebar ? getComputedStyle(titlebarEl).webkitAppRegion : "";
   const winBtnEl = document.querySelector('.titlebar .win-btn');
   const noDragBtn = wcoOnTitlebar && winBtnEl ? getComputedStyle(winBtnEl).webkitAppRegion : "";
@@ -471,6 +482,7 @@ const PAGE_PROBE = `(async () => {
     themeInTopbar: !!(top && top.querySelector('.theme-toggle')),
     topbarHasKeys,
     titlebarText,
+    brandIcon,
     configBtnInTitlebar: !!document.querySelector('.titlebar [aria-label="配置"]'),
     // 点中心的命中链上要有窗口键（里面是 svg，直接比 className 会拿到 SVGAnimatedString）
     cfgHitOk: !!(cfgRect && (() => {
@@ -528,6 +540,9 @@ const PHONE_PROBE = `(async () => {
             cs.display, cs.pointerEvents, desc(h)].join("/");
   });
   const sr = side ? side.getBoundingClientRect() : null;
+  // 手机视图那一行：应用名让位了，**图标要留着**（这一屏唯一能表明"这是哪个应用"的东西）
+  const brand = document.querySelector(".titlebar .brand-mark");
+  const br = brand ? brand.getBoundingClientRect() : null;
   return {
     exitBtn: !!btn,
     exitLabel: btn ? String(btn.getAttribute("aria-label")) : "",
@@ -538,6 +553,8 @@ const PHONE_PROBE = `(async () => {
     sideRect: sr ? [Math.round(sr.x), Math.round(sr.width)] : null,
     sideOpen: !!(side && side.classList.contains("mobile-open")),
     sideSettled: !!settled,
+    brandVisible: !!(br && br.width > 0 && br.height > 0),
+    brandLoaded: !!brand && brand.tagName === "IMG" && brand.naturalWidth > 0,
     innerWidth: window.innerWidth,
   };
 })()`;
@@ -547,6 +564,7 @@ async function selftestWindow() {
     width: 1280,
     height: 860,
     show: false,
+    icon: APP_ICON,
     ...wcoOptions(),          // 自检窗口也用自绘标题栏，量的才是用户看到的那套布局
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -707,7 +725,8 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
           + ` 手机窗口 ${probe.phoneBounds.width}x${probe.phoneBounds.height} `
           + `工作区 ${probe.workArea ? probe.workArea.width + "x" + probe.workArea.height : "未知"}`);
         log(`selftest 标题栏 | 配置键 ${u.configBtnInTitlebar} 可点 ${u.cfgHitOk} 主题键 ${u.titlebarTheme} `
-          + `窗口手机键 ${u.phoneBtnInTitlebar} 那一行文字「${u.titlebarText}」 | 面板打开 ${u.panelOpen} | `
+          + `窗口手机键 ${u.phoneBtnInTitlebar} 品牌图标 ${u.brandIcon.isImg ? `${u.brandIcon.size}px 已加载 ${u.brandIcon.loaded}` : "不是图片"} `
+          + `那一行文字「${u.titlebarText}」 | 面板打开 ${u.panelOpen} | `
           + `自绘 ${u.wcoOnTitlebar} 右上留白 ${u.reservedRight}px 拖拽 ${u.dragRegion}/${u.noDragBtn} | `
           + `第二行还有窗口键 ${u.topbarHasKeys} 第二行有主题键 ${u.themeInTopbar} | `
           + `图标列标签 ${u.railTabs} 个 无会话时配置键仍在 ${u.cfgBtnNoSession} `
@@ -723,7 +742,8 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
           + `位置尺寸 ${probe.pv.rect} 可点 ${probe.pv.hitOk} 命中 ${probe.pv.hit} 其父 ${probe.pv.hitParent} `
           + `页面宽 ${probe.pv.innerWidth}px | 污染尺寸恢复实测宽 ${probe.repairedWidth}px`);
         log(`selftest 手机键全量 | ${probe.pv.all.join(" ; ")} | `
-          + `抽屉 x=${probe.pv.sideRect} open=${probe.pv.sideOpen} 已归位=${probe.pv.sideSettled}`);
+          + `抽屉 x=${probe.pv.sideRect} open=${probe.pv.sideOpen} 已归位=${probe.pv.sideSettled} | `
+          + `品牌图标 可见 ${probe.pv.brandVisible} 已加载 ${probe.pv.brandLoaded}`);
 
         // 自检是要当闸门用的：不满足就非零退出，别让它"跑完就算过"
         const bad = [];
@@ -733,6 +753,10 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
         if (u.cfgHitOk !== true) bad.push("标题栏配置键点不到（被别的元素盖住）");
         if (u.cfgBtnNoSession !== true) bad.push("没有会话时配置键不见了");
         if (u.titlebarTheme !== true) bad.push("壳里的主题键不在标题栏上");
+        // 品牌标记现在是应用图标本体：必须是 img、图片真的加载出来了、且没有塌成 0 宽
+        if (u.brandIcon.isImg !== true) bad.push("标题栏的品牌标记不是图标图片");
+        if (u.brandIcon.loaded !== true) bad.push("标题栏的品牌图标没加载出来（naturalWidth 为 0）");
+        if (u.brandIcon.size < 12) bad.push(`标题栏的品牌图标被挤成 ${u.brandIcon.size}px`);
         if (u.panelOpen !== true) bad.push("配置面板点不开");
         // 图标列按钮数由"有没有会话"决定（见上面那条自洽断言），这里不再单独要求 ≥1
         // 第二行是页面自己的工具条：窗口键与主题键都不该再出现在那里
@@ -844,6 +868,9 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
           bad.push(`手机视图下退出键尺寸不对（${probe.pv.rect}）`);
         }
         if (probe.pv.hitOk !== true) bad.push(`手机视图下退出键被挡住（命中 ${probe.pv.hit}，抽屉 ${probe.pv.sideRect} 已归位 ${probe.pv.sideSettled}）`);
+        // 这一屏只剩图标 + 窗口键：应用名让位，图标留着且要真加载出来
+        if (probe.pv.brandVisible !== true) bad.push("手机视图标题栏里没有品牌图标");
+        if (probe.pv.brandLoaded !== true) bad.push("手机视图标题栏的品牌图标没加载出来");
         // 存档里被污染的"桌面尺寸"（跟手机一样宽）不该被当成恢复目标
         if (!(probe.repairedWidth > 800)) bad.push(`污染尺寸没被纠正（恢复成 ${probe.repairedWidth}px）`);
         if (bad.length) {

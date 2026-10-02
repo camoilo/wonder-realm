@@ -13,8 +13,8 @@ import hmac
 import secrets
 import time
 
-# 去掉了 0 O 1 I L：手输时最容易认错的几个
-ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+# 去掉了 0 O 1 I L：手输时最容易认错的几个（少 5 个字符，25 选 8 仍是 1.5e11 量级）
+ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 CODE_LEN = 8
 # 存进 Cookie 的名字，手机首次带码进来后就不必再带
 COOKIE_NAME = "wr_lan"

@@ -139,20 +139,14 @@ html, body {
   gap: 10px;
   padding: 16px 16px 14px;
 }
-/* 圆角渐变徽章：柔和、成块，比孤零零一颗小色块更有"品牌区"的完成度 */
+/* 品牌标记 = 应用图标（透明底，见 frontend/public/icon.png）：左栏品牌区与壳的窗口标题栏共用，
+   尺寸各自覆盖（标题栏只有 32px 高，用 17px）。图标本身就是成品，不再垫渐变底 */
 .brand-mark {
   flex: none;
   width: 30px;
   height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-  color: #fff;
-  font-size: 16px;
-  line-height: 1;
-  box-shadow: 0 2px 6px var(--shadow);
+  display: block;
+  object-fit: contain;
 }
 .brand-stack {
   display: flex;
@@ -1998,7 +1992,7 @@ mark.search-hit.current {
   -webkit-app-region: drag;
 }
 .titlebar :is(button, .desktop-config) { -webkit-app-region: no-drag; }
-.titlebar .brand-mark { color: var(--accent); font-size: 15px; line-height: 1; }
+.titlebar .brand-mark { width: 17px; height: 17px; }
 .titlebar-name { font-size: 13px; color: var(--text-soft); }
 .titlebar-gap { flex: 1; }
 
@@ -2741,9 +2735,9 @@ body { overscroll-behavior: none; }
     gap: 8px;
     padding: 10px 12px calc(10px + var(--sat));
   }
-  /* 手机视图这一屏很窄（375 减去系统按钮占的 ~138px）：标题栏只留窗口键，
-     图标与应用名让位，页面自己的工具条照旧在下面那一行 */
-  .titlebar .brand-mark,
+  /* 手机视图这一屏很窄（375 减去系统按钮占的 ~138px）：**应用名让位，图标留着**——
+     那是这一屏唯一能表明"这是哪个应用"的东西；页面自己的工具条照旧在下面那一行 */
+  .titlebar .brand-mark { width: 15px; height: 15px; }
   .titlebar .titlebar-name { display: none; }
   .title { font-size: 15px; }
   .chip { display: none; }

@@ -4,7 +4,7 @@
       <!-- 品牌区（图标 + 应用名）：壳里这一行信息已经在窗口标题栏上了（见 TopBar.vue 的
            .titlebar），所以这里只给浏览器/手机留一份，免得同一个名字出现两次 -->
       <div v-if="!isDesktop" class="app-brand">
-        <span class="brand-mark">◇</span>
+        <img class="brand-mark" src="/icon.png" alt="">
         <span class="brand-stack">
           <span class="brand-name">Wonder Realm</span>
           <span class="brand-sub">奇想界域 · 本地 Ollama</span>

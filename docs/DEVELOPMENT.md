@@ -229,6 +229,8 @@ flowchart LR
 
 **页面侧只有三样东西是"壳专属"**：标题栏那一行的「主题 / 配置 / 手机视图」，靠 preload 注入的 `window.dshDesktop` 判定（`isDesktop`）；网页端与手机浏览器没有这个对象，于是根本不渲染（见 7.1）。浏览器里的主题键留在页面顶栏，App 品牌区由左栏自己显示（壳里那一行已经有了，免得同一个名字出现两次）。
 
+**应用图标**：窗口图标用 `desktop/build/icon.ico`（多尺寸 16/24/32/48/64/128/256，由 `desktop/build/icon.png` 这张 1024×1024 透明母版生成；将来 electron-builder 打包默认也找这个路径），两个 `new BrowserWindow`（正常窗口与自检窗口）都传 `icon: APP_ICON`。页面那份品牌标记与浏览器标签图标是同一张图的另外几个尺寸，放在 `frontend/public/`（由 Vite 拷进 `app/static/`，见 7.1、8.1）。
+
 - **「配置」不看会话**：它在标题栏里，任何时候都在，空状态也进得去
 - **「手机视图」键在手机视图下不隐藏**：只变选中态、文案改"退出手机视图"——反过来的话进去就没有看得见的出路（菜单栏是 `autoHideMenuBar`，F9 与菜单项都不显眼）。手机视图那一屏只显示窗口键，375 减系统按钮那 ~136px 正好放得下
 - **"推送局域网"不走壳**：它是后端 `app_settings.lan_enabled` + `lan_token`，面板上的开关就是 `PUT /api/settings`（「重新生成」是 `POST /api/lan/regenerate`），立即生效、不重启后端（见 8.3）。壳只提供"地址"与"手机视图"这两件后端做不到的事
@@ -500,7 +502,9 @@ event: error  {"message"}                       # 中断并结束流
 - **「控制面板」键挂未保存小黄点**（`panelAnyDirty` = 生成要求 / 角色设定 / 记忆三页任一有改动）：手机上图标列在底部弹层里，收着时看不见点，顶栏这个入口得能提示
 - 手机断点下 `☰ / 🔍 / 属性 / ⊞ / ⋮` 都钉 `flex: none` 并统一到 36px，免得被挤瘦
 
-**左栏（260px）**："模式选择"标题 + 三模式 Tab；hover/聚焦模式按钮浮出介绍（`.mode-tip`）。**桌面端朝按钮右侧弹**（上方是窗口标题栏、下方是会话列表，只有右边不挡东西）；手机端在下方，且是**左右各留 8px 的整条**（375 宽那屏里「导演模式」那行字最长，按按钮左边定位会把右侧顶出屏幕）。它是 `fixed` 定位、位置由脚本按按钮矩形算——左栏是 `overflow: hidden`，`absolute` 往右弹会被裁掉。聊天/沉浸为"角色列表 → 会话"两级，导演直接会话列表；底按钮按模式新建。
+**品牌标记**（壳的窗口标题栏与浏览器的左栏各一处，同一张图）：都是 `<img class="brand-mark" src="/icon.png">`——应用图标本体，不是在 CSS 里画的字符徽章；尺寸按容器覆盖（左栏 30px、标题栏 17px、手机视图 15px）。**手机视图下应用名让位、图标留着**：那一屏只剩图标与窗口键，图标是唯一能表明"这是哪个应用"的东西。
+
+**左栏（260px）**：顶部品牌区（`.app-brand`，**仅浏览器/手机**——壳里这一行信息在窗口标题栏上）：应用图标 + 应用名 + 一行小字；下面是"模式选择"标题 + 三模式 Tab；hover/聚焦模式按钮浮出介绍（`.mode-tip`）。**桌面端朝按钮右侧弹**（上方是窗口标题栏、下方是会话列表，只有右边不挡东西）；手机端在下方，且是**左右各留 8px 的整条**（375 宽那屏里「导演模式」那行字最长，按按钮左边定位会把右侧顶出屏幕）。它是 `fixed` 定位、位置由脚本按按钮矩形算——左栏是 `overflow: hidden`，`absolute` 往右弹会被裁掉。聊天/沉浸为"角色列表 → 会话"两级，导演直接会话列表；底按钮按模式新建。
 
 **输入区**（`InputBar.vue`）
 - 三行结构：① 辅助键行（左 `.aux-scroll` 横向可滚，装背景切换/继续/隐藏对话/手机端 ⋯；右 `.jump-btn` 钉在行尾不参与滚动）② 情境行 ③ 话语行 + 发送键
@@ -603,8 +607,11 @@ wonder-realm/
 │   ├── routes/        # characters/sessions/chat/messages/memories/profile/world/settings/backup
 │   └── static/        # **构建产物**（提交进仓库，不要手改）
 ├── desktop/            # 电脑端外壳（Electron，3.3）：main.js / preload.js / package.json
+│   └── build/          # 应用图标：icon.png（1024 透明母版）+ icon.ico（多尺寸，窗口与打包共用）
 ├── frontend/           # Vue 3 + Vite 源码
 │   ├── index.html / package.json / vite.config.js
+│   ├── public/         # 原样拷进 app/static/ 的静态文件：favicon.ico / icon.png / icon-192.png /
+│   │                   #   apple-touch-icon-180.png（标签页、手机主屏与页面里的品牌标记）
 │   └── src/
 │       ├── main.js / store.js / style.css
 │       ├── store/（state/helpers/api/session/chat/search/panel/character/presets/attrs/backup/desktop/ui）
@@ -728,7 +735,7 @@ data_dir: ./data                  # 数据库目录
 
 ### 9.8 测试与验证
 - **清单**：15 个纯 Python + 4 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`/`test_qr.mjs`，需先装前端依赖；`test_qr.mjs` 用 `createRequire` 指到 `frontend/` 解析依赖）。纯前端逻辑用 Node 直连 store 断言，不开浏览器
-- **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件、防火墙命令与 README 同源、备份双入口与两类备份前缀分开……**新结构约定顺手补断言**
+- **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件、品牌标记是应用图标本体（两处品牌区共用）、标签页与主屏图标已挂、壳的两个窗口都传了 `icon`、防火墙命令与 README 同源、备份双入口与两类备份前缀分开……**新结构约定顺手补断言**
 - **启动脚本的编码约定也上守卫**（`test_bats.py`）：根目录 `*.bat` 必须 CRLF + GBK，并钉住电脑端入口的三处结构（查 `electron.exe` 本体、两种缺失各一条提示、顺手重建前端）
 - **后端"闸门 / 边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机。**请求要显式带 Host**：默认发的 `testserver` 是域名，会被 Host 校验挡下；局域网来客那份 Host 要从 `local_hosts()` 取本机真实地址，与手机打开 `http://<局域网IP>:17800` 一致。访问码的宽容输入、限速、换码作废、开/关闸门即失效都在这里盯着
 - **备份另有一套**（`test_backup.py`）：两类文件名的前缀、副本可读且不是 WAL、7 天轮转（超期删、期内留）、手动那份不被清理也不触发清理、连点不覆盖、库不存在时返回 None
@@ -749,12 +756,6 @@ data_dir: ./data                  # 数据库目录
 6. **锁定字段无"部分公开"**：要么全锁要么全公开；需要则把 `locked` 改成按字段记录
 7. **词库不能拖拽调序**：目前只能增删（顺序即添加序）；可照背景图那套加拖拽，存储已是数组
 8. **一次会话只能绑一份世界**：导演会话各自一份，聊天 / 沉浸同角色仅一份（跟角色走）；若要同一角色在不同会话处于不同世界，需把绑定从角色挪到会话（`sessions.world_id` 列与接口已备，缺的是聊天 / 沉浸带上它）
-9. **电脑端打包**：当前外壳直接复用项目 `.venv` 的 Python（见 3.3、8.1）；**待做的是打包分发**——PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`，这样别人的机器上不必装 Python 与 uv。同时值得顺手做的还有：**一键添加防火墙规则**（现在只做到"复制命令"，真要免提权得走 UAC 提权，二者选一）、Ollama 未安装时的引导、最小化到托盘
-10. **应用图标**：现在窗口与页面用的都是默认图标。图标放这四处（**不要**往 `app/static/` 里塞——那是构建产物目录，每次构建都会被清空）：
-    - `desktop/build/icon.ico`：多尺寸（16/32/48/64/128/256）Windows 图标，窗口与将来的 electron-builder 打包共用（它默认就找 `build/icon.ico`）
-    - `desktop/build/icon.png`：512×512，非 Windows 的窗口图标与文档展示
-    - `frontend/public/`：网页与手机用（`favicon.ico`、`apple-touch-icon-180.png`、`icon-192.png`）；Vite 会把 `public/` 原样拷进 `app/static/`，在 `frontend/index.html` 里用 `<link rel="icon">` 引用
-    - `docs/images/icon.png`：README 展示用（`docs/images/` 就是给文档配图的）
-    落地时还要在 `desktop/main.js` 建窗处传 `icon`、给 `frontend/index.html` 加 favicon 引用；打包配置留到 v2 一起做
-11. **HTTPS**：局域网访问目前是明文 HTTP（访问码可能被同网抓包看到）；要堵这条需自签证书 + 手机手动信任，视需要再做
+9. **电脑端打包**：当前外壳直接复用项目 `.venv` 的 Python（见 3.3、8.1）；**待做的是打包分发**——PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`，这样别人的机器上不必装 Python 与 uv（图标已就位，见 3.3 的 `desktop/build/icon.ico`）。同时值得顺手做的还有：**一键添加防火墙规则**（现在只做到"复制命令"，真要免提权得走 UAC 提权，二者选一）、Ollama 未安装时的引导、最小化到托盘
+10. **HTTPS**：局域网访问目前是明文 HTTP（访问码可能被同网抓包看到）；要堵这条需自签证书 + 手机手动信任，视需要再做
 

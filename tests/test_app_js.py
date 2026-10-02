@@ -1094,6 +1094,21 @@ check("两个桌面键都在窗口标题栏那一行",
       and "toggleDesktopConfig" in _titlebar and 'class="win-btn"' in _titlebar, True)
 check("标题栏左边是图标 + 应用名",
       'class="brand-mark"' in _titlebar and "Wonder Realm（奇想界域）" in _titlebar, True)
+# 品牌标记是**应用图标本体**（不是字符徽章）：两处品牌区共用同一张图，图标文件在 frontend/public/
+check("品牌标记是应用图标（两处品牌区共用）",
+      '<img class="brand-mark" src="/icon.png" alt="">' in _titlebar
+      and '<img class="brand-mark" src="/icon.png" alt="">' in _comp["components/SideBar.vue"]
+      and "◇" not in _comp["components/SideBar.vue"] and "&#9671;" not in _titlebar, True)
+check("网页标签图标与手机主屏图标都挂了",
+      'rel="icon" href="/favicon.ico"' in html and 'rel="apple-touch-icon"' in html
+      and "/apple-touch-icon-180.png" in html, True)
+check("图标资源齐备（vite 从 frontend/public/ 拷进 app/static/）",
+      all((frontend / "public" / f).exists() for f in (
+          "favicon.ico", "icon.png", "icon-192.png", "apple-touch-icon-180.png"))
+      and (ROOT / "desktop" / "build" / "icon.ico").exists(), True)
+check("壳把窗口图标接上了（两个窗口都要传）",
+      "const APP_ICON = path.join(__dirname, \"build\", \"icon.ico\")" in shell_js
+      and shell_js.count("icon: APP_ICON,") == 2, True)
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
       "退出手机视图" in _titlebar and ':class="{on: desktopPhoneView}"' in _titlebar, True)
 check("主题键在壳里搬到标题栏（浏览器留在顶栏）",
