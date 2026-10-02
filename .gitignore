@@ -9,9 +9,9 @@ __pycache__/
 venv/
 env/
 
-# 构建与缓存
-build/
-dist/
+# 构建与缓存（**只忽略根目录**的产物：electron-builder 的资源目录 desktop/build/ 要入库）
+/build/
+/dist/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
