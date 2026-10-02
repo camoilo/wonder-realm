@@ -1351,6 +1351,26 @@ check("有「隐藏对话」键，且只藏消息流",
       "chatHidden = !chatHidden" in _input_bar and "chatHidden" in _chat_area
       and "hide-msgs" in _chat_area
       and ".chat-area.hide-msgs .chat-inner { visibility: hidden; }" in css, True)
+check("「隐藏对话」也在收纳范围内（手机端 ⋯ 收起时一起收）",
+      ".inputbar:not(.aux-open) .aux-btn," in _mobile, True)
+# 角色生成：生成中那个键变「停止」，中断的是这一次请求
+check("角色生成可以中途停止",
+      "stopCharacterGenerate() : generateCharacter()" in html
+      and "stopCharacterGenerate() {" in js and "gen.abortCtrl.abort();" in js
+      and "gen.abortCtrl = new AbortController();" in js, True)
+# 「停止所有生成」：后端一个端点 + 电脑端设置面板 + 手机端更多菜单
+check("停止所有生成：端点与两个入口都在",
+      '@router.post("/generate/stop")' in (ROOT / "app/routes/chat.py").read_text(encoding="utf-8")
+      and "def stop_all()" in (ROOT / "app/generation.py").read_text(encoding="utf-8")
+      and "stopAllGenerations" in js
+      and "stopAllGenerations" in (frontend / "src/components/ConfigPanel.vue").read_text(encoding="utf-8")
+      and "stopAllGenerations" in _tb, True)
+# 属性面板：不跟着点击收起来，生成完（有属性时）自动展开
+check("属性面板不跟点击收、生成完自动展开",
+      "store.attrsCollapsed = true;" in js, False)
+check("生成完自动展开属性面板",
+      js.count("this.revealAttrs(d.attrs);") == 2
+      and "revealAttrs = (attrs) => {" in js, True)
 # 触屏降级：v-hint 在 pointer: coarse 下改点击显示
 check("v-hint 触屏降级为点击显示", "(pointer: coarse)" in
       (frontend / "src/composables/hint.js").read_text(encoding="utf-8"), True)

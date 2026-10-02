@@ -148,6 +148,20 @@ def persist_message(
         con.close()
 
 
+# 「停止所有生成」用的全局标记：每次调用 +1，正在跑的流自己发现变了就收尾。
+# 为什么不用"记着每个流的任务句柄"：流是 StreamingResponse 里的生成器，拿不到稳定的句柄，
+# 而客户端断开那条路（asyncio.CancelledError）只覆盖"他自己那一台设备"——这个标记覆盖面更广，
+# 手机与电脑同时开着也能一次全停。
+_stop_epoch = 0
+
+
+def stop_all() -> int:
+    """让当前所有正在进行的生成尽快收尾（已流出的部分照常落库）。返回新的代号。"""
+    global _stop_epoch
+    _stop_epoch += 1
+    return _stop_epoch
+
+
 def generation_response(
     sid: int, msgs: list, model: str, mode: str, options: dict | None = None,
     meta: dict | None = None, defs: list | None = None,
@@ -160,10 +174,15 @@ def generation_response(
 
     async def gen():
         parts = []
+        my_epoch = _stop_epoch
         if meta is not None:
             yield sse("meta", meta)
         try:
             async for kind, value in ollama_client.chat_stream(msgs, model, options):
+                if _stop_epoch != my_epoch:
+                    # 有人按了「停止所有生成」：跳出循环，走下面的正常收尾（部分内容照样落库）
+                    log.info("生成被停止（会话 %s，全局停止）", sid)
+                    break
                 if kind == "delta":
                     parts.append(value)
                     yield sse("delta", {"text": value})

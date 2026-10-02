@@ -1,10 +1,26 @@
 from fastapi import APIRouter
 
 from ..database import connect, now
-from ..generation import generation_response, load_generation_context, prepare_generation
+from ..generation import (
+    generation_response,
+    load_generation_context,
+    prepare_generation,
+    stop_all,
+)
 from ..schemas import ChatIn
 
 router = APIRouter(prefix="/api")
+
+
+@router.post("/generate/stop")
+def stop_generating():
+    """停止当前所有正在进行的生成（三端通用：手机、电脑、多开窗口）。
+
+    只让流尽快收尾，不删任何东西：已经流出的部分照常落库（与「停止」键同一种语义）。
+    角色生成是普通请求、记忆压缩与会话命名是后台任务，它们跑在别的路径上，
+    这里管不到——它们各自有超时，也不会阻塞对话。
+    """
+    return {"ok": True, "epoch": stop_all()}
 
 
 @router.post("/sessions/{sid}/chat")

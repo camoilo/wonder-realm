@@ -29,8 +29,10 @@
             ? "开放模式：生成的设定全部直接展示，可以随意修改。"
             : "探索模式：只公开姓名与外观，性格 / 语言风格 / 背景故事会上锁——它们照常参与生成，但不会显示，可以在对话里慢慢了解。" }}</p>
           <p class="hint">跟着顶栏的思考开关走：开着思考会明显更慢（常见一分钟以上），嫌久可以先关掉再生成。</p>
-          <button class="ghost-btn" :disabled="charModal.gen.busy" @click="generateCharacter">
-            {{ charModal.gen.busy ? "生成中…" : (charModal.gen.draftId ? "换一个" : "生成角色") }}
+          <button class="ghost-btn"
+                  v-hint="charModal.gen.busy ? '停止这次生成' : '按上面填的要求让模型写一份角色设定'"
+                  @click="charModal.gen.busy ? stopCharacterGenerate() : generateCharacter()">
+            {{ charModal.gen.busy ? "停止" : (charModal.gen.draftId ? "换一个" : "生成角色") }}
           </button>
           <p v-if="charModal.gen.error" class="avatar-error">{{ charModal.gen.error }}</p>
         </div>
@@ -200,6 +202,7 @@ const {
   removeBackground,
   removeCharacterFromModal,
   saveCharacterModal,
+  stopCharacterGenerate,
   unlockCharacter,
 } = store;
 

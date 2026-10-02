@@ -22,16 +22,18 @@ Object.assign(store, {
     if (!resp.ok) throw await store.httpError(resp);
     return resp.json();
   },
-  jsonOpts(method, body) {
-    return {
+  jsonOpts(method, body, signal) {
+    const opts = {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     };
+    // signal 可选：角色生成要能中途「停止」（与消息流的做法一致）
+    if (signal) opts.signal = signal;
+    return opts;
   },
   async ssePost(url, body, handlers, signal) {
-    const opts = store.jsonOpts("POST", body);
-    if (signal) opts.signal = signal;
+    const opts = store.jsonOpts("POST", body, signal);
     const resp = await fetch(url, opts);
     if (!resp.ok) throw await store.httpError(resp);
     const reader = resp.body.getReader();

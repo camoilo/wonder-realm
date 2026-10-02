@@ -144,6 +144,8 @@ Object.assign(store, {
               // 属性一起带回来（后端解析好了）：不用为它再拉一次消息列表
               attrs: d.attrs || [],
             });
+            // 生成完自动把属性面板展开（有属性时），不用再手动点一下
+            store.revealAttrs(d.attrs);
           },
           error: (d) => {
             store.error = d.message;
@@ -299,7 +301,10 @@ Object.assign(store, {
             role: "assistant",
             content: d.content,
             scenario: d.scenario,
+            attrs: d.attrs || [],
           });
+          // 与首次生成同一条约定：生成完自动展开属性面板（有属性时）
+          store.revealAttrs(d.attrs);
         },
         error: (d) => {
           store.error = d.message;

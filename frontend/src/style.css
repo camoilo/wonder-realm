@@ -2845,6 +2845,7 @@ body { overscroll-behavior: none; }
   /* 「回到页面底部」不进收纳：双端都常显（收起辅助键时它照样能用） */
   .inputbar:not(.aux-open) .bg-switch,
   .inputbar:not(.aux-open) .continue-btn,
+  .inputbar:not(.aux-open) .aux-btn,
   .inputbar:not(.aux-open) .scenario-field { display: none; }
 
   /* ---- 消息区：头像缩小保留（64px 太大收成 40px）、气泡放宽、操作条常显（手机上没有 hover） ---- */

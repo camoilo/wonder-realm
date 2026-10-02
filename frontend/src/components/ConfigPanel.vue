@@ -29,6 +29,7 @@
     <p v-else-if="!lanUrl" class="hint">没取到局域网地址（用 ipconfig 看一眼本机 IPv4，确认连着 WiFi/网线）。</p>
 
     <div class="dc-actions">
+      <button class="ghost-btn dc-act" @click="stopAllGenerations">停止所有生成</button>
       <button class="ghost-btn dc-act" @click="copyFirewallCmd">{{ firewallCopied ? "已复制命令" : "复制防火墙命令" }}</button>
       <button class="ghost-btn dc-act" @click="openLog">打开日志文件</button>
     </div>
@@ -52,6 +53,7 @@ const {
 
 const {
   copyFirewallCmd,
+  stopAllGenerations,
   copyLanUrl,
   openLog,
   toggleLan,

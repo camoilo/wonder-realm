@@ -37,12 +37,12 @@ Object.assign(store, {
   onDocumentClick(e) {
     // 删除菜单与触发它的按钮都做了 stopPropagation，能走到这里就说明点的是别处
     store.deleteMenuId = null;
-    // 顶栏那两个浮层（搜索条 / 附加属性下拉）也是"点别处就收"：
-    // 手机上尤其需要——点会话、点消息、点任何按钮时它们不能继续压着内容
+    // 搜索条"点别处就收"：它是一次性的浮条，选完就走
     const el = e && e.target;
     const inside = (sel) => !!(el && el.closest && el.closest(sel));
     if (store.searchOpen && !inside(".search-slot")) store.searchOpen = false;
-    if (!store.attrsCollapsed && !inside(".attr-slot")) store.attrsCollapsed = true;
+    // 附加属性**不跟着点击收起来**：它是"随时瞄一眼"的状态面板，点输入框或按键就收会很别扭；
+    // 改成"模型每生成完一条消息就自动展开"（见 chat.js 的 done 处理）
   },
   onDocumentKeydown(e) {
     if (e.key !== "Escape") return;

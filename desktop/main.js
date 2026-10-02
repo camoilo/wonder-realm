@@ -429,9 +429,10 @@ const PAGE_PROBE = `(async () => {
         boxCount: boxes.length,
         noSaveBtn: !(foot && foot.querySelector('.primary-btn.full')),
         footHint: !!(foot && /只读/.test(foot.textContent)),
-        // 点过面板图标之后，刚才还开着的搜索条 / 属性下拉都该收起来了（本来就没开 -> null，不判）
+        // 点过面板图标之后：搜索条要收起来（一次性浮条），属性面板**要留着**
+        // （它是"随时瞄一眼"的状态面板，只在生成完自动展开；本来就没开 -> null，不判）
         searchClosedOnOutside: hadSearchPop ? !document.querySelector('.search-pop') : null,
-        attrClosedOnOutside: hadAttrPanel ? !document.querySelector('.attr-panel') : null,
+        attrsKeptOnOutside: hadAttrPanel ? !!document.querySelector('.attr-panel') : null,
       };
     }
   }
@@ -780,7 +781,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
           if (u.worldPage.footHint !== true) bad.push("只读页底部没给出说明");
           // 点别处（面板图标）要把顶栏那两个浮层收起来（手机端遮挡问题）
           if (u.worldPage.searchClosedOnOutside === false) bad.push("点别处没收起搜索条");
-          if (u.worldPage.attrClosedOnOutside === false) bad.push("点别处没收起属性下拉");
+          if (u.worldPage.attrsKeptOnOutside === false) bad.push("点别处把属性面板收起来了");
         }
         // 配置面板必须真的落在视口里（它曾经因为父级没有定位上下文被摆到视口外面：
         // "按钮点了没反应"其实就是面板开在屏幕外 —— 实测踩到）

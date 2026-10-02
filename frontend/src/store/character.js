@@ -311,11 +311,13 @@ Object.assign(store, {
     const gen = store.charModal.gen;
     if (gen.busy) return;
     gen.busy = true;
+    gen.stopped = false;
     gen.error = "";
+    gen.abortCtrl = new AbortController();
     try {
       const r = await store.api(
         "/api/characters/generate",
-        store.jsonOpts("POST", { hint: gen.hint, mode: gen.mode })
+        store.jsonOpts("POST", { hint: gen.hint, mode: gen.mode }, gen.abortCtrl.signal)
       );
       store.avatarError = "";
       store.charModal.form.name = r.name || "";
@@ -326,9 +328,29 @@ Object.assign(store, {
       store.charModal.locked = !!r.locked;
       gen.draftId = r.draft_id;
     } catch (e) {
-      gen.error = e.message;
+      // 自己按的「停止」不算错误（草稿没生成出来，输入框里的提示词还在）
+      if (!gen.stopped) gen.error = e.message;
     } finally {
       gen.busy = false;
+      gen.abortCtrl = null;
+    }
+  },
+  // 角色生成是普通请求（不是流）：中断这次请求即可，服务端那次调用会自己超时结束
+  stopCharacterGenerate() {
+    const gen = store.charModal.gen;
+    if (!gen.busy || !gen.abortCtrl) return;
+    gen.stopped = true;
+    gen.abortCtrl.abort();
+  },
+  // 「停止所有生成」：本地这条流 + 角色生成 + 让服务端把它那边的流全部收尾
+  // （手机与电脑同时开着时，一次就能全停）
+  async stopAllGenerations() {
+    store.stop();
+    store.stopCharacterGenerate();
+    try {
+      await store.api("/api/generate/stop", { method: "POST" });
+    } catch (e) {
+      store.error = e.message;
     }
   },
   resetGeneratedDraft() {

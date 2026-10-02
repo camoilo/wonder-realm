@@ -108,6 +108,10 @@
           <span class="more-label">主题</span>
           <button class="ghost-btn mobile-theme" @click="cycleTheme">{{ themeIcon() }} {{ themeLabel() }}</button>
         </div>
+        <div class="more-row">
+          <span class="more-label">生成</span>
+          <button class="ghost-btn mobile-stop-all" @click="stopAllGenerations">停止所有生成</button>
+        </div>
       </div>
     </header>
 </template>
@@ -189,6 +193,7 @@ const {
   searchNext,
   searchPrev,
   startRename,
+  stopAllGenerations,
   switchModel,
   themeButtonTitle,
   themeIcon,

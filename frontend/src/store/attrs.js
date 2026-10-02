@@ -84,6 +84,12 @@ store.showAttrPanel = computed(() => {
   return !!store.activeSession && !store.isDirectorMode;
 });
 
+// 模型生成完一条带属性的消息后自动展开属性面板（见 chat.js 的 done 处理）。
+// 没有属性的角色不展开：那会平白弹出一个"还没有定义附加属性"的空面板
+store.revealAttrs = (attrs) => {
+  if ((attrs || []).length) store.attrsCollapsed = false;
+};
+
 // 编辑面板里那一节是否出现：只有聊天与沉浸两种模式、且角色定义了属性
 store.showAttrInEditor = computed(() => {
   if (!store.activeSession || store.isDirectorMode) return false;

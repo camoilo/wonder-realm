@@ -245,6 +245,9 @@ export const emptyGenerator = () => ({
   busy: false,
   error: "",
   draftId: null, // 服务端草稿 id：探索模式下隐藏的字段只存在服务端
+  // 生成中那次的 AbortController，以及"是用户按了停止"的标记（生成键在 busy 时变「停止」）
+  abortCtrl: null,
+  stopped: false,
 });
 
 // 用工厂函数而不是到处写字面量：漏一个键就会出现"某状态下少个字段"的怪问题
