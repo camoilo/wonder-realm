@@ -134,6 +134,7 @@ function startBackend() {
 function waitForBackend(timeoutMs = 120000) {
   // 给得宽：后端起服务前会先确保 Ollama 可用（见 app/ollama_boot.py），
   // 冷启动 Ollama 可能要几十秒——等不到就开窗口只会看到"打不开"
+  // 间隔取 1s：这段等待里后端还没开始监听（它在等 Ollama），探得再密也只是空打连接
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const tick = () => {
@@ -147,7 +148,7 @@ function waitForBackend(timeoutMs = 120000) {
     };
     const retry = () => {
       if (Date.now() > deadline) return reject(new Error("后端启动超时"));
-      setTimeout(tick, 400);
+      setTimeout(tick, 1000);
     };
     tick();
   });

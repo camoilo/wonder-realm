@@ -118,6 +118,16 @@ check("非 localhost 不补",
 check("自定端口的 localhost 也按端口补",
       ollama_boot._ping_urls("http://localhost:11499")[1], "http://127.0.0.1:11499/api/tags")
 
+# ---- 8.5 探测节奏：由密到疏（冷启动那几秒它在读模型，探得再密也不会更快就绪）----
+check("探测首档不低于 1s（不是每 0.5 秒一次）", ollama_boot.PROBE_DELAYS[0] >= 1.0, True)
+check("探测间隔不回头",
+      all(b >= a for a, b in zip(ollama_boot.PROBE_DELAYS, ollama_boot.PROBE_DELAYS[1:])), True)
+probes = []
+ollama_boot.ensure_ollama("http://localhost:11434",
+                          probe=lambda *a, **k: probes.append(1) and False,
+                          spawn=Spy(), timeout=3)
+check("3 秒里只探了几次（不是十几次）", 2 <= len(probes) <= 4, True)
+
 # ---- 9. serve 刚起就退出：从它的输出认出"端口被占"，给出能照做的提示 ----
 class DeadProc:
     """假装是个立刻退出的子进程（poll() 返回退出码）。"""

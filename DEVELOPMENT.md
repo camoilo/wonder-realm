@@ -209,7 +209,7 @@ flowchart LR
 
 | 壳的职责 | 做法 |
 |---|---|
-| 起后端 | `spawn(.venv/Scripts/python.exe run.py --no-browser)`，`cwd` = 项目根；stdout/stderr 转进 `userData/desktop.log`；等 `GET /api/limits` 返回 200 再开窗口（端口已被别的实例占用也算就绪——和 `run.py` 同一套判断）。**spawn 时必须带 `PYTHONIOENCODING=utf-8`**：后端输出走管道，Python 会按控制台代码页编码（bat 里是 936 → GBK 字节），而 Node 读管道按 UTF-8 解——不设它，日志里后端的中文就是一片"��"（踩过） |
+| 起后端 | `spawn(.venv/Scripts/python.exe run.py --no-browser)`，`cwd` = 项目根；stdout/stderr 转进 `userData/desktop.log`；等 `GET /api/limits` 返回 200 再开窗口（端口已被别的实例占用也算就绪——和 `run.py` 同一套判断）。**探测间隔 1s、上限 120s**：后端在 `uvicorn` 之前要先确保 Ollama 可用（见 3.4），这段等待里它还没开始监听，探得再密也只是空打连接。**spawn 时必须带 `PYTHONIOENCODING=utf-8`**：后端输出走管道，Python 会按控制台代码页编码（bat 里是 936 → GBK 字节），而 Node 读管道按 UTF-8 解——不设它，日志里后端的中文就是一片"��"（踩过） |
 | 开窗口 | `loadURL("http://127.0.0.1:17800/")`：**与浏览器里那份完全同一个页面**；外链走系统浏览器；菜单只留"视图 / 窗口"两项（刷新、手机视图、缩放、开发者工具） |
 | 手机视图 | 把窗口收成手机大小：**宽度锁死 375**（`setMinimumSize`/`setMaximumSize` 都设 `PHONE_WIDTH + 边框差`，边框还能拖但尺寸被钳住，比 `setResizable(false)` 更符合预期）、**高度留给用户拖**（480–1400，默认 **667 = 9:16 的传统手机比例**，不是现在的全面屏 19.5:9；仍会按工作区收一下），页面按已有的 `≤640px` 断点自己变成手机单栏；进/出都通过 `desktop:phone-view` 事件告诉页面，页面据此**隐藏桌面专属键**；退出时恢复进手机视图前的桌面尺寸。**切视图前后窗口中心不动**（`setBoundsCentered()` 按中心改尺寸、贴边时再夹回工作区），用户要求的是"居中扩展或者收缩"而不是从左上角缩/涨。**手机视图期间窗口置顶**（`setAlwaysOnTop(true)`，退回桌面视图时取消）：它是"预览 / 收纳"用的，被别的窗口压住就没意义 |
 | 单实例与退出 | `requestSingleInstanceLock()`：第二次双击只把已有窗口叫到前面；`before-quit` 杀掉后端子进程（后端是 `run.py` 自己开 uvicorn，一个进程，`kill()` 即可） |
@@ -244,7 +244,7 @@ flowchart LR
 | 情形 | 结果 | 说明 |
 |---|---|---|
 | `/api/tags` 已能返回 200 | `running` | 什么都不做。base_url 写 `localhost` 时**再探一次 `127.0.0.1`**：有些环境 localhost 先解析到 ::1 而 Ollama 只听 IPv4，不补这一下会"明明在跑却判成没跑" |
-| 没在跑、是本机地址、允许自启 | 起 `ollama serve` 并轮询到就绪 | 最多等 30s；起的进程 **DETACHED**，关掉应用不影响它；它的输出追加进 `data/ollama-serve.log`。**spawn 时必须把模型目录传对**（`_models_dir()`：环境变量 `OLLAMA_MODELS` > `ollama.exe` 旁边的 `models/`（且 manifests 非空）> 不设）：默认目录 `%USERPROFILE%\.ollama\models` 在"Ollama 装在 D 盘"这类机器上是**空的**，自动拉起来的服务于是"起来了但没有模型"，用户看着就是"Ollama 没启动"（真踩过：测试时拉起的实例占着 11434 用空目录，而用户真正的模型在 `D:\Ollama\models`） |
+| 没在跑、是本机地址、允许自启 | 起 `ollama serve` 并轮询到就绪 | 最多等 30s；**探测间隔由密到疏**（`PROBE_DELAYS` 1s → 1.5s → 2s → 3s，之后都按 3s）：冷启动那几秒它在读模型，探得再密也不会更快就绪，只是空刷请求（Ollama 每次请求都会在自己日志里留一行）。起的进程 **DETACHED**，关掉应用不影响它；它的输出追加进 `data/ollama-serve.log`。**spawn 时必须把模型目录传对**（`_models_dir()`：环境变量 `OLLAMA_MODELS` > `ollama.exe` 旁边的 `models/`（且 manifests 非空）> 不设）：默认目录 `%USERPROFILE%\.ollama\models` 在"Ollama 装在 D 盘"这类机器上是**空的**，自动拉起来的服务于是"起来了但没有模型"，用户看着就是"Ollama 没启动"（真踩过：测试时拉起的实例占着 11434 用空目录，而用户真正的模型在 `D:\Ollama\models`） |
 | 起了但进程很快就退出 | `blocked-port` / `serve-exited` | 从那份日志认出"端口被占"（Windows 上是 `bind: Only one usage…`）还是别的原因——**不再笼统报"超时"**：前者提示"去托盘退出 Ollama 再重开"，两种情况都指向那份日志 |
 | 起了但 30s 没就绪 | `started-timeout` | 界面里仍会提示连不上，让人手动看一眼，而不是假装成功 |
 | `ollama` 命令不存在 | `skipped-missing` | **不让启动失败**，提示装 Ollama（界面里也有同样的提示） |

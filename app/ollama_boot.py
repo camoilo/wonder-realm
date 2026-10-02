@@ -23,7 +23,9 @@ log = logging.getLogger("wonder_realm")
 # 只有本机地址才由我们去拉起来：base_url 指向别的机器时，那不是我们能启动的
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
 START_TIMEOUT = 30.0  # 冷启动留够时间（首次加载模型前，服务本身通常几秒就绪）
-POLL_INTERVAL = 0.5
+# 就绪探测的间隔：由密到疏（后面的探测都取最后一档）。冷启动那几秒它在读模型目录，
+# 探得再密也不会更快就绪，只是在空刷请求——Ollama 每次请求都会在自己日志里留一行。
+PROBE_DELAYS = (1.0, 1.5, 2.0, 3.0)
 # `ollama serve` 起不来时最常见的两种输出特征（Windows 上是第一句，POSIX 上后两句）
 PORT_BUSY_HINTS = (
     "only one usage of each socket address",   # Windows: bind 失败
@@ -157,14 +159,20 @@ def ensure_ollama(
         log.warning("拉起 ollama serve 失败：%s", e)
         return "skipped-missing"
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        time.sleep(POLL_INTERVAL)
+    step = 0
+    while True:
+        # 剩下的时间不够下一档间隔时，就把最后一觉缩短到刚好用满，别越过 deadline
+        delay = PROBE_DELAYS[min(step, len(PROBE_DELAYS) - 1)]
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return "started-timeout"
+        time.sleep(min(delay, left))
+        step += 1
         if probe(base_url):
             return "started"
         # 进程中途退出就别再空等一轮超时了：端口被占 / 立刻报错，都从它的输出里认出来
         if proc is not None and proc.poll() is not None:
             return "blocked-port" if _looks_like_port_busy(log_path) else "serve-exited"
-    return "started-timeout"
 
 
 def _looks_like_port_busy(log_path) -> bool:
