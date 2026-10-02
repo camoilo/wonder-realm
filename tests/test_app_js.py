@@ -1117,6 +1117,16 @@ _pkg = json.loads((ROOT / "desktop" / "package.json").read_text(encoding="utf-8"
 check("版本号三处一致（app/__init__ / pyproject / desktop/package.json）",
       [app_version, re.search(r'^version = "([^"]+)"', _pyproject, re.M).group(1), _pkg["version"]],
       [app_version] * 3)
+# 许可证：LICENSE 文件、两处元数据、README 一节必须同源（见 DEVELOPMENT §9.1）
+_license = (ROOT / "LICENSE").read_text(encoding="utf-8")
+check("LICENSE 是 MIT 且写明版权行",
+      _license.startswith("MIT License") and bool(re.search(r"^Copyright \(c\) \d{4} .+$", _license, re.M)),
+      True)
+check("两处元数据与 LICENSE 同为 MIT",
+      [_pkg.get("license"), re.search(r'license = \{ text = "([^"]+)" \}', _pyproject).group(1)],
+      ["MIT", "MIT"])
+check("README 有「许可」一节并链接到 LICENSE",
+      "## 许可" in readme and "[MIT 许可](LICENSE)" in readme, True)
 check("配置面板底部显示版本（值取自 /api/version）",
       '版本 {{ appVersion }}' in _config and 'api("/api/version")' in js, True)
 # 打包（见 DEVELOPMENT §8.4）：壳要能分两条路起后端（源码 / 随包 exe），配置要备齐两种产物

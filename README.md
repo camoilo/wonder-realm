@@ -175,6 +175,12 @@ netsh advfirewall firewall add rule name="Wonder Realm 局域网访问 17800" di
 | 网络 | 只有安装 Ollama、拉取模型时需要；日常使用完全离线 |
 | 内存 | 取决于所用模型，建议 8GB 以上 |
 
+## 许可
+
+本项目以 [MIT 许可](LICENSE) 发布：可以自由使用、修改、再分发（含商用），只需保留版权与许可声明；软件按"现状"提供，不附带任何担保。
+
+随安装包分发的第三方组件均为宽松许可，没有 GPL/AGPL 传染：Electron 与 Chromium（MIT / BSD-3，安装目录里附有它们的许可文件）、Vue 3 与 qrcode（MIT）、FastAPI 与 pydantic（MIT）、Uvicorn 与 httpx（BSD-3）、PyYAML 与 h11（MIT）、certifi（MPL-2.0，未修改）。界面里的应用图标是本项目自带素材。
+
 ## 开发
 
 想改代码、自己构建安装包，或者了解设计细节，请看 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)：需求与设计、目录结构、数据模型、API、测试与打包流程都在那里。

@@ -580,7 +580,7 @@ event: error  {"message"}                       # 中断并结束流
 ### 8.1 目录结构
 ```
 wonder-realm/
-├── README.md / .gitignore / config.yaml / pyproject.toml / uv.lock / .python-version
+├── README.md / LICENSE / .gitignore / config.yaml / pyproject.toml / uv.lock / .python-version
 ├── run.py                          # uv run run.py → 建库 → 确保 Ollama → uvicorn.run；起后开浏览器
 │                                   #   --no-browser 给桌面端用；--lan/--no-lan 切"推送局域网"（8.3）
 ├── start_desktop.bat               # 双击启动电脑端（Electron 外壳，3.3；GBK + CRLF，同样重建前端）
@@ -723,6 +723,7 @@ $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"    # 首次要下
 - 名词以术语表为准，代码 / 界面 / 文档三处一致；新名词先登记再使用
 - **改名要成套改**（key / 约束 / 函数 / 界面 / 测试 / 文档），改完 grep 确认零残留，逐案确认同形异义词没误伤
 - **不留兼容代码**：结构变了写一次性脚本改库（跑完即删）或删 `data/` 重建
+- **许可是 MIT**（`LICENSE`，三处元数据里同名：`pyproject.toml` / `desktop/package.json`）。随包分发的第三方组件都是宽松许可（MIT / BSD-3 / Apache 系，`certifi` 是 MPL-2.0 的文件级 copyleft），**没有 GPL/AGPL**，所以换许可证不受传染限制；真要换，记得同步 README 的「许可」一节与两处元数据
 
 ### 9.2 单一数据源
 - 字数上限只在 `app/limits.py` 的 `LIMITS`（后端校验 + `/api/limits` 下发，前端不另写）
