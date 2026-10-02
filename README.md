@@ -159,4 +159,4 @@ netsh advfirewall firewall add rule name="Wonder Realm 局域网访问 17800" di
 
 ## 开发与测试
 
-开发者请看 [DEVELOPMENT.md](./DEVELOPMENT.md)：需求与设计、目录结构、改前端的方式与测试命令都在那里。
+开发者请看 [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)：需求与设计、目录结构、改前端的方式与测试命令都在那里。
