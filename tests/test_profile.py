@@ -114,6 +114,14 @@ check("老库的 name 保持原样（不当成称呼）",
       database.read_profile()["name"], "旧名字")
 check("老库的称呼留空（由用户自己填）", database.read_profile()["call_name"], "")
 shutil.rmtree(old, ignore_errors=True)
+if old.exists():
+    # Windows 上刚关掉的库文件可能还在"删除待决"状态：等一下再删一次，别在工作区里留垃圾
+    import gc  # noqa: E402
+    import time  # noqa: E402
+
+    gc.collect()
+    time.sleep(0.2)
+    shutil.rmtree(old, ignore_errors=True)
 # 迁移检查把 DB_PATH 指到了老库上，这里**指回前面那个临时库**，后面的用例继续跑
 database.init_db(str(tmp), cfg["ollama"]["model"], "")
 

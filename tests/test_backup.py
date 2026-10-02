@@ -27,6 +27,15 @@ def check(name, got, want):
     print(f"[{'ok' if ok else 'FAIL'}] {name}: {got!r}" + ("" if ok else f" != {want!r}"))
 
 
+def q(path, sql):
+    """读一条。**显式关连接**：Windows 上没关的连接会锁住文件，末尾的临时目录就删不干净。"""
+    con = sqlite3.connect(path)
+    try:
+        return con.execute(sql).fetchone()[0]
+    finally:
+        con.close()
+
+
 tmp = Path(".test_backup_tmp").resolve()
 shutil.rmtree(tmp, ignore_errors=True)
 tmp.mkdir()
@@ -47,18 +56,16 @@ check("自动备份的名字带 chatbot- 前缀与 .db 后缀",
       (auto.name.startswith(backup.PREFIX), auto.suffix), (True, ".db"))
 check("时间戳能解析出今天（清理就是按它算的）",
       backup._date_of(auto), datetime.now().date())
-check("自动备份里找得到那条数据",
-      sqlite3.connect(auto).execute("SELECT note FROM t").fetchone()[0], "hello")
+check("自动备份里找得到那条数据", q(auto, "SELECT note FROM t"), "hello")
 check("备份副本不是 WAL（是一个自包含的文件）",
-      sqlite3.connect(auto).execute("PRAGMA journal_mode").fetchone()[0].lower(), "delete")
+      q(auto, "PRAGMA journal_mode").lower(), "delete")
 
 # ---- 2. 手动备份：名字与自动的分开，而且不轮转 ----
 manual = backup.make_backup(db_path, store_dir, days=0, manual=True)
 check("手动备份带 manual- 前缀（与自动的分得清）",
       (manual.name.startswith(backup.MANUAL_PREFIX),
        manual.name.startswith(backup.PREFIX)), (True, False))
-check("手动备份内容同样可用",
-      sqlite3.connect(manual).execute("SELECT note FROM t").fetchone()[0], "hello")
+check("手动备份内容同样可用", q(manual, "SELECT note FROM t"), "hello")
 check("days=0（本该一份不留）也动不了手动备份", manual.exists(), True)
 check("existing_backups() 只列自动备份（清理只针对它们）",
       [p.name for p in backup.existing_backups(store_dir)], [auto.name])
