@@ -385,7 +385,16 @@ CREATE INDEX idx_character_images ON character_images(character_id, position, id
 
 ### 5.7 数据库备份
 **为什么不能直接拷文件**：WAL 下未 checkpoint 的写入只在 `-wal`，拷主文件会丢最后一段、甚至读不出表结构。必须走 `Connection.backup()`（读当前已提交状态，应用运行中也能安全导出）。
-**流程**（`app/backup.py`）：库不存在跳过 → backup() 写 `backups/xxx.tmp` → `PRAGMA quick_check`（不通过就删并记 error，绝不拿没校验过的冒充备份）→ journal_mode 改回 DELETE（去掉 `-wal`/`-shm` 边车）→ 改名 → 只留最近 `backup.days`（14）个自然日（含当天，删边车；名字不合约定的不参与清理）。触发在 `run.py` 起服务前、端口检查前（即便已有一实例也先备）。按**天数**非份数，基准取可解析日期最大值（CJK 排序坑）。失败仅记日志不阻断启动。目录默认 `./backups`，**刻意不放 `data/` 内**（删库手势会连备份一起删）。
+**流程**（`app/backup.py`）：库不存在跳过 → backup() 写 `backups/xxx.tmp` → `PRAGMA quick_check`（不通过就删并记 error，绝不拿没校验过的冒充备份）→ journal_mode 改回 DELETE（去掉 `-wal`/`-shm` 边车）→ 改名 → 自动的那份只留最近 `backup.days`（**7**）个自然日（含当天，删边车；名字不合约定的不参与清理）。触发在 `run.py` 起服务前、端口检查前（即便已有一实例也先备）。按**天数**非份数，基准取可解析日期最大值（CJK 排序坑）。失败仅记日志不阻断启动。目录默认 `./backups`，**刻意不放 `data/` 内**（删库手势会连备份一起删）。
+
+**两类备份名字分开**（一眼分得清、也决定了谁会被清理）：
+
+| 类别 | 文件名 | 产生 | 轮转 |
+|---|---|---|---|
+| 自动 | `chatbot-<时间戳>.db` | 每次启动（`backup.on_startup`） | 按 `backup.days` 清理 |
+| 手动 | `manual-<时间戳>.db` | 界面上「手动备份」（`POST /api/backup`） | **不清理**：点名要的一份，被自动轮转删掉才是意外；不要了自己在备份目录里删 |
+
+手动那份走的是同一套 `make_backup()`（同一个在线备份 + 校验路径），只是 `manual=True` 换前缀并跳过清理；自动备份只在启动时做，聊到一半想要一个还原点时不必重启应用。入口：电脑端 ⚙ 配置面板、手机端顶栏 ⋮ 菜单（`store/backup.js` 的 `runBackup()`，结果那行显示文件名与大小）。
 
 ### 5.8 对话区背景图
 每角色至多 10 张，聊天/沉浸作对话区背景。单开 `character_images` 表：10 张、单张数百 KB，放角色表会让列表接口变每次几 MB，且不随列表/会话详情下发，按需拉取：
@@ -452,6 +461,7 @@ event: error  {"message"}                       # 中断发送并结束流
 | GET/PUT | `/api/settings` | 运行时设置 `{model, memory_model, disable_thinking, lan_enabled, lan_token}`；只在真要改模型名才查已安装列表（未装 400、连不上 502）；`lan_enabled` 只有本机能改，打开时补访问码、关掉时清空（见 8.3） |
 | POST | `/api/lan/claim` | 用访问码换 Cookie（手机首次进来）。闸门里唯一不需要码就能到达的接口，限速在它身上 |
 | POST | `/api/lan/regenerate` | 换一个访问码；只有本机能调 |
+| POST | `/api/backup` | 手动备份一份（`manual-<时间戳>.db`，不参与自动轮转），返回 `{file, size, dir}`；失败 500 并让人看日志（见 5.7） |
 | GET | `/api/models` | `/api/tags`×`/api/show` 并集得 `thinking` 标记 |
 | GET | `/api/gen-settings` | 生成要求表单定义 `{fields, defaults}`，前端据此动态渲染 |
 | GET/PUT | `/api/profile` | 我的设定（当前 id=1），整体覆盖保存 |
@@ -547,19 +557,19 @@ wonder-realm/
 │   ├── memory.py      # 记忆查询/压缩/scope（5.4）
 │   ├── naming.py      # 会话标题自动总结（5.6）
 │   ├── character_gen.py  # 生成角色、草稿、探索锁定裁剪
-│   ├── backup.py      # 在线备份（5.7）
+│   ├── backup.py      # 在线备份 + 校验（5.7）；自动/手动两类名字分开，只有自动的轮转
 │   ├── generation.py  # 生成主流程：组装→SSE→解析落库/停止保留
 │   ├── net.py         # 来源/主机判定（is_loopback、host_ok）：局域网闸门与"只有本机能改开关"共用
 │   ├── lan_auth.py    # 局域网访问码：生成/宽容比对/领码限速（8.3）
 │   ├── lan_gate.py    # 局域网闸门的两半（before/after）：Host 校验、开关、访问码（8.3）
-│   ├── routes/        # characters/sessions/chat/messages/memories/profile/world/settings
+│   ├── routes/        # characters/sessions/chat/messages/memories/profile/world/settings/backup
 │   └── static/        # **构建产物**（提交进仓库，不要手改）
 ├── desktop/            # 电脑端外壳（Electron，3.3）：main.js / preload.js / package.json
 ├── frontend/           # Vue 3 + Vite 源码
 │   ├── index.html / package.json / vite.config.js
 │   └── src/
 │       ├── main.js / store.js / style.css
-│       ├── store/（state/helpers/api/session/chat/search/panel/character/presets/attrs/ui）
+│       ├── store/（state/helpers/api/session/chat/search/panel/character/presets/attrs/backup/desktop/ui）
 │       ├── composables/（maskClose/hint）
 │       ├── App.vue
 │       └── components/（TitleBar/TopBar/SideBar/ChatArea/MessageItem/InputBar/Panel/ConfigPanel/
@@ -587,7 +597,8 @@ naming: { model: "", max_chars: 12, min_user_chars: 8 }
 server: { host: 0.0.0.0, port: 17800, lan: false }
                                   # host=监听地址（0.0.0.0 对外开放；127.0.0.1 只本机）
                                   # lan=首次建库时"推送局域网"的默认值（默认关，之后以库为准，见 8.3）
-backup: { dir: ./backups, days: 14, on_startup: true }
+backup: { dir: ./backups, days: 7, on_startup: true }
+                                  # days=自动备份的保留天数（手动备份不参与轮转）
 data_dir: ./data                  # 直接指定
 ```
 

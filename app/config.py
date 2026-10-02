@@ -40,7 +40,7 @@ DEFAULTS = {
         "lan": False,
     },
     "data_dir": str(ROOT / "data"),
-    "backup": {"dir": str(ROOT / "backups"), "days": 14, "on_startup": True},
+    "backup": {"dir": str(ROOT / "backups"), "days": 7, "on_startup": True},
 }
 
 

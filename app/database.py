@@ -144,6 +144,15 @@ def db_file(data_dir) -> Path:
     return Path(data_dir) / DB_FILENAME
 
 
+def current_db_file(data_dir) -> Path:
+    """应用真正在写的那个库文件：已经 `init_db()` 过就以 `DB_PATH` 为准。
+
+    两者可能不一致（测试里先建了库、或将来有别的调用点），以 `DB_PATH` 为准才对——备份要备的
+    是实际被写入的那份。
+    """
+    return DB_PATH or db_file(data_dir)
+
+
 def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 

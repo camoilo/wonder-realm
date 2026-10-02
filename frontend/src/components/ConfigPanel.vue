@@ -37,10 +37,16 @@
 
     <div class="dc-actions">
       <button class="ghost-btn dc-act" @click="stopAllGenerations">停止所有生成</button>
+      <button class="ghost-btn dc-act" :disabled="backupBusy" @click="runBackup">
+        {{ backupBusy ? "备份中…" : "手动备份" }}
+      </button>
       <button class="ghost-btn dc-act" @click="copyFirewallCmd">{{ firewallCopied ? "已复制命令" : "复制防火墙命令" }}</button>
       <button class="ghost-btn dc-act" @click="openLog">打开日志文件</button>
     </div>
+    <!-- 备份结果就显示在键下面：文件名是 manual-…，与启动时自动备份的 chatbot-… 分开 -->
+    <p v-if="backupNote" class="hint">{{ backupNote }}</p>
     <p class="hint">防火墙命令要在<strong>管理员</strong>权限的 PowerShell 里执行，只需一次。</p>
+    <p class="hint">启动时自动备份的留在 <code>backups/</code> 里、只保留最近 7 天；上面这个手动备份不会被自动清理。</p>
     <p class="hint">局域网开着时只有带访问码的设备能访问；传输没有加密，同一 WiFi 里抓包仍可能拿到访问码，
       公共网络里建议直接关掉。</p>
   </div>
@@ -52,6 +58,8 @@ import QRCode from "qrcode";
 import { store } from "../store.js";
 
 const {
+  backupBusy,
+  backupNote,
   firewallCopied,
   lanBusy,
   lanCopied,
@@ -67,6 +75,7 @@ const {
   copyLanUrl,
   openLog,
   regenerateLanCode,
+  runBackup,
   toggleLan,
 } = store;
 

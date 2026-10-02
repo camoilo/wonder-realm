@@ -2812,6 +2812,8 @@ body { overscroll-behavior: none; }
   }
   .more-row .model-select { flex: 1; min-width: 0; max-width: none; }
   .more-row .ghost-btn { flex: 1; }
+  /* 手动备份的结果行：缩进到与控件那一列对齐（标签列 52px + 间距 8px） */
+  .more-note { padding: 0 4px 6px 60px; word-break: break-all; }
   .mobile-theme { white-space: nowrap; }
 
   /* ---- 输入区：辅助键一排（可横滑）＋ 情境一行 ＋ 话语一行，主键放大到 ≥44px ---- */

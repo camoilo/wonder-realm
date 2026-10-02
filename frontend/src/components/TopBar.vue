@@ -112,6 +112,14 @@
           <span class="more-label">生成</span>
           <button class="ghost-btn mobile-stop-all" @click="stopAllGenerations">停止所有生成</button>
         </div>
+        <div class="more-row">
+          <span class="more-label">备份</span>
+          <button class="ghost-btn mobile-backup" :disabled="backupBusy" @click="runBackup">
+            {{ backupBusy ? "备份中…" : "手动备份" }}
+          </button>
+        </div>
+        <!-- 结果就显示在菜单里：文件名 manual-…，与启动时自动备份的 chatbot-… 分开 -->
+        <p v-if="backupNote" class="hint more-note">{{ backupNote }}</p>
       </div>
     </header>
 </template>
@@ -124,6 +132,8 @@ import AttrPanel from "./AttrPanel.vue";
 // 模板用到的状态与计算属性（toRefs 后模板里仍是裸名字，读写都保持响应式）
 const {
   activeSession,
+  backupBusy,
+  backupNote,
   currentModel,
   currentModelSupportsThinking,
   desktopConfigOpen,
@@ -189,6 +199,7 @@ const {
   isNear,
   len,
   loadModels,
+  runBackup,
   saveRename,
   searchNext,
   searchPrev,

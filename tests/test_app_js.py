@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.character_gen import HIDDEN_FIELDS  # noqa: E402
+from app.config import load_config  # noqa: E402
 
 frontend = ROOT / "frontend"
 # 拆成单文件组件后，源码分散在若干文件里；测试按下面两坨分别拼接：
@@ -1377,6 +1378,21 @@ check("停止所有生成：端点与两个入口都在",
       and "stopAllGenerations" in js
       and "stopAllGenerations" in (frontend / "src/components/ConfigPanel.vue").read_text(encoding="utf-8")
       and "stopAllGenerations" in _tb, True)
+# 手动备份：后端一个端点 + 电脑端设置面板 + 手机端更多菜单；名字与自动备份分开（后端负责起名）
+_backup_py = (ROOT / "app" / "backup.py").read_text(encoding="utf-8")
+check("手动备份：端点与两个入口都在",
+      '@router.post("/backup")' in (ROOT / "app/routes/backup.py").read_text(encoding="utf-8")
+      and 'api("/api/backup", { method: "POST" })' in js
+      and "runBackup" in (frontend / "src/components/ConfigPanel.vue").read_text(encoding="utf-8")
+      and "runBackup" in _tb and 'class="ghost-btn mobile-backup"' in _tb, True)
+check("手动备份写的是 manual- 前缀（自动的是 chatbot-），且不参与轮转",
+      'MANUAL_PREFIX = "manual-"' in _backup_py and 'PREFIX = "chatbot-"' in _backup_py
+      and "if not manual else 0" in _backup_py, True)
+check("备份结果有回显（文件名与大小）",
+      "this.backupNote = `已备份 ${r.file}" in js and "backupNote" in _tb
+      and 'v-if="backupNote"' in (frontend / "src/components/ConfigPanel.vue").read_text(encoding="utf-8"), True)
+check("自动备份保留 7 天（README 与后端默认同源）",
+      "保留最近 7 天" in readme and load_config()["backup"]["days"] == 7, True)
 # 属性面板：不跟着点击收起来，生成完（有属性时）自动展开
 check("属性面板不跟点击收、生成完自动展开",
       "store.attrsCollapsed = true;" in js, False)

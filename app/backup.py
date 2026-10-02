@@ -5,6 +5,13 @@
 真要用它恢复时才发现丢的正是最后那段。`Connection.backup()` 通过连接读取当前已提交状态，
 WAL 里的内容一并包含，且在应用正常运行、连接打开时也能安全导出。
 
+两类备份**名字分开**，用途也不同：
+
+| 类别 | 文件名 | 产生 | 轮转 |
+|---|---|---|---|
+| 自动 | `chatbot-<时间戳>.db` | 每次启动（`backup.on_startup`） | 按天数清理（`backup.days`） |
+| 手动 | `manual-<时间戳>.db` | 界面上「手动备份」 | **不清理**：点名要的一份，被自动轮转删掉才是意外；不要了自己在备份目录里删 |
+
 保留策略按**天数**而不是份数：每次启动都会备一份（一天可能好几份），超出保留天数的才清理。
 """
 
@@ -16,16 +23,21 @@ from pathlib import Path
 log = logging.getLogger("wonder_realm")
 
 PREFIX = "chatbot-"
+MANUAL_PREFIX = "manual-"
 SUFFIX = ".db"
+DEFAULT_DAYS = 7
 
 
 def _stamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def existing_backups(backup_dir) -> list[Path]:
-    """按时间升序列出已有备份：文件名是定宽时间戳，按名字排序即按时间排序。"""
-    return sorted(Path(backup_dir).glob(f"{PREFIX}*{SUFFIX}"))
+def existing_backups(backup_dir, prefix: str = PREFIX) -> list[Path]:
+    """按时间升序列出已有备份：文件名是定宽时间戳，按名字排序即按时间排序。
+
+    默认只列**自动**备份——清理只针对它们（手动那份是点名要的，见模块说明）。
+    """
+    return sorted(Path(backup_dir).glob(f"{prefix}*{SUFFIX}"))
 
 
 def _date_of(path: Path):
@@ -71,8 +83,11 @@ def _prune(backup_dir: Path, days: int) -> int:
     return removed
 
 
-def make_backup(db_path, backup_dir, days: int = 14) -> Path | None:
+def make_backup(db_path, backup_dir, days: int = DEFAULT_DAYS, manual: bool = False) -> Path | None:
     """把 db_path 备份进 backup_dir，成功返回备份路径；无需备份或失败返回 None。
+
+    `manual=True` 是界面上点名要的那份：文件名换成 `manual-` 前缀，且**不参与轮转**
+    （自动备份那套按天数的清理不会碰它）。
 
     本函数不抛异常：备份是附加保障，失败只记日志，绝不能因此挡住应用启动。
     """
@@ -83,7 +98,8 @@ def make_backup(db_path, backup_dir, days: int = 14) -> Path | None:
 
     backup_dir = Path(backup_dir)
     stamp = _stamp()
-    target = backup_dir / f"{PREFIX}{stamp}{SUFFIX}"
+    prefix = MANUAL_PREFIX if manual else PREFIX
+    target = backup_dir / f"{prefix}{stamp}{SUFFIX}"
     tmp = target.with_name(target.name + ".tmp")
     try:
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -91,7 +107,7 @@ def make_backup(db_path, backup_dir, days: int = 14) -> Path | None:
         seq = 1
         while target.exists():
             seq += 1
-            target = backup_dir / f"{PREFIX}{stamp}-{seq}{SUFFIX}"
+            target = backup_dir / f"{prefix}{stamp}-{seq}{SUFFIX}"
             tmp = target.with_name(target.name + ".tmp")
         _remove_file(tmp)
 
@@ -126,9 +142,10 @@ def make_backup(db_path, backup_dir, days: int = 14) -> Path | None:
         log.error("备份失败：%s", e)
         return None
 
-    removed = _prune(backup_dir, days)
+    removed = _prune(backup_dir, days) if not manual else 0
     log.info(
-        "已备份数据库到 %s（%d 字节）%s",
+        "已%s备份数据库到 %s（%d 字节）%s",
+        "手动" if manual else "",
         target,
         target.stat().st_size,
         f"，同时清理了 {removed} 份超过 {days} 天的旧备份" if removed else "",

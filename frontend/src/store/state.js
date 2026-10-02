@@ -64,6 +64,10 @@ export const store = reactive({
       // 地址与二维码里都带着它，所以关着开关时它是空的
       lanToken: "",
       lanCopied: false,
+      // 手动备份（见 §5.7）：自动备份只在启动时做，这里给的是"现在就来一份"。
+      // 文件名 manual-*.db，与自动的 chatbot-*.db 分开，也不会被轮转清掉
+      backupBusy: false,
+      backupNote: "",           // 备份成功后那行"已备份 manual-…（大小）"，失败走底部错误条
       firewallCopied: false,    // 「复制防火墙命令」的短暂反馈
       charForm: emptyCharForm(),
       charLocked: false,

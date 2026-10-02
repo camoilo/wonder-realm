@@ -13,6 +13,7 @@ import "./store/panel.js";
 import "./store/character.js";
 import "./store/presets.js";
 import "./store/attrs.js";
+import "./store/backup.js";
 import "./store/desktop.js";
 import "./store/ui.js";
 import { MODES } from "./store/helpers.js";

@@ -12,6 +12,7 @@ from .database import init_db, read_settings
 from .lan_gate import after as gate_after
 from .lan_gate import before as gate_before
 from .routes import (
+    backup,
     characters,
     chat,
     memories,
@@ -77,6 +78,7 @@ def create_app():
 
     app.include_router(characters.router)
     app.include_router(settings.router)
+    app.include_router(backup.router)
     app.include_router(profile.router)
     app.include_router(world.router)
     app.include_router(sessions.router)
