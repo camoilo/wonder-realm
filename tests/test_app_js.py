@@ -1119,6 +1119,28 @@ check("版本号三处一致（app/__init__ / pyproject / desktop/package.json�
       [app_version] * 3)
 check("配置面板底部显示版本（值取自 /api/version）",
       '版本 {{ appVersion }}' in _config and 'api("/api/version")' in js, True)
+# 打包（见 DEVELOPMENT §8.4）：壳要能分两条路起后端（源码 / 随包 exe），配置要备齐两种产物
+_pkg_build = _pkg.get("build", {})
+check("壳能按打包形态起后端（exe + --data-dir，源码形态不变）",
+      'app.isPackaged' in shell_js and "packagedBackend()" in shell_js
+      and '"--no-browser", "--data-dir", dataDir()' in shell_js
+      and '["run.py", "--no-browser"]' in shell_js
+      and "if (SELFTEST) args.push(\"--data-dir\", dataDir())" in shell_js, True)
+check("打包产两种：安装包 + 免安装 zip，图标与后端资源都配好",
+      [t.get("target") for t in _pkg_build.get("win", {}).get("target", [])] == ["nsis", "zip"]
+      and _pkg_build.get("extraResources", [{}])[0].get("to") == "backend"
+      and _pkg_build.get("win", {}).get("icon") == "build/icon.ico"
+      and "Wonder-Realm-Setup-${version}" in _pkg_build.get("nsis", {}).get("artifactName", ""), True)
+check("自检会自备数据（空库也能跑）且不碰用户的库",
+      "seedSelftestData()" in shell_js and 'apiJson("POST", "/api/characters"' in shell_js, True)
+_pyinstaller_spec = (ROOT / "packaging" / "wonder-realm-backend.spec").read_text(encoding="utf-8")
+check("后端 spec 收全了动态导入与静态资源",
+      'collect_submodules("app")' in _pyinstaller_spec
+      and 'collect_submodules("uvicorn")' in _pyinstaller_spec
+      and '(str(APP / "static"), "app/static")' in _pyinstaller_spec, True)
+check("后端用 ASGI 对象而不是导入字符串（冻结后字符串导入会失败）",
+      "uvicorn.run(asgi_app" in (ROOT / "run.py").read_text(encoding="utf-8")
+      and 'uvicorn.run("app.main:app", host' not in (ROOT / "run.py").read_text(encoding="utf-8"), True)
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
       "退出手机视图" in _titlebar and ':class="{on: desktopPhoneView}"' in _titlebar, True)
 check("主题键在壳里搬到标题栏（浏览器留在顶栏）",

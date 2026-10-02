@@ -22,18 +22,23 @@ const APP_ICON = path.join(__dirname, "build", "icon.ico");
 // 后端端口：壳必须和后端用同一个端口，而"换端口"是用户在 config.yaml 的 server.port 里做的，
 // 所以这里也读它（只要未注释的 `port:` 行——配置文件里那些默认值都是注释掉的）。
 // 环境变量 DSH_PORT 优先（临时换端口/多实例用），都拿不到就回默认 17800。
+// 找配置文件的顺序与后端一致（见 app/config.py）：数据目录里的 > 包里那份 > 默认值。
 function backendPort() {
   const env = Number(process.env.DSH_PORT);
   if (env > 0) return env;
-  try {
-    const m = fs.readFileSync(path.join(ROOT, "config.yaml"), "utf8").match(/^\s*port:\s*(\d+)/m);
-    const n = m ? Number(m[1]) : 0;
-    if (n > 0) return n;
-  } catch (e) { /* 配置读不到就用默认值，不能让壳因此起不来 */ }
+  const candidates = app.isPackaged
+    ? [path.join(dataDir(), "config.yaml"),
+       path.join(process.resourcesPath, "backend", "_internal", "config.yaml")]
+    : [path.join(ROOT, "config.yaml")];
+  for (const file of candidates) {
+    try {
+      const m = fs.readFileSync(file, "utf8").match(/^\s*port:\s*(\d+)/m);
+      const n = m ? Number(m[1]) : 0;
+      if (n > 0) return n;
+    } catch (e) { /* 读不到就试下一个；全读不到用默认值，不能让壳因此起不来 */ }
+  }
   return 17800;
 }
-const PORT = backendPort();
-const URL = `http://127.0.0.1:${PORT}/`;
 // 手机视图：**宽度锁死**（一拖宽就跳出手机单栏布局），**高度留给用户拖**（看长内容方便）。
 // 做法是 min==max==PHONE_WIDTH：边框还能拖，但尺寸被钳住，比 setResizable(false) 更符合预期。
 // 尺寸取**传统手机比例 9:16**（375×667，iPhone 8 那一代）：用户明确要"不是现在的全面屏比例"。
@@ -61,6 +66,11 @@ if (SELFTEST) {
     app.setPath("userData", dir);
   } catch (e) { /* 换不了就照常用默认目录 */ }
 }
+
+// 端口与 URL 要**等 userData 定下来之后**再算：自检用的是临时 userData，
+// 它的 config.yaml 决定后端监听哪个端口，壳必须读同一份（见 backendPort）。
+const PORT = backendPort();
+const URL = `http://127.0.0.1:${PORT}/`;
 
 let win = null;
 let backend = null;
@@ -112,11 +122,44 @@ function pythonExe() {
   return process.platform === "win32" ? "python" : "python3"; // 退回 PATH 上的 Python
 }
 
+// 可变数据（config.yaml / data / backups）放哪：一律放壳的 userData，**不放程序目录**。
+// 装到 Program Files 之类的只读位置时才写得进去，卸载/升级也不会动用户的数据（见 DEVELOPMENT §8.4）。
+function dataDir() {
+  return app.getPath("userData");
+}
+
+// 打包后后端在 resources/backend/（electron-builder 的 extraResources）：exe 旁边是 _internal
+function packagedBackend() {
+  return path.join(process.resourcesPath, "backend", "wonder-realm-backend.exe");
+}
+
+// 首次运行放一份 config.yaml 到数据目录：用户想改端口/模型目录时知道去哪儿改
+// （没有它也能跑——后端会退回包里那份模板）
+function seedConfig() {
+  const dst = path.join(dataDir(), "config.yaml");
+  if (fs.existsSync(dst)) return;
+  const src = path.join(process.resourcesPath, "backend", "_internal", "config.yaml");
+  try {
+    fs.copyFileSync(src, dst);
+    log(`已放入默认配置：${dst}`);
+  } catch (e) {
+    log(`放默认配置没成功（会用包内那份）：${e.message}`);
+  }
+}
+
 function startBackend() {
-  const exe = pythonExe();
-  log(`启动后端：${exe} run.py --no-browser（端口 ${PORT}）`);
-  backend = spawn(exe, ["run.py", "--no-browser"], {
-    cwd: ROOT,
+  const packaged = app.isPackaged;
+  const exe = packaged ? packagedBackend() : pythonExe();
+  const args = packaged
+    ? ["--no-browser", "--data-dir", dataDir()]
+    : ["run.py", "--no-browser"];
+  // **自检一律用临时数据目录**（下面那个会建角色/会话的自检数据准备不能写进用户的库）：
+  // 自检的 userData 本来就是临时目录（见开头那段），直接把它当数据根传给后端。
+  if (SELFTEST) args.push("--data-dir", dataDir());
+  if (packaged) seedConfig();
+  log(`启动后端：${exe} ${args.join(" ")}（端口 ${PORT}）`);
+  backend = spawn(exe, args, {
+    cwd: packaged ? path.dirname(exe) : ROOT,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     // 后端输出走的是**管道**，Python 会按控制台代码页编码它（bat 里控制台设成了 936，
@@ -132,6 +175,41 @@ function startBackend() {
     // 后端自己挂了就把窗口关掉：留一个点不动的界面比直接退出更让人困惑
     if (!SELFTEST && code !== 0 && !app.isQuiting) app.quit();
   });
+}
+
+// 自检要跑"打开会话之后"的界面（面板五页、只读页、顶栏那几颗键），而每个新装的库都是空的。
+// 先经接口建一个角色 + 一个会话，自检就不依赖"这台机器的库里恰好有东西"——打包后的自检尤其需要
+// （它用的是全新的临时数据目录，见 DEVELOPMENT §8.4 / §9.8）。
+function apiJson(method, path, body) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const headers = { "Content-Type": "application/json" };
+    if (data) headers["Content-Length"] = Buffer.byteLength(data);
+    const req = http.request(`${URL.replace(/\/$/, "")}${path}`, { method, headers }, (res) => {
+      let buf = "";
+      res.on("data", (b) => { buf += b; });
+      res.on("end", () => {
+        if (res.statusCode >= 400) {
+          return reject(new Error(`${method} ${path} -> ${res.statusCode} ${buf.slice(0, 200)}`));
+        }
+        try { resolve(buf ? JSON.parse(buf) : {}); } catch (e) { resolve({}); }
+      });
+    });
+    req.on("error", reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+
+async function seedSelftestData() {
+  try {
+    const ch = await apiJson("POST", "/api/characters", { name: "自检角色", appearance: "自检用" });
+    const se = await apiJson("POST", "/api/sessions",
+      { mode: "chat", character_id: ch.id, title: "自检会话" });
+    log(`自检：已备好一个角色与一个会话（id ${ch.id}/${se.id}），空库也能跑`);
+  } catch (e) {
+    log(`自检：准备数据失败（${e.message}）——面板相关断言可能量不到`);
+  }
 }
 
 function waitForBackend(timeoutMs = 120000) {
@@ -715,6 +793,7 @@ if (!SELFTEST && !app.requestSingleInstanceLock()) {
       try {
         await waitForBackend();
         log(`后端就绪 ${URL} | 局域网地址 ${lanUrl() || "（没取到网卡）"}`);
+        await seedSelftestData();
         const probe = await selftestWindow();
         const u = probe.ui;
         log(`selftest ok | 桥接 ${probe.bridge} | 桌面宽 ${probe.desktopWidth}px | `

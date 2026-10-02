@@ -75,6 +75,21 @@
 
 ## 安装与启动（Windows）
 
+### 方式一：直接用打包版（不需要装 Python / Node）
+
+从 release 里取一个：
+
+| 文件 | 怎么用 |
+|---|---|
+| `Wonder-Realm-Setup-1.0.0.exe` | 安装包：双击安装（可改安装目录），装完从开始菜单或桌面快捷方式启动 |
+| `Wonder-Realm-1.0.0-x64.zip` | 免安装版：解压到任意目录，双击里面的 `Wonder Realm.exe` |
+
+两个都**只需要机器上装了 [Ollama](https://ollama.com/download)**（模型与运行环境不在包里）。安装包没有代码签名，首次运行 Windows 会提示"未知发布者"，选择"仍要运行"即可。
+
+**数据放在哪**：`%APPDATA%\wonder-realm-desktop\`（`config.yaml` 配置、`data\chatbot.db` 数据库、`backups\` 备份）。卸载或换目录都不会动它；想带走数据就复制这个目录（**先关掉应用**）。
+
+### 方式二：从源码跑（开发 / 想改代码）
+
 **1. 装 Ollama 并拉一个模型**
 
 从 [ollama.com/download](https://ollama.com/download) 安装，然后拉一个小模型先跑通：
@@ -120,6 +135,8 @@ uv run run.py
 1. 在聊天模式或沉浸模式点"新建角色"，填写或用模型生成一个角色。
 2. 点"新建会话"，标题可留空，开始对话。
 3. 想自己写剧本就切到导演模式，直接新建会话。
+
+源码版的库在项目的 `data\chatbot.db`，与打包版的 `%APPDATA%` 那份**不是同一个**；要把现有数据搬到打包版，就把 `data\chatbot.db` 复制进 `%APPDATA%\wonder-realm-desktop\data\`（先关掉应用）。
 
 ## 手机与局域网
 

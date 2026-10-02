@@ -3,12 +3,52 @@
   "private": true,
   "version": "1.0.0",
   "description": "Wonder Realm（奇想界域）的电脑端外壳（Electron）：同一个后端 + 同一份网页，多一个「配置」与「手机视图」",
+  "author": "Wonder Realm",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "selftest": "electron . --selftest"
+    "selftest": "electron . --selftest",
+    "dist": "electron-builder --win --x64"
   },
   "devDependencies": {
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.wonderrealm.desktop",
+    "productName": "Wonder Realm",
+    "copyright": "Wonder Realm（奇想界域）",
+    "directories": {
+      "output": "../dist/release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/backend",
+        "to": "backend"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "zip", "arch": ["x64"] }
+      ]
+    },
+    "artifactName": "Wonder-Realm-${version}-${arch}.${ext}",
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Wonder Realm",
+      "artifactName": "Wonder-Realm-Setup-${version}.${ext}"
+    }
   }
 }

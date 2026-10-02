@@ -237,7 +237,7 @@ flowchart LR
 
 **壳的日志与偏好**都在 `app.getPath("userData")`（Windows：`%APPDATA%\wonder-realm-desktop\`，目录名取自 `desktop/package.json` 的 `name`）：`desktop.log` 里壳自己做的事以 `[desktop] 本地时间 …` 开头，**后端的 stdout/stderr 也混进来**（前缀 `后端:` / `后端(err):`）——窗口没开出来或一片空白时，原因（Python traceback、端口占用、Ollama 没起来）都在这一个文件里。窗口这一步单独留一行：加载成功记 `窗口已打开：<url>`，失败记 `页面加载失败：<错误码> <描述> <url>`。只追加、不轮转（一次启动几 KB）。
 
-**自检**：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径，**当闸门用**（断言不满足就非零退出）。它**不抢单实例锁**（应用开着也要能跑：只开隐藏窗口，后端被占就用现成的），并**改用临时 userData**（`os.tmpdir()/wonder-realm-selftest`）——否则第二个进程会撞 Chromium 的 profile 单例、静默退出，什么都测不到。断言覆盖 preload 桥接、手机视图尺寸规则、顶栏与配置面板的真渲染结果（完整清单见 `desktop/main.js` 里那些 `bad.push`，要点见 9.8）。设 `DSH_SHOT=<png>`（桌面态）或 `DSH_SHOT_PHONE=<png>`（手机视图态）会**短暂显示窗口并截图**（隐藏窗口的 `capturePage` 只能拿到首帧缓存）；**隐藏窗口里 CSS 过渡不会自己推进**，量"抽屉滑出屏外"这类状态要先轮询到归位再量。开发期复用项目 `.venv` 里的 Python。
+**自检**：`electron . --selftest` 起后端 + 开一个**隐藏窗口**跑关键路径，**当闸门用**（断言不满足就非零退出）。它**不抢单实例锁**（应用开着也要能跑：只开隐藏窗口，后端被占就用现成的），并**改用临时 userData**（`os.tmpdir()/wonder-realm-selftest`）——否则第二个进程会撞 Chromium 的 profile 单例、静默退出，什么都测不到；这个临时目录同时当后端的 `--data-dir`，**自检碰不到用户的库**。开跑前还会经接口建一个角色与一个会话（很多断言量的是"打开会话之后"的界面，空库也要能跑）。断言覆盖 preload 桥接、手机视图尺寸规则、顶栏与配置面板的真渲染结果（完整清单见 `desktop/main.js` 里那些 `bad.push`，要点见 9.8）。设 `DSH_SHOT=<png>`（桌面态）或 `DSH_SHOT_PHONE=<png>`（手机视图态）会**短暂显示窗口并截图**（隐藏窗口的 `capturePage` 只能拿到首帧缓存）；**隐藏窗口里 CSS 过渡不会自己推进**，量"抽屉滑出屏外"这类状态要先轮询到归位再量。开发期复用项目 `.venv` 里的 Python；**打包见 8.4**。
 
 **入口脚本 `start_desktop.bat`**（8.1）：先判断依赖与前端产物、需要时重建前端，再拉起 `electron.exe desktop`。窗口与它起的后端都挂在那个 cmd 窗口下，**关掉 cmd 窗口等于关掉应用**——双击后"只有一行提示、看着像卡住"是正常的，界面窗口由 Electron 单独弹出。文件是 **GBK + CRLF**（中文提示在本机控制台才正常），**末尾切到 `chcp 65001`**（Electron 输出是 UTF-8 字节，936 控制台会显示成乱码；日志文件本身是好的），**切换之后余下的行必须纯 ASCII**（cmd 在 65001 下读多字节内容会按字节错位解析），`test_bats.py` 盯着这两条。
 
@@ -587,6 +587,7 @@ wonder-realm/
 ├── docs/
 │   ├── DEVELOPMENT.md              # 本文档
 │   └── images/                     # 文档配图（截图、示意图）
+├── packaging/          # 打包：wonder-realm-backend.spec（PyInstaller，见 8.4）
 ├── app/
 │   ├── main.py        # FastAPI 实例、静态托管、局域网闸门中间件、lifespan 自检
 │   ├── config.py      # 配置加载合并
@@ -621,9 +622,10 @@ wonder-realm/
 │                        TermEditor/AttrEditor/AttrPanel + panes/ + modals/）
 ├── tests/              # 见 9.8
 ├── data/chatbot.db     # SQLite（路径由 config.yaml 指定，不入版本库）
-└── backups/            # 备份目录（不入版本库；见 5.7）
+├── backups/            # 备份目录（不入版本库；见 5.7）
+└── dist/               # 打包产物：backend/（后端 exe）、release/（安装包与 zip），不入版本库（见 8.4）
 ```
-`frontend/node_modules`、`desktop/node_modules`、npm 缓存、`data/`、`backups/` 都不入库；`app/static/` 产物**要提交**（没 Node 也能跑），源码改了忘构建时 `tests/test_app_js.py` 会拦。
+`frontend/node_modules`、`desktop/node_modules`、npm 缓存、`data/`、`backups/`、`dist/` 都不入库；`app/static/` 产物与 `desktop/build/` 的图标**要提交**（没 Node 也能跑、打包要用），源码改了忘构建时 `tests/test_app_js.py` 会拦。
 
 ### 8.2 配置文件
 ```yaml
@@ -669,8 +671,52 @@ data_dir: ./data                  # 数据库目录
 | 手机访问 | 同一 WiFi → 手机浏览器扫配置面板里的二维码（或打开 `http://<电脑局域网IP>:17800` 手输访问码；IP 用 `ipconfig` 查）。后端是同一份：会话、角色、设置在手机与电脑上是同一套数据，页面也就是同一份（手机按 ≤640px 断点走单栏，见 7.1） |
 | 安全边界 | 开着时**只有带对访问码的设备**能用；但 HTTP 是明文，同一 WiFi 上能抓包的人仍可能截到访问码——真正敏感的内容别在不信任的网络开放。要堵这条只能上 HTTPS（自签证书），目前不做。**退出应用即结束**：后端进程随之结束，端口关闭 |
 
+### 8.4 打包与发布
+出一版 release 是**三块活**，顺序不能反（后一块要吃前一块的产物）：
+
+```powershell
+npm run build --prefix frontend                     # 1. 前端 → app/static/
+uv run --group dev pyinstaller packaging/wonder-realm-backend.spec --noconfirm --distpath dist
+                                                    # 2. 后端 → dist/backend/（exe + _internal）
+npm run dist --prefix desktop                       # 3. 壳 → dist/release/
+```
+
+| 产物（`dist/release/`） | 说明 |
+|---|---|
+| `Wonder-Realm-Setup-<版本>.exe` | NSIS 安装包：可选安装目录、建桌面与开始菜单快捷方式（约 90MB） |
+| `Wonder-Realm-<版本>-x64.zip` | 免安装绿色版：解压双击 `Wonder Realm.exe`（约 120MB，解开 300MB） |
+| `win-unpacked/` | 未压缩目录版：打包与自检用的就是它 |
+
+**1. 前端**：electron-builder 不管前端，`app/static/` 必须是已构建状态（产物提交进仓库，见 9.7）。
+
+**2. 后端**（`packaging/wonder-realm-backend.spec`）：一目录模式（启动快、不会每次解压到临时目录），25MB。三个坑：
+- `run.py` 用 **ASGI 对象**（`from app.main import app`）而不是 `uvicorn.run("app.main:app")`：导入字符串是运行时才解析的，冻结后打包器看不见它，起来就报 "Could not import module app.main"。
+- spec 里用 `collect_submodules("app")` + `collect_submodules("uvicorn")`：前者兜住上面那句的导入字符串，后者兜住 uvicorn 按名字动态加载的协议/循环/生命周期实现。
+- 前端产物与 `config.yaml` 模板当 datas 进包（分别落在 `_internal/app/static`、`_internal/config.yaml`）。
+
+**3. 壳**（`desktop/package.json` 的 `build` 段）：`files` 只带 `main.js`/`preload.js`/`package.json`；`extraResources` 把 `dist/backend` 放进 `resources/backend`；图标取 `desktop/build/icon.ico`。国内必须设镜像，否则下载 7zip / nsis 资源会连 GitHub 超时：
+```powershell
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"    # 首次要下 electron 本体时
+```
+
+**装好之后路径是这样的**（`app/config.py` 的两个"根"）：
+- **程序文件**：exe 与 `_internal/`（`app/static`、`config.yaml` 模板）在安装目录 / 解压目录，不需要写权限；
+- **可变数据**：壳的 userData `%APPDATA%\wonder-realm-desktop\` —— `config.yaml`、`data\chatbot.db`、`backups\`。壳 spawn 后端时传 `--data-dir <userData>`，所以程序目录一个字节都不动；
+- **首启**：壳把包里的 `config.yaml` 复制一份到 userData（想改端口/模型目录就改这份）。没有它也能跑——后端会退回包内那份模板；
+- **命令行**：`wonder-realm-backend.exe --data-dir D:\wr-data`（或环境变量 `WR_DATA_DIR`）；`--version` 打印版本号。
+
+**出包必过的验收**：
+1. `dist/release/win-unpacked/Wonder Realm.exe --selftest`：打包形态下的完整自检（后端从 `resources/backend` 起、数据落临时目录），断言不过就非零退出；
+2. 解压 zip 双击一次：窗口标题对、`/api/version` 回 `packaged: true`、userData 里生成了 `config.yaml` 与 `data\chatbot.db`。
+
+**包外依赖与必须说清的边界**：
+- 目标机器要自己装 **Ollama**（不进包）；
+- **没有代码签名**：别人首次运行会看到 SmartScreen"未知发布者"，这不影响使用；
+- 打包版与开发版的库**不是同一个**（前者在 userData，后者在仓库 `data/`）。要带走现有数据，就把 `data/chatbot.db` 复制到 userData 的 `data\` 下——先关掉应用，别在运行时复制；
+- **自检会往临时数据目录里建一个角色与一个会话**（空库也能跑）：它的 userData 与数据根都是 `%TEMP%\wonder-realm-selftest`，碰不到用户的库（见 9.8）。
+
 ## 9. 开发约定与强调
-跨功能、且违反代价明显的约定；功能自身的取舍写在对应章节。
 
 ### 9.1 文档与命名
 - 本文档**只描述当前状态**，不追加变更历史 / 阶段划分 / 决策编号（查"为什么改"用 git）
@@ -734,12 +780,13 @@ data_dir: ./data                  # 数据库目录
 - 源码 `frontend/`、产物提交 `app/static/`：改源码必须 `npm run build`，产物别手改
 
 ### 9.8 测试与验证
-- **清单**：15 个纯 Python + 4 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`/`test_qr.mjs`，需先装前端依赖；`test_qr.mjs` 用 `createRequire` 指到 `frontend/` 解析依赖）。纯前端逻辑用 Node 直连 store 断言，不开浏览器
+- **清单**：16 个纯 Python + 4 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`/`test_qr.mjs`，需先装前端依赖；`test_qr.mjs` 用 `createRequire` 指到 `frontend/` 解析依赖）。纯前端逻辑用 Node 直连 store 断言，不开浏览器
 - **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件、品牌标记是应用图标本体（两处品牌区共用）、标签页与主屏图标已挂、壳的两个窗口都传了 `icon`、防火墙命令与 README 同源、备份双入口与两类备份前缀分开……**新结构约定顺手补断言**
 - **启动脚本的编码约定也上守卫**（`test_bats.py`）：根目录 `*.bat` 必须 CRLF + GBK，并钉住电脑端入口的三处结构（查 `electron.exe` 本体、两种缺失各一条提示、顺手重建前端）
 - **后端"闸门 / 边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机。**请求要显式带 Host**：默认发的 `testserver` 是域名，会被 Host 校验挡下；局域网来客那份 Host 要从 `local_hosts()` 取本机真实地址，与手机打开 `http://<局域网IP>:17800` 一致。访问码的宽容输入、限速、换码作废、开/关闸门即失效都在这里盯着
 - **备份另有一套**（`test_backup.py`）：两类文件名的前缀、副本可读且不是 WAL、7 天轮转（超期删、期内留）、手动那份不被清理也不触发清理、连点不覆盖、库不存在时返回 None
-- **壳（Electron）用自带的自检，且是闸门**：`electron . --selftest`，断言不过就非零退出（见 3.3）
+- **路径解析另有一套**（`test_paths.py`）：程序文件与可变数据两个根、`--data-dir`/`--config`/`WR_DATA_DIR` 三种指定方式、配置里相对路径相对数据根、显式配置优先、换根后配置缓存作废；顺带盯住 `config.yaml` 与 `DEFAULTS` 里的路径必须是相对形式（绝对路径一旦写死，打包后会指回开发机），以及 `_merge` 不能把 `DEFAULTS` 改脏
+- **壳（Electron）用自带的自检，且是闸门**：`electron . --selftest`（源码形态）与 `dist/release/win-unpacked/Wonder Realm.exe --selftest`（打包形态）都要过，断言不过就非零退出（见 3.3、8.4）
 - **守卫反向验证**：故意删被保护的东西确认报红（"碰巧通过"≠"抓得住"）
 - 界面改动要真渲染证据：dev（Vue 警告开）+ 生产产物各跑一遍，控制台零 warning/error；涉及函数名 / 导入 / 绑定**只跑构建会漏**
 - 探针：`MutationObserver` 挂载（`--virtual-time-budget` 下定时器抢跑）；每步等状态稳定；收尾只执行一次（否则不空闲、浏览器不退）；查倍数用"接口条数 − DOM 数"
@@ -756,6 +803,6 @@ data_dir: ./data                  # 数据库目录
 6. **锁定字段无"部分公开"**：要么全锁要么全公开；需要则把 `locked` 改成按字段记录
 7. **词库不能拖拽调序**：目前只能增删（顺序即添加序）；可照背景图那套加拖拽，存储已是数组
 8. **一次会话只能绑一份世界**：导演会话各自一份，聊天 / 沉浸同角色仅一份（跟角色走）；若要同一角色在不同会话处于不同世界，需把绑定从角色挪到会话（`sessions.world_id` 列与接口已备，缺的是聊天 / 沉浸带上它）
-9. **电脑端打包**：当前外壳直接复用项目 `.venv` 的 Python（见 3.3、8.1）；**待做的是打包分发**——PyInstaller 把后端收成 exe（带 `app/`、`app/static/`），electron-builder 出安装包 + 免安装版，首启把 `config.yaml` 写到 `userData`，这样别人的机器上不必装 Python 与 uv（图标已就位，见 3.3 的 `desktop/build/icon.ico`）。同时值得顺手做的还有：**一键添加防火墙规则**（现在只做到"复制命令"，真要免提权得走 UAC 提权，二者选一）、Ollama 未安装时的引导、最小化到托盘
+9. **发布还可以顺手做的几件**（打包本身已就绪，见 8.4）：**代码签名**（消除 SmartScreen"未知发布者"，需要证书）、**一键添加防火墙规则**（现在只做到"复制命令"，真要免提权得走 UAC 提权）、Ollama 未安装时的引导、最小化到托盘、自动更新
 10. **HTTPS**：局域网访问目前是明文 HTTP（访问码可能被同网抓包看到）；要堵这条需自签证书 + 手机手动信任，视需要再做
 

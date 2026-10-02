@@ -120,4 +120,9 @@ if __name__ == "__main__":
         print(ollama_boot.report(status, cfg["ollama"]["base_url"]))
         if not no_browser:
             open_browser_later(url)
-        uvicorn.run("app.main:app", host=host, port=port)
+        # **直接传 ASGI 对象，不写导入字符串**：`uvicorn.run("app.main:app")` 在 PyInstaller
+        # 冻结后找不到模块（导入字符串是运行时才解析的，打包器静态分析看不见）。
+        # 这句必须留在这里（而不是模块顶部）：`create_app()` 会读配置，而数据根要先由
+        # 上面的参数定下来（见 app/config.py 的懒加载）。
+        from app.main import app as asgi_app
+        uvicorn.run(asgi_app, host=host, port=port)
