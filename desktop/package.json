@@ -1,7 +1,7 @@
 {
   "name": "wonder-realm-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Wonder Realm（奇想界域）的电脑端外壳（Electron）：同一个后端 + 同一份网页，多一个「配置」与「手机视图」",
   "main": "main.js",
   "scripts": {

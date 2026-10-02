@@ -13,6 +13,7 @@ export const store = reactive({
       currentModel: "",
       modelWarning: "",
       ollamaBusy: false,   // 「重试」正在让后端再确保一次 Ollama
+      appVersion: "",      // 后端版本号（配置面板底部显示；单一来源在 app/__init__.py）
       disableThinking: false,
       characters: [],
       sessions: [],

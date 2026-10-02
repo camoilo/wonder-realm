@@ -4,12 +4,14 @@ Vue options API 的 data / computed / methods 共用一个实例命名空间，�
 静默失效——之前 bgDragOver 数据字段盖掉同名方法就是这个坑，所以这里盯住它。
 """
 import pathlib
+import json
 import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app import __version__ as app_version  # noqa: E402
 from app.character_gen import HIDDEN_FIELDS  # noqa: E402
 from app.config import load_config  # noqa: E402
 
@@ -1109,6 +1111,14 @@ check("图标资源齐备（vite 从 frontend/public/ 拷进 app/static/）",
 check("壳把窗口图标接上了（两个窗口都要传）",
       "const APP_ICON = path.join(__dirname, \"build\", \"icon.ico\")" in shell_js
       and shell_js.count("icon: APP_ICON,") == 2, True)
+# 版本号三处必须一致（后端是唯一来源，另两处是打包工具要读的）
+_pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+_pkg = json.loads((ROOT / "desktop" / "package.json").read_text(encoding="utf-8"))
+check("版本号三处一致（app/__init__ / pyproject / desktop/package.json）",
+      [app_version, re.search(r'^version = "([^"]+)"', _pyproject, re.M).group(1), _pkg["version"]],
+      [app_version] * 3)
+check("配置面板底部显示版本（值取自 /api/version）",
+      '版本 {{ appVersion }}' in _config and 'api("/api/version")' in js, True)
 check("手机视图键在手机视图下仍然渲染（文案变成退出）",
       "退出手机视图" in _titlebar and ':class="{on: desktopPhoneView}"' in _titlebar, True)
 check("主题键在壳里搬到标题栏（浏览器留在顶栏）",

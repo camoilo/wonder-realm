@@ -1,10 +1,12 @@
 import os
+import sys
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .. import lan_auth, ollama_boot, ollama_client
+from .. import __version__
 from ..config import get_config
 from ..database import (
     get_db,
@@ -20,6 +22,15 @@ from ..prompts import DEFAULT_SETTINGS, FIELDS
 from ..schemas import LanClaimIn, SettingsIn
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/version")
+def get_version():
+    """应用版本（单一来源在 `app/__init__.py`）。界面在配置面板底部显示它。
+
+    `packaged` 说明这次跑的是打包后的 exe 还是源码——排查"数据到底写到哪去了"时要看它。
+    """
+    return {"version": __version__, "packaged": bool(getattr(sys, "frozen", False))}
 
 
 @router.get("/limits")

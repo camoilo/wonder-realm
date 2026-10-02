@@ -8,8 +8,9 @@ from pathlib import Path
 
 import uvicorn
 
-from app import backup, database
+from app import backup, config, database
 from app import ollama_boot
+from app import __version__
 from app.config import get_config
 
 log = logging.getLogger("wonder_realm")
@@ -44,19 +45,43 @@ def startup_backup(cfg: dict) -> Path | None:
     )
 
 
+def _arg_value(args: list[str], name: str) -> str | None:
+    """取 `--name value` 或 `--name=value` 的值；没给返回 None。
+
+    手写而不是上 argparse：这里只有三个开关，参数少、要能容忍未知参数（壳会透传别的开关）。
+    """
+    for i, a in enumerate(args):
+        if a == name:
+            return args[i + 1] if i + 1 < len(args) else None
+        if a.startswith(name + "="):
+            return a.split("=", 1)[1]
+    return None
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     # --no-browser：给桌面端（Electron）用——它自己开窗口，不要再弹一个系统浏览器。
     # --lan / --no-lan：设置"推送局域网"开关（写进库，立即生效，不用改 config 再重启）。
     # 桌面端有顶栏「配置」按钮，这两个参数是给不带桌面端的命令行用户留的路子（见 §8.3）
+    # --data-dir / --config：把可变数据（config.yaml / data / backups）指到别处——打包版由壳
+    #   指到用户数据目录（见 §8.4）；不指定就与程序同目录（绿色版）
     args = sys.argv[1:]
+    if "--version" in args:
+        print(__version__)
+        sys.exit(0)
     no_browser = "--no-browser" in args
+    # **先定路径再读配置**：get_config() 是懒加载的，这里定完它才第一次算路径
+    config.set_config_path(_arg_value(args, "--config"))
+    config.set_data_root(_arg_value(args, "--data-dir"))
+
     cfg = get_config()
     host = cfg["server"]["host"]
     port = cfg["server"]["port"]
     # 监听地址可能是 0.0.0.0，浏览器需要能访问的具体地址
     browser_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     url = f"http://{browser_host}:{port}"
+    # 打印路径：装成 exe 后"数据到底写到哪去了"是最常要确认的一件事
+    print(f"数据目录：{cfg['data_dir']}（配置：{config.config_path()}）")
 
     # 无论这次是真的起服务还是"已经在跑"，都先留一份备份。
     # 放在 uvicorn.run() 之前：留下的是上次运行结束时的库，而不是本次启动刚建过表的。

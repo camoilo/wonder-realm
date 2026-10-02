@@ -1,6 +1,6 @@
 [project]
 name = "ollama-agent"
-version = "0.1.0"
+version = "1.0.0"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",
@@ -8,6 +8,10 @@ dependencies = [
     "pyyaml>=6.0.3",
     "uvicorn>=0.53.0",
 ]
+
+[dependency-groups]
+# 打包用（见 DEVELOPMENT §8.4）：把后端收成 exe，运行时不需要它
+dev = ["pyinstaller>=6.11"]
 
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"

@@ -49,6 +49,7 @@
     <p class="hint">启动时自动备份的留在 <code>backups/</code> 里、只保留最近 7 天；上面这个手动备份不会被自动清理。</p>
     <p class="hint">局域网开着时只有带访问码的设备能访问；传输没有加密，同一 WiFi 里抓包仍可能拿到访问码，
       公共网络里建议直接关掉。</p>
+    <p v-if="appVersion" class="hint dc-version">版本 {{ appVersion }}</p>
   </div>
 </template>
 
@@ -58,6 +59,7 @@ import QRCode from "qrcode";
 import { store } from "../store.js";
 
 const {
+  appVersion,
   backupBusy,
   backupNote,
   firewallCopied,

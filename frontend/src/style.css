@@ -1496,6 +1496,8 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   image-rendering: pixelated;
 }
 .dc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 版本行：面板最底那行，只读信息，与别的说明行同一档字号 */
+.dc-version { opacity: 0.75; }
 .dc-act { padding: 6px 10px; font-size: 12.5px; }
 /* 局域网没开时二维码置灰：地址是真的，但手机此刻连不上 */
 .dc-qr.dim { opacity: 0.35; }

@@ -103,6 +103,12 @@ Object.assign(store, {
     } catch (e) {
       /* 用兜底值 */
     }
+    // 版本号（配置面板底部显示一行）：只是显示，拿不到就留空，不该影响别的步骤
+    try {
+      store.appVersion = (await store.api("/api/version")).version || "";
+    } catch (e) {
+      /* 留空 */
+    }
     // "我的设定"是每个主体一份：当前那份 + 预设库，都只在启动时取一次
     try {
       const p = await store.api("/api/profile");
