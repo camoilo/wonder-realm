@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
     -- 是否允许局域网来源访问（见 §8.3）：0 = 只有本机可用（默认，安全优先）。
     -- 监听地址可能是 0.0.0.0（端口对外开放），放不放行由这道开关在应用层决定
     lan_enabled      INTEGER NOT NULL DEFAULT 0,
+    -- 局域网访问码：非本机来源要带对才放行（见 §8.3）。开着开关时一定有值，
+    -- 关掉即清空（已发出去的 Cookie 一并作废）。生成在 app/lan_auth.py
+    lan_token        TEXT NOT NULL DEFAULT '',
     updated_at       TEXT NOT NULL
 );
 
@@ -161,7 +164,7 @@ _COLUMN_MIGRATIONS = {
     # 语义不同；升级后称呼为空 = 模型暂时不称呼你，由用户自己填。
     "user_profiles": {"call_name": "TEXT NOT NULL DEFAULT ''"},
     # app_settings 是单行设置表：每加一个偏好就在这里登记一次
-    "app_settings": {"lan_enabled": "INTEGER NOT NULL DEFAULT 0"},
+    "app_settings": {"lan_enabled": "INTEGER NOT NULL DEFAULT 0", "lan_token": "TEXT NOT NULL DEFAULT ''"},
 }
 
 # 老库里的旧表名 → 新表名。改名的理由：这两张表装的都是"当前那份 + 若干预设"，
@@ -729,20 +732,22 @@ def read_settings() -> dict:
     con = connect()
     try:
         row = con.execute(
-            "SELECT model, memory_model, disable_thinking, lan_enabled "
+            "SELECT model, memory_model, disable_thinking, lan_enabled, lan_token "
             "FROM app_settings WHERE id=1"
         ).fetchone()
     finally:
         con.close()
     if not row:
         return {
-            "model": "", "memory_model": "", "disable_thinking": False, "lan_enabled": False,
+            "model": "", "memory_model": "", "disable_thinking": False,
+            "lan_enabled": False, "lan_token": "",
         }
     return {
         "model": row["model"],
         "memory_model": row["memory_model"],
         "disable_thinking": bool(row["disable_thinking"]),
         "lan_enabled": bool(row["lan_enabled"]),
+        "lan_token": row["lan_token"],
     }
 
 
@@ -770,3 +775,20 @@ def write_lan_enabled(enabled: bool) -> None:
         con.commit()
     finally:
         con.close()
+
+
+def write_lan_token(token: str) -> str:
+    """换/清局域网访问码（见 DEVELOPMENT §8.3），返回写入后的值。
+
+    只在两处调用：打开开关时补一个（没有才补）、用户点「重新生成」、以及关掉开关时清空。
+    """
+    con = connect()
+    try:
+        con.execute(
+            "UPDATE app_settings SET lan_token=?, updated_at=? WHERE id=1",
+            (token, now()),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return token

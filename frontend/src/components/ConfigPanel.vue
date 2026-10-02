@@ -16,14 +16,21 @@
     <p class="dc-status">{{ statusText }}</p>
 
     <!-- 二维码**只在局域网开着时才画**：关着时什么都不显示——
-         界面是给用户用的，不用介绍"打开开关后会怎样" -->
+         界面是给用户用的，不用介绍"打开开关后会怎样"。
+         码与地址里都带着访问码（`?k=`）：非本机来源要带对它才放行（见 DEVELOPMENT §8.3） -->
     <template v-if="lanUrl && lanEnabled">
       <canvas ref="qrEl" class="dc-qr" width="232" height="232" aria-label="手机访问二维码"></canvas>
       <div class="dc-row">
-        <span class="dc-url">{{ lanUrl }}</span>
+        <span class="dc-url">{{ lanLink }}</span>
         <button class="ghost-btn dc-copy" @click="copyLanUrl">{{ lanCopied ? "已复制" : "复制" }}</button>
       </div>
-      <p class="hint">手机连同一个 WiFi，扫码或直接打开这个地址即可。</p>
+      <div class="dc-row">
+        <span class="dc-label">访问码</span>
+        <span class="dc-code">{{ lanToken }}</span>
+        <button class="ghost-btn dc-copy" :disabled="lanBusy" @click="regenerateLanCode">重新生成</button>
+      </div>
+      <p class="hint">手机连同一个 WiFi，扫上面的码就能进；换一台设备要重新扫（地址里带着访问码，
+        别把它发给别人）。</p>
     </template>
     <!-- 关着（或没地址）时这里**什么都不显示**：不做"打开后会怎样"的介绍 -->
     <p v-else-if="!lanUrl" class="hint">没取到局域网地址（用 ipconfig 看一眼本机 IPv4，确认连着 WiFi/网线）。</p>
@@ -34,7 +41,8 @@
       <button class="ghost-btn dc-act" @click="openLog">打开日志文件</button>
     </div>
     <p class="hint">防火墙命令要在<strong>管理员</strong>权限的 PowerShell 里执行，只需一次。</p>
-    <p class="hint">应用没有账号体系：在公共网络里建议把上面的开关关掉。</p>
+    <p class="hint">局域网开着时只有带访问码的设备能访问；传输没有加密，同一 WiFi 里抓包仍可能拿到访问码，
+      公共网络里建议直接关掉。</p>
   </div>
 </template>
 
@@ -48,6 +56,8 @@ const {
   lanBusy,
   lanCopied,
   lanEnabled,
+  lanLink,
+  lanToken,
   lanUrl,
 } = toRefs(store);
 
@@ -56,6 +66,7 @@ const {
   stopAllGenerations,
   copyLanUrl,
   openLog,
+  regenerateLanCode,
   toggleLan,
 } = store;
 
@@ -71,18 +82,18 @@ const statusText = computed(() => {
 // 二维码：232px 画布 + CSS 116px，高分屏下也不糊
 const qrEl = ref(null);
 async function paint() {
-  if (!qrEl.value || !lanUrl.value) return;
+  if (!qrEl.value || !lanLink.value) return;
   try {
-    await QRCode.toCanvas(qrEl.value, lanUrl.value, {
+    await QRCode.toCanvas(qrEl.value, lanLink.value, {
       width: 232, margin: 1, errorCorrectionLevel: "M",
     });
   } catch (e) {
     store.error = `二维码生成失败：${e.message}`;
   }
 }
-onMounted(() => { if (lanUrl.value && lanEnabled.value) paint(); });
-watch([lanUrl, lanEnabled], async () => {
+onMounted(() => { if (lanLink.value && lanEnabled.value) paint(); });
+watch([lanLink, lanEnabled], async () => {
   await nextTick();          // 等 v-if 里的 canvas 真的挂上再画（开关一开才挂载）
-  if (lanUrl.value && lanEnabled.value) paint();
+  if (lanLink.value && lanEnabled.value) paint();
 });
 </script>

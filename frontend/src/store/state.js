@@ -60,6 +60,9 @@ export const store = reactive({
       lanEnabled: false,        // 后端"推送局域网"开关（读 /api/settings 带回）
       lanBusy: false,
       lanUrl: "",               // 局域网地址（壳按网卡算出来给的，用于复制与二维码）
+      // 局域网访问码（后端生成，读 /api/settings 带回）：非本机来源要带对它才放行（见 §8.3）。
+      // 地址与二维码里都带着它，所以关着开关时它是空的
+      lanToken: "",
       lanCopied: false,
       firewallCopied: false,    // 「复制防火墙命令」的短暂反馈
       charForm: emptyCharForm(),

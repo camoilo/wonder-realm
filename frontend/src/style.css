@@ -1471,6 +1471,17 @@ textarea:disabled { background: var(--field-disabled); color: var(--text-soft); 
   padding: 6px 8px;
 }
 .dc-copy { flex: none; padding: 6px 10px; font-size: 12.5px; }
+.dc-code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--text);
+}
 /* 状态行：端口 / Ollama / 局域网，只读信息不放控件 */
 .dc-status {
   margin: 0;

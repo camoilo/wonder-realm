@@ -2,8 +2,9 @@ import os
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-from .. import ollama_boot, ollama_client
+from .. import lan_auth, ollama_boot, ollama_client
 from ..config import get_config
 from ..database import (
     get_db,
@@ -11,11 +12,12 @@ from ..database import (
     read_settings,
     write_disable_thinking,
     write_lan_enabled,
+    write_lan_token,
 )
 from ..limits import LIMITS
 from ..net import is_loopback
 from ..prompts import DEFAULT_SETTINGS, FIELDS
-from ..schemas import SettingsIn
+from ..schemas import LanClaimIn, SettingsIn
 
 router = APIRouter(prefix="/api")
 
@@ -72,7 +74,44 @@ async def update_settings(body: SettingsIn, request: Request, db=Depends(get_db)
         write_disable_thinking(body.disable_thinking)
     if body.lan_enabled is not None:
         write_lan_enabled(body.lan_enabled)
+        # 打开时若还没有访问码就补一个（已经有了就留着，重新开关不该把手机踢下线）；
+        # 关掉时清空：那道闸门一关，已经发出去的 Cookie 也一并作废（见 §8.3）
+        if body.lan_enabled and not read_settings()["lan_token"]:
+            write_lan_token(lan_auth.new_code())
+        elif not body.lan_enabled:
+            write_lan_token("")
     return read_settings()
+
+
+@router.post("/lan/claim")
+def claim_lan_access(body: LanClaimIn, request: Request):
+    """用访问码换一张 Cookie（手机端首次进来、或访问码换过之后）。
+
+    它是闸门里**唯一**不需要码就能到达的接口：没码的人正是靠它进来。所以校验与限速都在这里：
+    码错记一次失败，同一来源一分钟内错够 `lan_auth.FAIL_LIMIT` 次就 429。
+    """
+    ip = request.client.host if request.client else ""
+    if lan_auth.too_many_fails(ip):
+        raise HTTPException(429, "试错次数太多，请等一分钟再试")
+    stored = read_settings()["lan_token"]
+    if not lan_auth.matches(stored, body.code):
+        lan_auth.note_fail(ip)
+        raise HTTPException(401, "访问码不对")
+    lan_auth.clear_fails(ip)
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(
+        lan_auth.COOKIE_NAME, stored,
+        max_age=lan_auth.COOKIE_MAX_AGE, httponly=True, samesite="lax", path="/",
+    )
+    return resp
+
+
+@router.post("/lan/regenerate")
+def regenerate_lan_token(request: Request):
+    """换一个访问码：旧设备要重新扫码。只有本机能做（和开关同一条理由）。"""
+    if not is_loopback(request.client):
+        raise HTTPException(403, "只有这台电脑上能换访问码")
+    return {"lan_token": write_lan_token(lan_auth.new_code())}
 
 
 @router.get("/models")

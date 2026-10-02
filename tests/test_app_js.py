@@ -1166,7 +1166,19 @@ check("二维码是 qrcode 画在 canvas 上（不手搓、不用 v-html）",
       "QRCode.toCanvas(" in _config and "v-html" not in _config, True)
 check("二维码只在「开关开着 + 取到地址」时才画",
       'v-if="lanUrl && lanEnabled"' in _config
-      and "if (lanUrl.value && lanEnabled.value) paint();" in _config, True)
+      and "if (lanLink.value && lanEnabled.value) paint();" in _config, True)
+# 手机那条链接要**带着访问码**：后端非本机来源只认带码的请求（见 DEVELOPMENT §8.3）
+check("手机链接带着访问码，二维码画的也是它",
+      "this.lanToken ? `${this.lanUrl}/?k=${this.lanToken}` : this.lanUrl" in js
+      and "QRCode.toCanvas(qrEl.value, lanLink.value" in _config
+      and "navigator.clipboard.writeText(this.lanLink)" in js, True)
+check("配置面板能换访问码（旧的设备立刻失效）",
+      'class="dc-code"' in _config and "regenerateLanCode" in _config
+      and 'api("/api/lan/regenerate", { method: "POST" })' in js
+      and "this.lanToken = r.lan_token || \"\";" in js, True)
+check("开关切换把访问码一起读回来",
+      "this.lanToken = s.lan_token || \"\";"
+      in js.split("async toggleLan()")[1].split("async regenerateLanCode()")[0], True)
 check("配置面板层级在浮层与弹窗之间",
       ".desktop-config {" in css and "z-index: 600;" in css
       and css.index("z-index: 600;") < css.index(".modal-mask {"), True)

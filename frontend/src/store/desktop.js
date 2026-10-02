@@ -3,7 +3,7 @@
 // 壳在 preload 里注入 `window.dshDesktop`（开窗口、缩放手机视图、算局域网地址都是壳的事）；
 // 网页端与手机浏览器没有这个对象，于是"配置 / 手机视图"两个键、以及复制局域网地址的能力
 // 自然不会出现——**同一份前端代码，桌面端只是多了一层壳**。
-import { watch } from "vue";
+import { computed, watch } from "vue";
 import { store } from "./state.js";
 
 export function initDesktop() {
@@ -63,6 +63,21 @@ Object.assign(store, {
         store.jsonOpts("PUT", { lan_enabled: !store.lanEnabled })
       );
       store.lanEnabled = !!s.lan_enabled;
+      store.lanToken = s.lan_token || "";
+    } catch (e) {
+      store.error = e.message;
+    } finally {
+      store.lanBusy = false;
+    }
+  },
+  // 换一个访问码：旧的设备立刻失效，要重新扫（见 §8.3）
+  async regenerateLanCode() {
+    if (store.lanBusy) return;
+    store.lanBusy = true;
+    try {
+      const r = await store.api("/api/lan/regenerate", { method: "POST" });
+      store.lanToken = r.lan_token || "";
+      store.lanCopied = false;
     } catch (e) {
       store.error = e.message;
     } finally {
@@ -73,7 +88,7 @@ Object.assign(store, {
     if (!store.lanUrl) await store.refreshLanUrl();
     if (!store.lanUrl) return;
     try {
-      await navigator.clipboard.writeText(store.lanUrl);
+      await navigator.clipboard.writeText(store.lanLink);
       store.lanCopied = true;
       setTimeout(() => { store.lanCopied = false; }, 1500);
     } catch (e) {
@@ -105,4 +120,11 @@ Object.assign(store, {
       store.error = `打开日志失败：${e.message}`;
     }
   },
+});
+
+// 手机要打开的那条地址：**带着访问码**（`?k=`）。首次打开就把码换成 Cookie 并把 URL 里的码擦掉，
+// 所以这条链接只该给可信的设备（见 §8.3）。
+store.lanLink = computed(() => {
+  if (!store.lanUrl) return "";
+  return store.lanToken ? `${store.lanUrl}/?k=${store.lanToken}` : store.lanUrl;
 });

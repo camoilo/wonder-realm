@@ -227,3 +227,8 @@ class SettingsIn(BaseModel):
     disable_thinking: bool | None = None
     # 是否允许局域网来源访问（见 §8.3）；None 表示这次不改它。只有本机能改
     lan_enabled: bool | None = None
+
+
+class LanClaimIn(BaseModel):
+    """手机端用访问码换 Cookie（见 §8.3）。宽容处理（大小写、空格、连字符）在 lan_auth 里。"""
+    code: str = ""

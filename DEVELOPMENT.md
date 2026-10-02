@@ -213,7 +213,7 @@ flowchart LR
 | 开窗口 | `loadURL("http://127.0.0.1:17800/")`：**与浏览器里那份完全同一个页面**；外链走系统浏览器；菜单只留"视图 / 窗口"两项（刷新、手机视图、缩放、开发者工具） |
 | 手机视图 | 把窗口收成手机大小：**宽度锁死 375**（`setMinimumSize`/`setMaximumSize` 都设 `PHONE_WIDTH + 边框差`，边框还能拖但尺寸被钳住，比 `setResizable(false)` 更符合预期）、**高度留给用户拖**（480–1400，默认 **667 = 9:16 的传统手机比例**，不是现在的全面屏 19.5:9；仍会按工作区收一下），页面按已有的 `≤640px` 断点自己变成手机单栏；进/出都通过 `desktop:phone-view` 事件告诉页面，页面据此**隐藏桌面专属键**；退出时恢复进手机视图前的桌面尺寸。**切视图前后窗口中心不动**（`setBoundsCentered()` 按中心改尺寸、贴边时再夹回工作区），用户要求的是"居中扩展或者收缩"而不是从左上角缩/涨。**手机视图期间窗口置顶**（`setAlwaysOnTop(true)`，退回桌面视图时取消）：它是"预览 / 收纳"用的，被别的窗口压住就没意义 |
 | 单实例与退出 | `requestSingleInstanceLock()`：第二次双击只把已有窗口叫到前面；`before-quit` 杀掉后端子进程（后端是 `run.py` 自己开 uvicorn，一个进程，`kill()` 即可） |
-| 局域网地址 | `os.networkInterfaces()` 挑一个真实 IPv4（优先 `192.168.`/`10.`/`172.16-31.`）拼成 `http://<IP>:17800` 交给页面：那里既显示地址（可复制）、也**画成二维码给手机扫**；**拿不到就显示"没取到局域网地址"**，不猜 |
+| 局域网地址 | `os.networkInterfaces()` 挑一个真实 IPv4（优先 `192.168.`/`10.`/`172.16-31.`）拼成 `http://<IP>:17800` 交给页面：那里既显示地址（可复制）、也**画成二维码给手机扫**（**地址与二维码都带访问码** `?k=`，见 8.3；码由后端给，壳管不着）；**拿不到就显示"没取到局域网地址"**，不猜 |
 | 自绘标题栏 | Windows 上用 **Window Controls Overlay**（`titleBarStyle: "hidden"` + `titleBarOverlay`）：系统标题栏交给页面画，**最小化/最大化/关闭仍由系统画在右上角**。窗口最上面那一行（`TitleBar.vue`）于是横向铺满整个窗口：**左边图标 + 应用名，右边主题 / 配置 / 手机视图，再往右就是系统那三个按钮**；页面的会话名 / 搜索 / 模型 / 思考在它下面那一行（`TopBar.vue`），不再混进标题栏。代价与约束：① 这一行是拖拽区（`-webkit-app-region: drag`，里面的控件逐个 `no-drag`）；② 高度必须与 CSS 的 `--titlebar-h` 同值（`TITLEBAR_H = 32`，取 Windows 原生标题栏高度，不同值系统三键就跟页面按钮错开）；③ 右上角要留出系统按钮的宽度（`env(titlebar-area-*)`）；④ 那三个按钮是**壳**画的，主题一变页面要告诉壳（`desktop:set-titlebar-theme`），否则深色页面顶着一条浅色带；⑤ 窗口键按系统那三个的样式做（`.win-btn`：46px 宽、满高、无圆角、悬停浅灰），两种按钮才是"一套"。非 Windows 自动退回系统标题栏 |
 | 打开日志 | `ipcMain.handle("desktop:open-log")` → `shell.openPath(userData/desktop.log)`：配置面板里一个键就能用记事本打开它（排查时不用自己去翻 `%APPDATA%`） |
 
@@ -222,7 +222,7 @@ flowchart LR
 **页面侧只有两样东西是"壳专属"**：标题栏那一行的「主题 / 配置 / 手机视图」三个窗口键，靠 preload 注入的 `window.dshDesktop` 判定（`isDesktop`）——网页端与手机浏览器没有这个对象，于是它们根本不渲染（见 7.1）；浏览器里的主题键留在页面顶栏，App 品牌区也由左栏自己显示（壳里那一行已经有了，免得同一个名字出现两次）。
 **「配置」不看会话**：它在标题栏里，任何时候都在——空状态下也进得去。
 **「手机视图」键在手机视图下**不隐藏（只是变成选中态、文案改成"退出手机视图"）：反过来的话进去就没有看得见的出路了——菜单栏是 `autoHideMenuBar`，F9 与菜单项都不显眼。手机视图那一屏只显示窗口键（图标与应用名让位），375 减去系统按钮那 ~136px 正好放得下。
-**"推送局域网"不走壳**：它是后端 `app_settings.lan_enabled`（默认关），页面上的开关就是 `PUT /api/settings`，立即生效、不重启后端（见 8.3）。壳只提供"地址"和"手机视图"这两件后端做不到的事。
+**"推送局域网"不走壳**：它是后端 `app_settings.lan_enabled`（默认关）+ `lan_token`（访问码），页面上的开关就是 `PUT /api/settings`（面板里的「重新生成」是 `POST /api/lan/regenerate`），立即生效、不重启后端（见 8.3）。壳只提供"地址"和"手机视图"这两件后端做不到的事。
 
 **壳的日志与偏好**都在 `app.getPath("userData")`（Windows：`%APPDATA%\wonder-realm-desktop\`，目录名取自 `desktop/package.json` 的 `name`）：
 - `desktop.log`：壳自己做的事以 `[desktop] 本地时间 …` 开头，**后端的 stdout/stderr 也一并混进来**（前缀 `后端:` / `后端(err):`）——所以窗口没开出来、或打开后一片空白时，原因（Python traceback、端口占用、Ollama 没起来）都在这一个文件里。窗口这一步单独留一行：加载成功记 `窗口已打开：<url>`，失败记 `页面加载失败：<错误码> <描述> <url>`——有它才能一眼分清"壳没起来"和"壳起了、页面没出来"。只追加、不轮转（一次启动几 KB，可忽略）。
@@ -302,7 +302,7 @@ memories(id, scope_type CHECK('character','session'), scope_id, content,
     message_count, updated_at, UNIQUE(scope_type, scope_id))
 
 app_settings(id CHECK(id=1), model, memory_model,       -- 单行表：运行时设置+界面偏好
-    disable_thinking, updated_at)
+    disable_thinking, lan_enabled, lan_token, updated_at)
 
 character_images(id, character_id FK CASCADE, position, data, created_at)  -- 对话背景图
 CREATE INDEX idx_character_images ON character_images(character_id, position, id);
@@ -312,7 +312,7 @@ CREATE INDEX idx_character_images ON character_images(character_id, position, id
 - **`archived` 而非物理删除**：压缩后仍留库，前端折叠显示"已归档 N 条"，上下文跳过 `archived=1`
 - **`scenario`/`content` 分列**：编辑、渲染、注入独立处理，不靠运行时解析
 - **删角色**：`character_id` 置 NULL、记忆删除，会话保留（可看不可续，提示"角色已删除"）；不级联删会话
-- **`app_settings` 单行表**存模型 + 界面偏好（`disable_thinking`）；`config.yaml` 仅初始化默认
+- **`app_settings` 单行表**存模型 + 界面偏好（`disable_thinking`、`lan_enabled`、`lan_token`）；`config.yaml` 仅初始化默认
 - **`title_auto` 字段**而非比对标题字符串（用户可能真命名"新会话"）
 - **词库用一列 JSON 而非单独词条表**：整体读写、有序、可增删，一次 UPDATE；解析失败退回空列表（不拖垮生成）
 - **新功能优先开新表**：`CREATE TABLE IF NOT EXISTS` 对已有库也建表；**加列必须登记** `_COLUMN_MIGRATIONS`（幂等补上，漏登记=老库该列永远不存在），且只支持加列（改类型/删列/改约束要重建）
@@ -449,7 +449,9 @@ event: error  {"message"}                       # 中断发送并结束流
 ### 6.6 运行设置与模型
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET/PUT | `/api/settings` | 运行时设置 `{model, memory_model, disable_thinking}`；只在真要改模型名才查已安装列表（未装 400、连不上 502） |
+| GET/PUT | `/api/settings` | 运行时设置 `{model, memory_model, disable_thinking, lan_enabled, lan_token}`；只在真要改模型名才查已安装列表（未装 400、连不上 502）；`lan_enabled` 只有本机能改，打开时补访问码、关掉时清空（见 8.3） |
+| POST | `/api/lan/claim` | 用访问码换 Cookie（手机首次进来）。闸门里唯一不需要码就能到达的接口，限速在它身上 |
+| POST | `/api/lan/regenerate` | 换一个访问码；只有本机能调 |
 | GET | `/api/models` | `/api/tags`×`/api/show` 并集得 `thinking` 标记 |
 | GET | `/api/gen-settings` | 生成要求表单定义 `{fields, defaults}`，前端据此动态渲染 |
 | GET/PUT | `/api/profile` | 我的设定（当前 id=1），整体覆盖保存 |
@@ -547,7 +549,9 @@ wonder-realm/
 │   ├── character_gen.py  # 生成角色、草稿、探索锁定裁剪
 │   ├── backup.py      # 在线备份（5.7）
 │   ├── generation.py  # 生成主流程：组装→SSE→解析落库/停止保留
-│   ├── net.py         # 来源地址判定（is_loopback）：局域网闸门与"只有本机能改开关"共用
+│   ├── net.py         # 来源/主机判定（is_loopback、host_ok）：局域网闸门与"只有本机能改开关"共用
+│   ├── lan_auth.py    # 局域网访问码：生成/宽容比对/领码限速（8.3）
+│   ├── lan_gate.py    # 局域网闸门的两半（before/after）：Host 校验、开关、访问码（8.3）
 │   ├── routes/        # characters/sessions/chat/messages/memories/profile/world/settings
 │   └── static/        # **构建产物**（提交进仓库，不要手改）
 ├── desktop/            # 电脑端外壳（Electron，3.3）：main.js / preload.js / package.json
@@ -596,15 +600,19 @@ data_dir: ./data                  # 直接指定
 | 监听 | `server.host` 默认 `0.0.0.0`（所有网卡都听）；想彻底不对外就改 `127.0.0.1`，**改完重启** |
 | 推送开关 | `lan_enabled`：关着时非本机来源一律 **403**，本机永远放行 |
 | 每次启动 | **`run.py` 启动时一律写回关闭**；要开就在界面里点，或用 `--lan` 显式启动 |
-| 二维码 | **只在开关开着、且真取到局域网地址时才画**；关着时配置面板**什么都不显示**（不做「打开后会怎样」的介绍：界面是给用户用的，不是功能说明） |
-| 闸门位置 | `app/main.py` 的 `lan_gate` 中间件按 `app/net.py is_loopback()` 判来源。**放应用层而不是改监听地址重启**：桌面端的按钮要能立即开关，重启后端会打断正在进行的生成 |
-| 403 的样子 | `/api/*` 回 JSON（前端好提示），页面请求回一段人话——手机浏览器直接打开时看到"电脑端当前没有开启局域网访问"比一串 JSON 明白 |
-| 怎么开关 | ① 桌面端 ⚙ 配置（在标题栏那排，见 3.3 / 7.1）；② `run.py --lan` / `--no-lan`（命令行用户的路径）；③ `PUT /api/settings {"lan_enabled": …}`——**只有本机来源能改**（手机端改不了这道闸门） |
+| 访问码 | `lan_token`：**8 位**（`app/lan_auth.py`，字母表去掉 0/O/1/I/L，手输忽略大小写与连字符）。打开开关时生成、关掉时清空（已发出去的 Cookie 一并作废），面板里可以「重新生成」。**开着而库里没码时一律不放行**——不给"空码"开后门 |
+| 手机怎么进 | 二维码与「复制」给的都是 **带码的地址**（`http://<IP>:17800/?k=<码>`）：打开 → 换一张 Cookie（`wr_lan`，HttpOnly / SameSite=Lax / 30 天）→ **302 把 URL 里的码擦掉**（免得留在浏览器历史和截图里）。之后同源的接口、SSE、图片请求自动带 Cookie。没带码的页面请求给一个只有输入框的极简页（不加载任何外部资源），它 `fetch` 到 `POST /api/lan/claim` 换 Cookie；`/api/*` 则回 **401 JSON** |
+| 领码限速 | 同一来源一分钟内错够 `lan_auth.FAIL_LIMIT`（5）次就 **429**；比对用 `hmac.compare_digest` |
+| Host 校验 | `app/net.py host_ok()`：Host 必须是**本机自己的**回环地址 / 机器名 / 网卡地址，否则 **403**（页面请求也给人话）。**与开关无关，本机来源同样要过**——防的是 DNS rebinding：恶意网页把自己的域名解析到 `127.0.0.1`，浏览器便当它与本应用同源，而"来源是回环"这条判据恰恰会放它进来。本机名与地址 10 秒缓存一次（换 WiFi 会变，但不该每个请求都查 DNS）。代价：用域名（DDNS / 反向代理）访问这台机器会被挡，请改用局域网 IP 或 localhost |
+| 二维码 | **只在开关开着、且真取到局域网地址时才画**；关着时配置面板**什么都不显示**（不做「打开后会怎样」的介绍：界面是给用户用的，不是功能说明）。画的内容是带码的地址 |
+| 闸门位置 | `app/lan_gate.py` 的 `before()` / `after()`，由 `app/main.py` 的中间件装上。**放应用层而不是改监听地址重启**：桌面端的按钮要能立即开关，重启后端会打断正在进行的生成。拆两半是为了可测：`tests/test_lan_gate.py` 装一道同款中间件即可，不必起整个应用（`create_app()` 会碰真实 `data/`）。`before()` 放行、`after()` 补 Cookie（带了 `?k=` 的接口请求） |
+| 403 / 401 的样子 | `/api/*` 回 JSON（前端好提示），页面请求回人话——手机浏览器直接打开时看到"没开启局域网访问"/"输入访问码"比一串 JSON 明白 |
+| 怎么开关 | ① 桌面端 ⚙ 配置（在标题栏那排，见 3.3 / 7.1）；② `run.py --lan` / `--no-lan`（命令行用户的路径）；③ `PUT /api/settings {"lan_enabled": …}`——**只有本机来源能改**（手机端改不了这道闸门，换码同理：`POST /api/lan/regenerate` 也只有本机能调） |
 | 首次默认 | `config.yaml` 的 `server.lan`（默认 `false`）只在**首次建库**时写进库；之后以库为准（与模型选择同一条约定） |
 | 防火墙 | Windows 需放行入站 TCP 17800：`netsh advfirewall firewall add rule name="Wonder Realm 局域网访问 17800" dir=in action=allow protocol=TCP localport=17800`（收回：`… delete rule name="…"`）。**这条规则不在代码里**，换机器/重装系统要重加；配置面板里有一个「复制防火墙命令」键（`store/desktop.js` 的 `firewallCmd()`，**文案与 README 同源，改一处必须改另一处**，`test_app_js.py` 盯着） |
-| 手机访问 | 同一 WiFi → 手机浏览器打开 `http://<电脑局域网IP>:17800`（IP 用 `ipconfig` 查；配置面板直接给出并可复制，**还画成二维码**给手机扫）。后端是同一份：会话、角色、设置在手机与电脑上是同一套数据，页面也就是同一份（手机按 ≤640px 断点走单栏，见 7.1） |
+| 手机访问 | 同一 WiFi → 手机浏览器扫配置面板里的二维码（或打开 `http://<电脑局域网IP>:17800` 手输访问码；IP 用 `ipconfig` 查）。后端是同一份：会话、角色、设置在手机与电脑上是同一套数据，页面也就是同一份（手机按 ≤640px 断点走单栏，见 7.1） |
 | 面板里的状态行 | 端口 / Ollama（已连接 · N 个模型 / 未连接）/ 局域网开·关，数据都取界面本来就在用的 `models`/`modelWarning`/`lanEnabled`，不额外发请求 |
-| 安全 | **应用没有账号体系**：开关打开时，能连到这个端口的人都能读写你的会话。只在可信的家庭/办公网络开启，公共 WiFi 建议关掉（一键，不用重启） |
+| 安全边界 | 开着时**只有带对访问码的设备**能用；但 HTTP 是明文，同一 WiFi 上能抓包的人仍可能截到访问码——真正敏感的内容别在不信任的网络开放。要堵这条只能上 HTTPS（自签证书），目前不做。**退出应用即结束**：后端进程随之结束，端口关闭 |
 
 ## 9. 开发约定与强调
 跨功能、且违反代价明显的约定；功能自身取舍写在对应章节。
@@ -674,7 +682,7 @@ data_dir: ./data                  # 直接指定
 - **清单**：14 个纯 Python + 4 个 Node（`test_search.mjs`/`test_init.mjs`/`test_mask_close.mjs`/`test_qr.mjs`，需先装前端依赖；`test_qr.mjs` 用 `createRequire` 指到 `frontend/` 解析依赖——它装在 `frontend/node_modules`，仓库根目录找不到裸包名）；纯前端逻辑用 Node 直连 store 断言，不开浏览器
 - **结构性事实用静态守卫**（`test_app_js.py`）：组件绑定、模块级名字来源、消息归属、弹窗关闭判定、模式介绍浮层、字数上限一致、产物存在被引用、移动端断点与触屏约定、桌面壳专属键的出现条件（两个键都在顶栏、自绘标题栏的三条约束与高度同值、图标列常驻且无会话时禁用、面板内容、二维码只在有地址时画、防火墙命令与 README 同源、壳侧"宽度锁死/尺寸分开存"）；新结构约定顺手补断言
 - **启动脚本的编码约定也上守卫**（`test_bats.py`）：根目录 `*.bat` 必须 CRLF、GBK 编码、可执行行里不许有 `chcp 65001`，并钉住电脑端入口的三处结构（查 `electron.exe` 本体、两种缺失各一条提示、顺手重建前端）
-- **后端"闸门/边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机——网络来源相关的规则都照这个套路测
+- **后端"闸门/边界"用 TestClient 扮演不同来源**（`test_lan_gate.py`）：`TestClient(app)` 默认来源不是回环，天然就是"局域网来客"，`client=("127.0.0.1", …)` 才是本机——网络来源相关的规则都照这个套路测。**请求要显式带 Host**：TestClient 默认发 `testserver`（域名），会被 Host 校验挡下；局域网来客那份 Host 要用本机真实地址（`local_hosts()` 里取），与手机打开 `http://<局域网IP>:17800` 一致。访问码的宽容输入、限速、换码作废、开/关闸门即失效都在这里盯着
 - **壳（Electron）用自带的自检，且是闸门**：`electron . --selftest` 起后端 + 开隐藏窗口，断言不过就非零退出。除 preload 桥接与手机视图尺寸（宽度被钳、高度可改、退出恢复）外，**还验真渲染出来的界面**：配置键在顶栏且没会话时也在、自绘标题栏的留白与拖拽区、面板点得开、二维码真画出来（数 canvas 暗点）、置灰与开关状态一致、顶栏手机键没被挡住。加 `DSH_SHOT=<png>` / `DSH_SHOT_PHONE=<png>` 会短暂显示窗口并截图（隐藏窗口截到的是首帧缓存）
 - **守卫反向验证**：故意删被保护的东西确认报红（"碰巧通过"≠"抓得住"）
 - 界面改动要真渲染证据：dev（Vue 警告开）+ 生产产物各跑一遍，控制台零 warning/error；涉及函数名/导入/绑定**只跑构建会漏**
